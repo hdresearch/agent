@@ -14,6 +14,7 @@ A Claude Code agent harness that runs inside a VM, exposing both an interactive 
 - **Self-contained bundle** with Claude Code CLI included (~127MB total)
 - **Remote mode** - connect CLI to a remote server via `--url`
 - **Dual-mode operation** - run server + CLI simultaneously or separately
+- **Docker support** - run in containers with docker-compose
 
 ## Quick Reference
 
@@ -22,6 +23,7 @@ A Claude Code agent harness that runs inside a VM, exposing both an interactive 
 bun install                    # Install dependencies
 bun run dev                    # Run with hot reload
 bun run typecheck              # Type check
+bun test                       # Run tests
 
 # Building
 bun run build                  # Standalone executable
@@ -32,6 +34,9 @@ bun run bundle                 # Self-contained bundle
 ./vers-agent --cli             # CLI only
 ./vers-agent --server          # Server only
 ./vers-agent --url http://vm:9999  # Connect to remote
+
+# Docker
+docker compose up              # Run in container (port 9999)
 
 # Environment
 export ANTHROPIC_API_KEY=xxx   # Required
@@ -91,9 +96,14 @@ Here are the files...
 ```
 
 **CLI Commands:**
+- `/help`, `/h` - Show help
+- `/model [opus|sonnet|haiku]` - View or change model
+- `/thinking [on|off] [budget]` - Toggle extended thinking
 - `/continue`, `/c` - Continue the last conversation
 - `/new`, `/n` - Start a new conversation
-- `/help`, `/h` - Show help
+- `/compact` - Compact conversation history
+- `/mcp add|remove|list` - Manage MCP servers
+- `!command` - Execute bash command directly
 - `exit`, `quit` - Exit
 
 ### HTTP API Mode
@@ -327,22 +337,57 @@ dist/
 
 ```
 vers-agent/
-├── index.ts              # Entry point: CLI arg parsing, mode selection
+├── index.ts                    # Entry point: CLI arg parsing, mode selection
 ├── src/
-│   ├── cli.tsx          # Interactive CLI (React/Ink UI) - 700 lines
-│   ├── server.ts        # HTTP API server (Bun.serve) - 280 lines
-│   ├── agent.ts         # Task execution & lifecycle - 130 lines
-│   ├── query-runner.ts  # Claude SDK wrapper & event handling - 280 lines
-│   ├── tasks.ts         # Task store (in-memory state) - 100 lines
-│   ├── api-client.ts    # Client for HTTP API (used by CLI) - 260 lines
-│   ├── config.ts        # Global config & session mgmt - 90 lines
-│   └── types.ts         # TypeScript types - 60 lines
-├── scripts/
-│   └── bundle.ts        # Bundle script (creates self-contained dist)
-└── dist/                # Built artifacts
-    ├── vers-agent           # Main executable (59MB)
-    ├── vers-agent-launcher  # Wrapper script (sets CLAUDE_CODE_EXECUTABLE)
-    └── claude-code/         # Bundled Claude Code CLI (68MB)
+│   ├── cli/                    # Interactive CLI (React/Ink UI)
+│   │   ├── cli.tsx            # Entry point (42 lines)
+│   │   ├── app.tsx            # Main App component (316 lines)
+│   │   ├── types.ts           # CLI type definitions
+│   │   ├── constants.ts       # Commands, icons, limits
+│   │   ├── components/        # UI components (7 files)
+│   │   │   ├── spinner.tsx
+│   │   │   ├── output-area.tsx
+│   │   │   ├── input-bar.tsx
+│   │   │   ├── status-bar.tsx
+│   │   │   ├── top-status-bar.tsx
+│   │   │   ├── command-suggestions.tsx
+│   │   │   └── path-suggestions.tsx
+│   │   ├── hooks/             # React hooks (2 files)
+│   │   │   ├── use-acp-client.ts
+│   │   │   └── use-image-attachments.ts
+│   │   ├── handlers/          # Command handlers (2 files)
+│   │   │   ├── command-handlers.ts
+│   │   │   └── bash-handler.ts
+│   │   └── utils/             # Utilities (3 files)
+│   │       ├── formatting.ts
+│   │       ├── command-matching.ts
+│   │       └── path-completion.ts
+│   ├── server/                # ACP HTTP server
+│   │   └── http-server.ts
+│   ├── client/                # HTTP client for ACP
+│   │   └── http-client.ts
+│   ├── core/                  # Agent logic
+│   │   ├── agent.ts
+│   │   ├── query-runner.ts
+│   │   ├── prompt-queue.ts
+│   │   └── tasks.ts
+│   ├── protocol/              # ACP type definitions
+│   │   ├── acp-types.ts
+│   │   └── jsonrpc.ts
+│   └── utils/                 # Shared utilities
+│       ├── config.ts
+│       ├── history.ts
+│       ├── keys.ts
+│       ├── image-utils.ts
+│       └── project-docs.ts
+├── tests/                     # Test files
+│   └── cli/
+│       ├── utils/             # Utility tests
+│       ├── handlers/          # Handler tests
+│       └── remote-submission.test.ts
+├── Dockerfile                 # Docker support
+├── docker-compose.yml
+└── dist/                      # Built artifacts
 ```
 
 ### Key Components
@@ -370,16 +415,19 @@ vers-agent/
 - Server-Sent Events (SSE) for streaming task updates
 - No authentication (designed for local/VM use)
 
-#### 5. **CLI** (`src/cli.tsx`)
+#### 5. **CLI** (`src/cli/`)
 - Built with Ink (React for terminals)
+- Modular architecture: components, hooks, handlers, utils
 - Real-time UI updates via event streams
 - Slash commands (/help, /model, /continue, etc.)
-- Can connect to local or remote server via ApiClient
+- Remote bash execution via server when connected
+- Can connect to local or remote server via AcpClient
 
-#### 6. **API Client** (`src/api-client.ts`)
-- HTTP client for talking to the server
-- Used by CLI in all modes (even when server is local)
-- Handles SSE streaming for task events
+#### 6. **ACP Client** (`src/client/http-client.ts`)
+- HTTP client using ACP (Agent Control Protocol) over JSON-RPC 2.0
+- Used by CLI to communicate with server
+- Handles SSE streaming for real-time notifications
+- Supports remote bash execution and working directory queries
 
 ### Data Flow
 
@@ -443,13 +491,17 @@ bun run bundle         # Creates dist/ directory (~127MB)
 
 | Want to... | Edit this file |
 |------------|----------------|
-| Add new CLI commands | `src/cli.tsx` (COMMANDS array, handleCommand function) |
-| Add new API endpoints | `src/server.ts` (fetch handler) |
-| Change task lifecycle | `src/agent.ts` (runTask function) |
-| Modify event handling | `src/query-runner.ts` (runQuery function) |
-| Add task state fields | `src/types.ts` (Task interface) |
-| Change session behavior | `src/config.ts` |
-| Add tool icons | `src/cli.tsx` (TOOL_ICONS object) |
+| Add new CLI slash commands | `src/cli/handlers/command-handlers.ts` |
+| Add CLI command constants | `src/cli/constants.ts` (COMMANDS array) |
+| Add new API endpoints | `src/server/http-server.ts` (fetch handler) |
+| Change task lifecycle | `src/core/agent.ts` (runTask function) |
+| Modify event handling | `src/core/query-runner.ts` (runQuery function) |
+| Add task state fields | `src/core/tasks.ts` (Task interface) |
+| Change session behavior | `src/utils/config.ts` |
+| Add tool icons | `src/cli/constants.ts` (TOOL_ICONS object) |
+| Add new CLI components | `src/cli/components/` directory |
+| Add new CLI hooks | `src/cli/hooks/` directory |
+| Change bash escape handling | `src/cli/handlers/bash-handler.ts` |
 
 ### Debugging Tips
 
@@ -546,16 +598,25 @@ const result = await apiClient.myEndpoint();
 
 #### Adding a New CLI Command
 
-1. Add to COMMANDS array in `src/cli.tsx`:
+1. Add to COMMANDS array in `src/cli/constants.ts`:
 ```typescript
 { name: "mycommand", alias: "mc", description: "Do something" }
 ```
 
-2. Add handler in `handleCommand` function:
+2. Add handler in `src/cli/handlers/command-handlers.ts`:
 ```typescript
 case "mycommand":
-  // Implementation
-  break;
+  ctx.addOutput({ type: "system", content: "Command executed" });
+  return { handled: true };
+```
+
+3. Add tests in `tests/cli/handlers/command-handlers.test.ts`:
+```typescript
+test("handles /mycommand", () => {
+  const ctx = createMockContext();
+  const result = handleSlashCommand("/mycommand", ctx);
+  expect(result.handled).toBe(true);
+});
 ```
 
 #### Adding a New Config Option
@@ -637,8 +698,8 @@ Some ideas for extending this project:
 - [ ] Add task queuing (only run N tasks concurrently)
 - [ ] Add metrics endpoint (Prometheus format)
 - [ ] Add log streaming (tail -f style for debugging)
-- [ ] Add Docker support (Dockerfile, docker-compose)
-- [ ] Add tests (Bun has built-in test runner)
+- [x] Add Docker support (Dockerfile, docker-compose)
+- [x] Add tests (Bun has built-in test runner)
 - [ ] Add web UI (Bun can serve HTML + React)
 - [ ] Add cost tracking per user/session
 - [ ] Add support for multiple concurrent sessions
@@ -657,28 +718,39 @@ Key dependencies and why they're used:
 
 All dependencies are pinned in `bun.lock` for reproducibility.
 
-### Testing Strategy
+### Testing
 
-Currently no tests exist. If adding tests:
+Run tests with:
+```bash
+bun test
+```
 
-1. **Unit tests**: Test individual functions in isolation
-   ```bash
-   bun test src/tasks.test.ts
-   ```
+Current test coverage:
+- **`tests/cli/utils/formatting.test.ts`** - formatTokens, formatToolArgs utilities
+- **`tests/cli/utils/command-matching.test.ts`** - Command matching and path extraction
+- **`tests/cli/handlers/command-handlers.test.ts`** - Slash command handler logic
+- **`tests/cli/remote-submission.test.ts`** - Remote server submission flow
 
-2. **Integration tests**: Test API endpoints
-   ```typescript
-   import { expect, test } from "bun:test";
+Test structure follows source structure:
+```
+tests/
+└── cli/
+    ├── utils/
+    │   ├── formatting.test.ts
+    │   └── command-matching.test.ts
+    ├── handlers/
+    │   └── command-handlers.test.ts
+    └── remote-submission.test.ts
+```
 
-   test("health endpoint", async () => {
-     const res = await fetch("http://localhost:9999/health");
-     expect(res.status).toBe(200);
-   });
-   ```
+Adding new tests:
+```typescript
+import { describe, test, expect, mock, beforeEach } from "bun:test";
 
-3. **E2E tests**: Spin up server, create task, verify completion
-
-4. **CLI tests**: Mock API client, test command handlers
+test("my test", () => {
+  expect(myFunction()).toBe(expectedValue);
+});
+```
 
 ## License
 
