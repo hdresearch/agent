@@ -36,7 +36,8 @@ export function App({ initialContinue, serverUrl }: AppProps) {
   const [queuedInput, setQueuedInput] = useState<string | null>(null);
   const [output, setOutput] = useState<OutputLine[]>([]);
   const [state, setState] = useState<AppState>({ status: "idle" });
-  const [continueMode, setContinueMode] = useState(initialContinue);
+  // In remote mode, default to continuing the most recent session
+  const [continueMode, setContinueMode] = useState(initialContinue || !!serverUrl);
 
   // Submission guards
   const isSubmittingRef = useRef(false);

@@ -694,7 +694,6 @@ Some ideas for extending this project:
 
 - [ ] Add database persistence (SQLite via `bun:sqlite`)
 - [ ] Add authentication (API keys, JWT)
-- [ ] Add WebSocket support for bidirectional streaming
 - [ ] Add task queuing (only run N tasks concurrently)
 - [ ] Add metrics endpoint (Prometheus format)
 - [ ] Add log streaming (tail -f style for debugging)
