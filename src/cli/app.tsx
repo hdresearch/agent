@@ -281,9 +281,9 @@ export function App({ initialContinue, serverUrl }: AppProps) {
         model={statusInfo.model}
         thinking={statusInfo.thinking}
         cost={statusInfo.cost}
-        continueMode={continueMode}
         connected={connected}
         planMode={statusInfo.planMode}
+        sessionId={statusInfo.sessionId}
       />
       <Box flexDirection="column" flexGrow={1}>
         <OutputArea lines={output} maxLines={outputMaxLines} />

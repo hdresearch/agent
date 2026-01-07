@@ -136,7 +136,11 @@ function handleNew(ctx: CommandHandlerContext): void {
   ctx.historyRef.current = createHistory("new");
   saveHistory(ctx.historyRef.current);
   ctx.setOutput([]);
-  ctx.client?.newSession(ctx.sessionConfig).catch(() => {});
+  ctx.client?.newSession(ctx.sessionConfig)
+    .then((result) => {
+      ctx.setStatusInfo(prev => ({ ...prev, sessionId: result.sessionId }));
+    })
+    .catch(() => {});
   ctx.addOutput({ type: "system", content: "🆕 Starting new conversation" });
 }
 
@@ -220,12 +224,12 @@ function handleSession(sessionId: string | undefined, ctx: CommandHandlerContext
 
       // Switch to this session
       return ctx.client!.loadSession(session.id)
-        .then(async () => {
+        .then(async (loadResult) => {
           ctx.setContinueMode(true);
+          // Update session ID in status bar
+          ctx.setStatusInfo(prev => ({ ...prev, sessionId: loadResult.sessionId }));
           // Clear local output cache - start fresh for this session
           ctx.clearOutput();
-          const name = session.name ? ` "${session.name}"` : "";
-          ctx.addOutput({ type: "system", content: `↩ Switched to session ${session.id.slice(0, 8)}${name}` });
 
           // Sync outputs from server
           try {

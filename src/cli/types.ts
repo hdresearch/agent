@@ -30,6 +30,7 @@ export interface StatusInfo {
     outputTokens: number;
   };
   planMode: boolean;
+  sessionId: string | null;
 }
 
 export interface PathMatch {

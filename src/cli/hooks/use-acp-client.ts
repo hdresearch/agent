@@ -58,6 +58,7 @@ export function useAcpClient({
     },
     cost: { totalCost: 0, inputTokens: 0, outputTokens: 0 },
     planMode: false,
+    sessionId: null,
   });
 
   // Keep session config ref in sync
@@ -223,18 +224,16 @@ export function useAcpClient({
 
         // Create or load session
         let sessionLoaded = false;
+        let currentSessionId: string | null = null;
         if (continueMode) {
           // Try to load most recent session
           try {
             const sessions = await client.listSessions();
             if (sessions.sessions.length > 0) {
               const mostRecent = sessions.sessions[0];
-              await client.loadSession(mostRecent.id);
+              const loadResult = await client.loadSession(mostRecent.id);
+              currentSessionId = loadResult.sessionId;
               sessionLoaded = true;
-              onOutput({
-                type: "system",
-                content: `↩ Resumed session ${mostRecent.id.slice(0, 8)} (${mostRecent.turns} turns)`,
-              });
             }
           } catch {
             // Fall back to new session
@@ -242,7 +241,13 @@ export function useAcpClient({
         }
 
         if (!sessionLoaded) {
-          await client.newSession(sessionConfigRef.current);
+          const newResult = await client.newSession(sessionConfigRef.current);
+          currentSessionId = newResult.sessionId;
+        }
+
+        // Update status with session ID
+        if (currentSessionId) {
+          setStatusInfo(prev => ({ ...prev, sessionId: currentSessionId }));
         }
 
         // Sync outputs from server (for multi-user support)

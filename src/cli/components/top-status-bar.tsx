@@ -7,18 +7,18 @@ interface TopStatusBarProps {
   model: string;
   thinking: { enabled: boolean; budget?: number | null };
   cost: { totalCost: number; inputTokens: number; outputTokens: number };
-  continueMode: boolean;
   connected: boolean;
   planMode: boolean;
+  sessionId: string | null;
 }
 
 export function TopStatusBar({
   model,
   thinking,
   cost,
-  continueMode,
   connected,
   planMode,
+  sessionId,
 }: TopStatusBarProps) {
   const contextLimit = MODEL_CONTEXT_LIMITS[model] || 200000;
   const contextUsed = cost.inputTokens; // Input tokens represent context usage
@@ -61,10 +61,10 @@ export function TopStatusBar({
           {bar} {formatTokens(contextUsed)}/{formatTokens(contextLimit)}
         </Text>
         <Text dimColor>({formatTokens(cost.outputTokens)} out)</Text>
-        {continueMode && (
+        {sessionId && (
           <>
             <Text dimColor>│</Text>
-            <Text color="blue">↩ resume</Text>
+            <Text color="gray">{sessionId.slice(0, 8)}</Text>
           </>
         )}
         {!connected && (
