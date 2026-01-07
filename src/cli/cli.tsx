@@ -613,6 +613,22 @@ function InputBar({
 
     // Emacs keybindings
     if (key.ctrl) {
+      // Ctrl+C: cancel query, clear input, or exit
+      // Note: Ctrl+C comes through as \x03 (ASCII 3), not "c"
+      if (input === "\x03" || input === "c") {
+        if (disabled) {
+          // Query is running - cancel it
+          onCancel();
+        } else if (value.length > 0) {
+          // Has input - clear it
+          onChange("");
+          setCursorIndex(0);
+        } else {
+          // No input - exit
+          onExit();
+        }
+        return;
+      }
       // Ctrl+A: Beginning of line
       if (input === "a") {
         const lineStart = value.lastIndexOf("\n", cursorIndex - 1) + 1;
@@ -651,21 +667,6 @@ function InputBar({
         const newValue = value.slice(0, newPos) + value.slice(cursorIndex);
         onChange(newValue);
         setCursorIndex(newPos);
-        return;
-      }
-      // Ctrl+C: cancel query, clear input, or exit
-      if (input === "c") {
-        if (disabled) {
-          // Query is running - cancel it
-          onCancel();
-        } else if (value.length > 0) {
-          // Has input - clear it
-          onChange("");
-          setCursorIndex(0);
-        } else {
-          // No input - exit
-          onExit();
-        }
         return;
       }
     }
@@ -1743,11 +1744,32 @@ export interface CliOptions {
 }
 
 export async function runCli(options: CliOptions = {}) {
+  // Ignore SIGINT - let useInput handle Ctrl+C instead
+  // This is critical for compiled binaries where SIGINT handling differs
+  const originalSigintListeners = process.listeners("SIGINT");
+  process.removeAllListeners("SIGINT");
+  process.on("SIGINT", () => {
+    // Do nothing - Ctrl+C is handled by useInput via exitOnCtrlC: false
+  });
+
   const { waitUntilExit } = render(
     <App
       initialContinue={options.continueSession ?? false}
       serverUrl={options.serverUrl}
-    />
+    />,
+    {
+      // Let useInput handle Ctrl+C instead of exiting
+      exitOnCtrlC: false,
+    }
   );
-  await waitUntilExit();
+
+  try {
+    await waitUntilExit();
+  } finally {
+    // Restore original SIGINT listeners
+    process.removeAllListeners("SIGINT");
+    for (const listener of originalSigintListeners) {
+      process.on("SIGINT", listener as NodeJS.SignalsListener);
+    }
+  }
 }
