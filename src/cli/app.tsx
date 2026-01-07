@@ -172,6 +172,7 @@ export function App({ initialContinue, serverUrl }: AppProps) {
           setStatusInfo,
           addOutput,
           setOutput,
+          clearOutput: () => setOutput([]),
           setContinueMode,
           historyRef,
           exit,

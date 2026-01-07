@@ -5,6 +5,8 @@ export const COMMANDS = [
   { name: "clear", alias: null, description: "Clear the screen" },
   { name: "continue", alias: "c", description: "Continue last conversation" },
   { name: "new", alias: "n", description: "Start new conversation" },
+  { name: "sessions", alias: "s", description: "List sessions (or: /session <id> to switch)" },
+  { name: "session", alias: null, description: "Switch to session by ID" },
   { name: "compact", alias: null, description: "Compact conversation context" },
   { name: "reload", alias: "r", description: "Re-inject CLAUDE.md/AGENT.md on next message" },
   { name: "docs", alias: "d", description: "Show loaded project docs (CLAUDE.md, AGENT.md)" },

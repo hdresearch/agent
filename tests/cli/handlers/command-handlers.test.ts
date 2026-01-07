@@ -21,6 +21,7 @@ function createMockContext(): CommandHandlerContext & { outputs: Omit<OutputLine
     setStatusInfo: mock(() => {}),
     addOutput: (line) => outputs.push(line),
     setOutput: mock(() => {}),
+    clearOutput: mock(() => {}),
     setContinueMode: mock(() => {}),
     historyRef: { current: null },
     exit: mock(() => {}),

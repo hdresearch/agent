@@ -37,12 +37,18 @@ import {
   type QueueRemoveResult,
   type QueueClearResult,
   type QueuedPromptInfo,
+  type SessionInfo,
+  type ListSessionsResult,
+  type GetSessionOutputsParams,
+  type GetSessionOutputsResult,
+  type SessionSyncInfo,
 } from "../protocol/acp-types";
 import { promptQueue, type QueuedPrompt } from "../core/prompt-queue";
 import { runTask, cancelTask, clearProjectDocsCache, markDocsForReinjection } from "../core/agent";
 import { getDocs, setDocs, setDoc, getDocsStore, loadDocsStore, type StoredDoc } from "../utils/docs-store";
 import { taskStore } from "../core/tasks";
 import { getConfig, setConfig, getSession, resetSession, updateSession, loadConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig, setSessionMode, getSessionMode, getPlan, setPlan, clearPlan, type PlanEntry } from "../utils/config";
+import { sessionStore, sessionOutputStore } from "../utils/session-store";
 import { loadStoredKeys, saveKeys, computeKeysHash, type KeysState } from "../utils/keys";
 import { expandPrompt, hasPathReferences } from "../utils/path-expansion";
 import { randomUUID } from "crypto";
@@ -243,6 +249,10 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       };
 
     case "completed":
+      // Record completion stats in SQLite session store
+      if (currentSessionId) {
+        sessionStore.recordCompletion(currentSessionId, (d.totalCostUsd as number) || 0);
+      }
       return {
         type: "completed",
         data: {
@@ -281,6 +291,10 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       // Mode update from agent
       if (d.mode === "plan" || d.mode === "default") {
         setSessionMode(d.mode);
+        // Persist mode to SQLite session store
+        if (currentSessionId) {
+          sessionStore.setMode(currentSessionId, d.mode);
+        }
       }
       return {
         type: "mode_update",
@@ -293,6 +307,22 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
 }
 
 // Send session notification to all SSE clients
+// Store output to SQLite and broadcast to SSE clients
+function storeAndBroadcastOutput(
+  outputType: string,
+  content: string,
+  extra?: { color?: string; toolName?: string }
+): void {
+  if (currentSessionId) {
+    sessionOutputStore.append(currentSessionId, {
+      type: outputType,
+      content,
+      color: extra?.color,
+      toolName: extra?.toolName,
+    });
+  }
+}
+
 function sendSessionNotification(type: string, data: unknown): void {
   const mapped = mapEventToAcp(type, data);
   if (!mapped) return;
@@ -302,6 +332,38 @@ function sendSessionNotification(type: string, data: unknown): void {
     type: mapped.type as SessionNotificationParams["type"],
     data: mapped.data as SessionNotificationParams["data"],
   };
+
+  // Store certain notification types as outputs for history sync
+  const d = data as Record<string, unknown>;
+  console.log(`[OUTPUT_STORE] Event type: ${type}, sessionId: ${currentSessionId}, data keys: ${Object.keys(d).join(", ")}`);
+
+  if (currentSessionId) {
+    switch (type) {
+      case "assistant_message":
+        const textContent = (d.text as string) || "";
+        console.log(`[OUTPUT_STORE] Storing assistant_message: "${textContent.slice(0, 50)}..."`);
+        storeAndBroadcastOutput("text", textContent);
+        break;
+      case "tool_use":
+        console.log(`[OUTPUT_STORE] Storing tool_use: ${d.toolName}`);
+        storeAndBroadcastOutput(
+          "tool",
+          JSON.stringify({ name: d.toolName, input: d.toolInput }),
+          { toolName: d.toolName as string }
+        );
+        break;
+      case "tool_result":
+        console.log(`[OUTPUT_STORE] Storing tool_result`);
+        storeAndBroadcastOutput(
+          "tool-result",
+          typeof d.content === "string" ? d.content : JSON.stringify(d.content),
+          { toolName: d.toolUseId as string }
+        );
+        break;
+    }
+  } else {
+    console.log(`[OUTPUT_STORE] WARNING: No currentSessionId, skipping storage for ${type}`);
+  }
 
   broadcastEvent("notification", notification);
 }
@@ -359,6 +421,9 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
   currentSessionId = randomUUID();
   updateSession({ sessionId: currentSessionId });
 
+  // Register this session in SQLite storage
+  sessionStore.create(currentSessionId);
+
   // Get the current mode (should be "default" after reset)
   const mode = getSessionMode();
   info("New session created:", { sessionId: currentSessionId, mode });
@@ -373,9 +438,36 @@ async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSession
   currentSessionId = params.sessionId;
   updateSession({ sessionId: params.sessionId });
 
+  // Touch session in SQLite to update lastUsedAt
+  sessionStore.touch(params.sessionId);
+
+  // Get session mode from store and sync it
+  const storedSession = sessionStore.get(params.sessionId);
+  if (storedSession) {
+    setSessionMode(storedSession.mode);
+    sendSessionNotification("mode_update", { type: "mode_update", mode: storedSession.mode });
+  }
+
   return {
     sessionId: params.sessionId,
     resumed: true,
+  };
+}
+
+async function handleSessionList(): Promise<ListSessionsResult> {
+  const sessions = sessionStore.list(50);
+
+  return {
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      name: s.name || undefined,
+      createdAt: s.createdAt,
+      lastUsedAt: s.lastUsedAt,
+      turns: s.turns,
+      totalCost: s.totalCost,
+      mode: s.mode,
+    })),
+    currentSessionId,
   };
 }
 
@@ -384,6 +476,15 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
   if (!currentSessionId) {
     info("Auto-creating session for incoming prompt");
     await handleSessionNew({});
+  }
+
+  // Store user message in output history
+  if (currentSessionId) {
+    const hasAttachments = params.attachments && params.attachments.length > 0;
+    const displayText = hasAttachments
+      ? `[${params.attachments!.length} attachment(s)]\n${params.text}`
+      : params.text;
+    storeAndBroadcastOutput("user", displayText);
   }
 
   // If a task is already running, queue this prompt
@@ -520,6 +621,58 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
       case AcpMethod.SessionLoad:
         ensureInitialized();
         result = await handleSessionLoad(params as LoadSessionParams);
+        break;
+
+      case AcpMethod.SessionList:
+        ensureInitialized();
+        result = await handleSessionList();
+        break;
+
+      case AcpMethod.SessionOutputs:
+        ensureInitialized();
+        {
+          const outputParams = params as GetSessionOutputsParams;
+          const sessionId = outputParams.sessionId || currentSessionId;
+          if (!sessionId) {
+            throw new Error("No session active");
+          }
+          const outputs = outputParams.afterSeq !== undefined
+            ? sessionOutputStore.getAfter(sessionId, outputParams.afterSeq)
+            : sessionOutputStore.getAll(sessionId);
+          const syncInfo = sessionOutputStore.getSyncInfo(sessionId);
+          result = {
+            sessionId,
+            outputs: outputs.map(o => ({
+              seq: o.seq,
+              type: o.type,
+              content: o.content,
+              color: o.color,
+              toolName: o.toolName,
+            })),
+            syncInfo: {
+              sessionId,
+              count: syncInfo.count,
+              lastSeq: syncInfo.lastSeq,
+            },
+          } as GetSessionOutputsResult;
+        }
+        break;
+
+      case AcpMethod.SessionSync:
+        ensureInitialized();
+        {
+          const syncParams = params as { sessionId?: string };
+          const sessionId = syncParams.sessionId || currentSessionId;
+          if (!sessionId) {
+            throw new Error("No session active");
+          }
+          const syncInfo = sessionOutputStore.getSyncInfo(sessionId);
+          result = {
+            sessionId,
+            count: syncInfo.count,
+            lastSeq: syncInfo.lastSeq,
+          } as SessionSyncInfo;
+        }
         break;
 
       case AcpMethod.SessionPrompt:

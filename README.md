@@ -9,7 +9,9 @@ A Claude Code agent harness that runs inside a VM, exposing both an interactive 
 - **Interactive CLI** with Claude Code-style UI (spinners, diffs, tool previews) built with Ink (React for terminals)
 - **HTTP API** for programmatic control from outside the VM
 - **Multi-turn conversations** with session continuity and state management
-- **Continue last conversation** across restarts (sessions persisted in memory)
+- **Continue last conversation** across restarts (sessions persisted in SQLite)
+- **Multi-user session sync** - multiple CLI clients can share the same session
+- **Session management** - list, switch, and resume sessions via `/sessions` and `/session`
 - **Auto-compacting** when context fills up (configurable turn limits)
 - **Self-contained bundle** with Claude Code CLI included (~127MB total)
 - **Remote mode** - connect CLI to a remote server via `--url`
@@ -53,11 +55,11 @@ bun install
 # Run in development
 bun run dev
 
-# Build self-contained bundle
-bun run bundle
+# Build standalone executable
+bun run build
 
-# Run the bundle
-./dist/vers-agent-launcher
+# Run the executable
+./vers-agent
 ```
 
 ## Usage
@@ -65,7 +67,7 @@ bun run bundle
 ### CLI Mode
 
 ```bash
-./dist/vers-agent-launcher --cli
+./vers-agent --cli
 ```
 
 ```
@@ -101,6 +103,8 @@ Here are the files...
 - `/thinking [on|off] [budget]` - Toggle extended thinking
 - `/continue`, `/c` - Continue the last conversation
 - `/new`, `/n` - Start a new conversation
+- `/sessions`, `/s` - List all sessions
+- `/session <id>` - Switch to a specific session
 - `/compact` - Compact conversation history
 - `/mcp add|remove|list` - Manage MCP servers
 - `!command` - Execute bash command directly
@@ -109,7 +113,7 @@ Here are the files...
 ### HTTP API Mode
 
 ```bash
-./dist/vers-agent-launcher --server
+./vers-agent --server
 ```
 
 Server runs on port 9999 (configurable via `PORT` env var).
@@ -223,6 +227,15 @@ curl -N http://localhost:9999/tasks/{id}/stream
 | `/session/reset` | POST | Reset session (start fresh) |
 | `/session/compact` | POST | Compact session context |
 
+**RPC Methods (via `/rpc`):**
+
+| Method | Description |
+|--------|-------------|
+| `session/list` | List all sessions with turn counts |
+| `session/load` | Switch to a specific session |
+| `session/outputs` | Get all outputs for current session |
+| `session/sync` | Get sync info (count, lastSeq) for incremental sync |
+
 #### Health & Status
 
 | Endpoint | Method | Description |
@@ -248,7 +261,7 @@ data: {"type":"completed","timestamp":"2026-01-06T12:00:04Z"}
 ### Both Modes (Default)
 
 ```bash
-./dist/vers-agent-launcher
+./vers-agent
 ```
 
 Runs the HTTP server and CLI simultaneously. Use the terminal for interactive work while external tools can control via HTTP.
@@ -290,12 +303,9 @@ bun run build
 bun run bundle
 ```
 
-The bundle creates:
+The build creates:
 ```
-dist/
-├── vers-agent           # 59MB - Main executable
-├── vers-agent-launcher  # Wrapper that sets up paths
-└── claude-code/         # 68MB - Claude Code CLI + WASM files
+./vers-agent             # 59MB - Standalone executable
 ```
 
 ## Architecture
@@ -379,8 +389,11 @@ vers-agent/
 │       ├── history.ts
 │       ├── keys.ts
 │       ├── image-utils.ts
-│       └── project-docs.ts
+│       ├── project-docs.ts
+│       └── session-store.ts   # SQLite session/output persistence
 ├── tests/                     # Test files
+│   ├── session-sync.test.ts   # Session sync behavior tests
+│   ├── server-output-storage.test.ts  # Server storage tests
 │   └── cli/
 │       ├── utils/             # Utility tests
 │       ├── handlers/          # Handler tests
@@ -440,10 +453,24 @@ User Input → CLI/HTTP → Task Created → Agent.runTask()
 
 ### Session Management
 
-- **Config**: Model, thinking budget (global, survives restarts if in-memory)
+- **Config**: Model, thinking budget (global, survives restarts)
 - **Session**: Conversation history, cumulative cost/tokens
+- **SQLite Persistence**: Sessions and outputs stored in `bun:sqlite` database
 - **Last Session ID**: Persisted to enable `/continue` across restarts
 - **Compaction**: When context limit reached, old turns are summarized/removed
+
+#### Multi-User Session Sync
+
+When multiple CLI clients connect to the same server (remote mode), they can share sessions:
+
+1. **Server stores all outputs** - User messages, assistant responses, tool calls, and tool results are stored in SQLite
+2. **CLI syncs on connect** - When a CLI loads a session, it fetches all outputs from the server
+3. **Incremental sync** - Uses sequence numbers for efficient sync after initial load
+4. **Remote vs Local mode**:
+   - **Local mode** (`--cli` without `--url`): History loaded from local file (`~/.vers-agent/history.json`)
+   - **Remote mode** (`--url http://server:9999`): History loaded from server, local file ignored
+
+This enables workflows where Person A starts a session, Person B connects and sees the full history, and both can continue the conversation.
 
 ## Development Guide
 
@@ -481,10 +508,10 @@ bun run build          # Creates ./vers-agent (59MB)
 bun run bundle         # Creates dist/ directory (~127MB)
 ```
 
-#### Testing the Bundle
+#### Testing the Build
 ```bash
-./dist/vers-agent-launcher --help
-./dist/vers-agent-launcher --cli
+./vers-agent --help
+./vers-agent --cli
 ```
 
 ### Key Files to Modify
@@ -498,6 +525,7 @@ bun run bundle         # Creates dist/ directory (~127MB)
 | Modify event handling | `src/core/query-runner.ts` (runQuery function) |
 | Add task state fields | `src/core/tasks.ts` (Task interface) |
 | Change session behavior | `src/utils/config.ts` |
+| Change session storage | `src/utils/session-store.ts` |
 | Add tool icons | `src/cli/constants.ts` (TOOL_ICONS object) |
 | Add new CLI components | `src/cli/components/` directory |
 | Add new CLI hooks | `src/cli/hooks/` directory |
@@ -524,9 +552,10 @@ export CLAUDE_CODE_EXECUTABLE=./dist/claude-code/cli.js
 ```
 
 #### Session Not Continuing
-- Sessions are stored in memory only
-- Check `src/config.ts` for session storage logic
+- Sessions are stored in SQLite (survives restarts)
+- Check `src/utils/session-store.ts` for session storage logic
 - Use `curl http://localhost:9999/session` to inspect session state
+- In remote mode, ensure CLI is connecting to the correct server URL
 
 #### Task Events Not Appearing
 - Enable verbose logging in `src/agent.ts` (add console.log in event loop)
@@ -561,11 +590,16 @@ Events flow through three layers:
 - Handles complex layouts (spinners, multiline input, etc.)
 - Hot reload in development
 
+#### Why SQLite for Sessions?
+- Lightweight (no external database)
+- Persistent (survives restarts)
+- Multi-user sync (multiple CLI clients can share sessions)
+- Built-in to Bun (`bun:sqlite`)
+
 #### Why In-Memory Task Storage?
-- Simplicity (no database setup)
-- Fast (no I/O)
-- Ephemeral by design (VM use case)
-- Could be swapped for SQLite/Redis if persistence needed
+- Tasks are ephemeral (short-lived agent executions)
+- Fast (no I/O for real-time event streaming)
+- Sessions handle long-term persistence separately
 
 #### Why Separate CLI and Server?
 - Flexibility (run headless, or interactive, or both)
@@ -630,7 +664,7 @@ test("handles /mycommand", () => {
 
 #### "Claude Code executable not found"
 - Install: `npm install -g @anthropic-ai/claude-code`
-- Or use bundle: `bun run bundle` and use `dist/vers-agent-launcher`
+- Or build: `bun run build` and use `./vers-agent`
 - Or set manually: `export CLAUDE_CODE_EXECUTABLE=/path/to/claude`
 
 #### "Port 9999 already in use"
@@ -664,7 +698,7 @@ test("handles /mycommand", () => {
 
    This is intentional - each layer has different concerns.
 
-4. **Sessions are memory-only** - Sessions don't survive process restarts. The "last session ID" is stored, but the actual session data is lost. To add persistence, modify `src/config.ts`.
+4. **Sessions are SQLite-backed** - Sessions and outputs are stored in SQLite via `bun:sqlite`. This allows sessions to survive server restarts. See `src/utils/session-store.ts`.
 
 5. **No authentication** - The HTTP API has no auth. This is by design (VM/localhost use case). Add middleware in `src/server.ts` if needed.
 
@@ -692,7 +726,7 @@ test("handles /mycommand", () => {
 
 Some ideas for extending this project:
 
-- [ ] Add database persistence (SQLite via `bun:sqlite`)
+- [x] Add database persistence (SQLite via `bun:sqlite`)
 - [ ] Add authentication (API keys, JWT)
 - [ ] Add task queuing (only run N tasks concurrently)
 - [ ] Add metrics endpoint (Prometheus format)
@@ -701,7 +735,7 @@ Some ideas for extending this project:
 - [x] Add tests (Bun has built-in test runner)
 - [ ] Add web UI (Bun can serve HTML + React)
 - [ ] Add cost tracking per user/session
-- [ ] Add support for multiple concurrent sessions
+- [x] Add support for multiple concurrent sessions
 - [ ] Add transcript export (JSON, Markdown)
 
 ### Dependencies
@@ -725,6 +759,8 @@ bun test
 ```
 
 Current test coverage:
+- **`tests/session-sync.test.ts`** - Session output storage and multi-user sync
+- **`tests/server-output-storage.test.ts`** - Server output storage integration
 - **`tests/cli/utils/formatting.test.ts`** - formatTokens, formatToolArgs utilities
 - **`tests/cli/utils/command-matching.test.ts`** - Command matching and path extraction
 - **`tests/cli/handlers/command-handlers.test.ts`** - Slash command handler logic
@@ -733,6 +769,8 @@ Current test coverage:
 Test structure follows source structure:
 ```
 tests/
+├── session-sync.test.ts
+├── server-output-storage.test.ts
 └── cli/
     ├── utils/
     │   ├── formatting.test.ts

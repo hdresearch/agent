@@ -16,6 +16,7 @@ export interface CommandHandlerContext {
   setStatusInfo: React.Dispatch<React.SetStateAction<StatusInfo>>;
   addOutput: (line: Omit<OutputLine, "id">) => void;
   setOutput: React.Dispatch<React.SetStateAction<OutputLine[]>>;
+  clearOutput: () => void;
   setContinueMode: (mode: boolean) => void;
   historyRef: React.MutableRefObject<ConversationHistory | null>;
   exit: () => void;
@@ -51,6 +52,15 @@ export function handleSlashCommand(
     case "new":
     case "n":
       handleNew(ctx);
+      return { handled: true };
+
+    case "sessions":
+    case "s":
+      handleSessions(ctx);
+      return { handled: true };
+
+    case "session":
+      handleSession(arg, ctx);
       return { handled: true };
 
     case "clear":
@@ -128,6 +138,132 @@ function handleNew(ctx: CommandHandlerContext): void {
   ctx.setOutput([]);
   ctx.client?.newSession(ctx.sessionConfig).catch(() => {});
   ctx.addOutput({ type: "system", content: "🆕 Starting new conversation" });
+}
+
+function handleSessions(ctx: CommandHandlerContext): void {
+  if (!ctx.client) {
+    ctx.addOutput({ type: "error", content: "Not connected to server" });
+    return;
+  }
+
+  ctx.client.listSessions()
+    .then((result) => {
+      if (result.sessions.length === 0) {
+        ctx.addOutput({ type: "system", content: "No sessions found." });
+        ctx.addOutput({ type: "system", content: "Start a new session by sending a message." });
+        return;
+      }
+
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: `Sessions (${result.sessions.length}):` });
+      ctx.addOutput({ type: "system", content: "" });
+
+      for (const session of result.sessions) {
+        const isCurrent = session.id === result.currentSessionId;
+        const marker = isCurrent ? "→ " : "  ";
+        const name = session.name ? ` "${session.name}"` : "";
+        const lastUsed = formatRelativeTime(new Date(session.lastUsedAt));
+        const cost = session.totalCost > 0 ? ` · $${session.totalCost.toFixed(4)}` : "";
+        const mode = session.mode === "plan" ? " [plan]" : "";
+
+        // Show short ID (first 8 chars)
+        const shortId = session.id.slice(0, 8);
+
+        ctx.addOutput({
+          type: "system",
+          content: `${marker}${shortId}${name}${mode} - ${session.turns} turns${cost} - ${lastUsed}`,
+        });
+      }
+
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Switch to a session: /session <id>" });
+    })
+    .catch((err) => {
+      ctx.addOutput({ type: "error", content: `Failed to list sessions: ${err.message}` });
+    });
+}
+
+function handleSession(sessionId: string | undefined, ctx: CommandHandlerContext): void {
+  if (!ctx.client) {
+    ctx.addOutput({ type: "error", content: "Not connected to server" });
+    return;
+  }
+
+  if (!sessionId) {
+    ctx.addOutput({ type: "system", content: "Usage: /session <id>" });
+    ctx.addOutput({ type: "system", content: "Use /sessions to list available sessions." });
+    return;
+  }
+
+  // Allow partial session IDs - find matching session
+  ctx.client.listSessions()
+    .then((result) => {
+      // Find session matching the provided ID (prefix match)
+      const matches = result.sessions.filter(s => s.id.startsWith(sessionId));
+
+      if (matches.length === 0) {
+        ctx.addOutput({ type: "error", content: `No session found matching: ${sessionId}` });
+        ctx.addOutput({ type: "system", content: "Use /sessions to list available sessions." });
+        return;
+      }
+
+      if (matches.length > 1) {
+        ctx.addOutput({ type: "error", content: `Multiple sessions match "${sessionId}":` });
+        for (const s of matches.slice(0, 5)) {
+          ctx.addOutput({ type: "system", content: `  ${s.id.slice(0, 8)}` });
+        }
+        ctx.addOutput({ type: "system", content: "Please provide a more specific ID." });
+        return;
+      }
+
+      const session = matches[0];
+
+      // Switch to this session
+      return ctx.client!.loadSession(session.id)
+        .then(async () => {
+          ctx.setContinueMode(true);
+          // Clear local output cache - start fresh for this session
+          ctx.clearOutput();
+          const name = session.name ? ` "${session.name}"` : "";
+          ctx.addOutput({ type: "system", content: `↩ Switched to session ${session.id.slice(0, 8)}${name}` });
+
+          // Sync outputs from server
+          try {
+            const outputsResult = await ctx.client!.getSessionOutputs();
+            if (outputsResult.outputs.length > 0) {
+              ctx.addOutput({ type: "system", content: `📜 Loading ${outputsResult.outputs.length} previous messages...` });
+              for (const output of outputsResult.outputs) {
+                ctx.addOutput({
+                  type: output.type as "user" | "text" | "tool" | "tool-result" | "system" | "error" | "stats",
+                  content: output.content,
+                  color: output.color,
+                  toolName: output.toolName,
+                });
+              }
+            }
+          } catch {
+            // Ignore sync errors
+          }
+        });
+    })
+    .catch((err) => {
+      ctx.addOutput({ type: "error", content: `Failed to switch session: ${err.message}` });
+    });
+}
+
+// Helper function for relative time formatting
+function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }
 
 function handleClear(ctx: CommandHandlerContext): void {

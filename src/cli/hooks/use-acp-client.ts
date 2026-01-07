@@ -66,7 +66,14 @@ export function useAcpClient({
   }, [sessionConfig]);
 
   // Load conversation history on startup if continue mode
+  // BUT: for remote mode, skip local history - we'll load from server instead
   useEffect(() => {
+    if (isRemoteMode) {
+      // Remote mode: don't load local history, server will provide it
+      historyRef.current = createHistory("remote");
+      return;
+    }
+
     if (continueMode) {
       loadHistory().then((history) => {
         if (history && history.messages.length > 0) {
@@ -90,7 +97,7 @@ export function useAcpClient({
       // Fresh session
       historyRef.current = createHistory("new");
     }
-  }, [continueMode, persistedConfig.lastSessionId, onOutput]);
+  }, [continueMode, persistedConfig.lastSessionId, onOutput, isRemoteMode]);
 
   // Initialize ACP client
   useEffect(() => {
@@ -215,15 +222,45 @@ export function useAcpClient({
         }
 
         // Create or load session
+        let sessionLoaded = false;
         if (continueMode) {
-          // Try to load previous session (for now just create new)
+          // Try to load most recent session
+          try {
+            const sessions = await client.listSessions();
+            if (sessions.sessions.length > 0) {
+              const mostRecent = sessions.sessions[0];
+              await client.loadSession(mostRecent.id);
+              sessionLoaded = true;
+              onOutput({
+                type: "system",
+                content: `↩ Resumed session ${mostRecent.id.slice(0, 8)} (${mostRecent.turns} turns)`,
+              });
+            }
+          } catch {
+            // Fall back to new session
+          }
+        }
+
+        if (!sessionLoaded) {
           await client.newSession(sessionConfigRef.current);
-          onOutput({
-            type: "system",
-            content: "↩ Ready to continue (session state managed by Claude Code)",
-          });
-        } else {
-          await client.newSession(sessionConfigRef.current);
+        }
+
+        // Sync outputs from server (for multi-user support)
+        try {
+          const outputsResult = await client.getSessionOutputs();
+          if (outputsResult.outputs.length > 0) {
+            onOutput({ type: "system", content: `📜 Loading ${outputsResult.outputs.length} previous messages...` });
+            for (const output of outputsResult.outputs) {
+              onOutput({
+                type: output.type as OutputLine["type"],
+                content: output.content,
+                color: output.color,
+                toolName: output.toolName,
+              });
+            }
+          }
+        } catch {
+          // Ignore sync errors - outputs feature may not be available
         }
 
         // Fetch remote working directory if in remote mode

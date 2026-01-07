@@ -16,6 +16,10 @@ import {
   type NewSessionResult,
   type LoadSessionParams,
   type LoadSessionResult,
+  type ListSessionsResult,
+  type GetSessionOutputsParams,
+  type GetSessionOutputsResult,
+  type SessionSyncInfo,
   type PromptParams,
   type PromptResult,
   type SetModeParams,
@@ -180,6 +184,18 @@ export class HttpAcpClient {
     const result = await this.request<LoadSessionResult>(AcpMethod.SessionLoad, params);
     this._sessionId = result.sessionId;
     return result;
+  }
+
+  async listSessions(): Promise<ListSessionsResult> {
+    return this.request<ListSessionsResult>(AcpMethod.SessionList, {});
+  }
+
+  async getSessionOutputs(params?: GetSessionOutputsParams): Promise<GetSessionOutputsResult> {
+    return this.request<GetSessionOutputsResult>(AcpMethod.SessionOutputs, params || {});
+  }
+
+  async getSessionSync(sessionId?: string): Promise<SessionSyncInfo> {
+    return this.request<SessionSyncInfo>(AcpMethod.SessionSync, { sessionId });
   }
 
   async prompt(text: string, attachments?: Attachment[]): Promise<PromptResult> {

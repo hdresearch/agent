@@ -95,6 +95,48 @@ export interface LoadSessionResult {
   resumed: boolean;
 }
 
+// Session info for listing
+export interface SessionInfo {
+  id: string;
+  name?: string;
+  createdAt: string;
+  lastUsedAt: string;
+  turns: number;
+  totalCost: number;
+  mode: "default" | "plan";
+}
+
+export interface ListSessionsResult {
+  sessions: SessionInfo[];
+  currentSessionId: string | null;
+}
+
+// Session output sync
+export interface SessionOutput {
+  seq: number;
+  type: string;
+  content: string;
+  color?: string;
+  toolName?: string;
+}
+
+export interface SessionSyncInfo {
+  sessionId: string;
+  count: number;
+  lastSeq: number;
+}
+
+export interface GetSessionOutputsParams {
+  sessionId?: string;  // defaults to current session
+  afterSeq?: number;   // for incremental sync
+}
+
+export interface GetSessionOutputsResult {
+  sessionId: string;
+  outputs: SessionOutput[];
+  syncInfo: SessionSyncInfo;
+}
+
 export interface SessionConfig {
   model?: string;
   thinkingBudget?: number | null;
@@ -363,6 +405,9 @@ export const AcpMethod = {
   Authenticate: "authenticate",
   SessionNew: "session/new",
   SessionLoad: "session/load",
+  SessionList: "session/list",
+  SessionOutputs: "session/outputs",
+  SessionSync: "session/sync",
   SessionPrompt: "session/prompt",
   SessionCancel: "session/cancel",
   SessionSetMode: "session/set_mode",
