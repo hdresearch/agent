@@ -394,4 +394,63 @@ export const AcpMethod = {
   SessionGetPlan: "session/get_plan",
   SessionSetPlan: "session/set_plan",
   SessionClearPlan: "session/clear_plan",
+
+  // Queue Management
+  QueueEnqueue: "queue/enqueue",
+  QueueDequeue: "queue/dequeue",
+  QueuePeek: "queue/peek",
+  QueueList: "queue/list",
+  QueueRemove: "queue/remove",
+  QueueClear: "queue/clear",
 } as const;
+
+// ============================================================
+// Queue Management Types
+// ============================================================
+
+export interface QueuedPromptInfo {
+  id: string;
+  text: string;
+  attachments?: Attachment[];
+  queuedAt: string;
+  mode?: SessionMode;
+}
+
+export interface QueueEnqueueParams {
+  text: string;
+  attachments?: Attachment[];
+  mode?: SessionMode;
+}
+
+export interface QueueEnqueueResult {
+  id: string;
+  position: number;
+}
+
+export interface QueueDequeueResult {
+  prompt: QueuedPromptInfo | null;
+  remaining: number;
+}
+
+export interface QueuePeekResult {
+  prompt: QueuedPromptInfo | null;
+  queueLength: number;
+}
+
+export interface QueueListResult {
+  prompts: QueuedPromptInfo[];
+  processing: boolean;
+}
+
+export interface QueueRemoveParams {
+  ids: string[];
+}
+
+export interface QueueRemoveResult {
+  removed: number;
+  remaining: number;
+}
+
+export interface QueueClearResult {
+  cleared: number;
+}

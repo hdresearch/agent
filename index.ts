@@ -1,7 +1,7 @@
-import { runCli } from "./src/cli.js";
-import { createHttpServer } from "./src/http-server";
-import { loadConfig, loadMcpServers } from "./src/config";
-import { loadDocsStore } from "./src/docs-store";
+import { runCli } from "./src/cli/cli.js";
+import { createHttpServer } from "./src/server/http-server";
+import { loadConfig, loadMcpServers } from "./src/utils/config";
+import { loadDocsStore } from "./src/utils/docs-store";
 
 // Auto-detect Claude Code executable if not already set
 async function findClaudeCode(): Promise<string | null> {

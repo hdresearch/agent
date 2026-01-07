@@ -1,6 +1,6 @@
 import { query, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { getConfig, addToSession, updateSession, getMcpServers, getSessionMode } from "./config";
-import type { ProcessedImage } from "./image-utils";
+import { getConfig, addToSession, updateSession, getMcpServers, getSessionMode } from "../utils/config";
+import type { ProcessedImage } from "../utils/image-utils";
 
 // Get Claude Code executable path at runtime (not module load time)
 function getClaudeCodeExecutable(): string | undefined {

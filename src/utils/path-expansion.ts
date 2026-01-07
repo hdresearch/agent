@@ -3,7 +3,7 @@
 // Supports both local and remote (via ACP client) file reads
 
 import { join, resolve, isAbsolute } from "path";
-import type { HttpAcpClient } from "./http-client";
+import type { HttpAcpClient } from "../client/http-client";
 
 // Match @path references: @./file, @file, @path/to/file, @/absolute/path
 // Supports optional quotes: @"path with spaces"

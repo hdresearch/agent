@@ -9,7 +9,7 @@ import {
   createErrorResponse,
   ErrorCode,
   parseMessage,
-} from "./jsonrpc";
+} from "../protocol/jsonrpc";
 import {
   AcpMethod,
   type InitializeParams,
@@ -28,13 +28,23 @@ import {
   type CancelResult,
   type SessionNotificationParams,
   type AgentCapabilities,
-} from "./acp-types";
-import { runTask, cancelTask, clearProjectDocsCache, markDocsForReinjection } from "./agent";
-import { getDocs, setDocs, setDoc, getDocsStore, loadDocsStore, type StoredDoc } from "./docs-store";
-import { taskStore } from "./tasks";
-import { getConfig, setConfig, getSession, resetSession, updateSession, loadConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig, setSessionMode, getSessionMode, getPlan, setPlan, clearPlan, type PlanEntry } from "./config";
-import { loadStoredKeys, saveKeys, computeKeysHash, type KeysState } from "./keys";
-import { expandPrompt, hasPathReferences } from "./path-expansion";
+  type QueueEnqueueParams,
+  type QueueEnqueueResult,
+  type QueueDequeueResult,
+  type QueuePeekResult,
+  type QueueListResult,
+  type QueueRemoveParams,
+  type QueueRemoveResult,
+  type QueueClearResult,
+  type QueuedPromptInfo,
+} from "../protocol/acp-types";
+import { promptQueue, type QueuedPrompt } from "../core/prompt-queue";
+import { runTask, cancelTask, clearProjectDocsCache, markDocsForReinjection } from "../core/agent";
+import { getDocs, setDocs, setDoc, getDocsStore, loadDocsStore, type StoredDoc } from "../utils/docs-store";
+import { taskStore } from "../core/tasks";
+import { getConfig, setConfig, getSession, resetSession, updateSession, loadConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig, setSessionMode, getSessionMode, getPlan, setPlan, clearPlan, type PlanEntry } from "../utils/config";
+import { loadStoredKeys, saveKeys, computeKeysHash, type KeysState } from "../utils/keys";
+import { expandPrompt, hasPathReferences } from "../utils/path-expansion";
 import { randomUUID } from "crypto";
 
 const AGENT_INFO = {
@@ -65,6 +75,94 @@ let initialized = false;
 let authenticated = false;
 let currentSessionId: string | null = null;
 let runningTaskId: string | null = null;
+let autoProcessQueue = true; // Auto-process queued prompts after task completion
+
+// Helper to convert QueuedPrompt to QueuedPromptInfo
+function toQueuedPromptInfo(prompt: QueuedPrompt): QueuedPromptInfo {
+  return {
+    id: prompt.id,
+    text: prompt.text,
+    attachments: prompt.attachments,
+    queuedAt: prompt.queuedAt.toISOString(),
+    mode: prompt.mode,
+  };
+}
+
+// Process next queued prompt if available
+async function processNextQueuedPrompt(): Promise<void> {
+  if (!autoProcessQueue || runningTaskId || promptQueue.isEmpty) {
+    return;
+  }
+
+  const queued = promptQueue.dequeue();
+  if (!queued) return;
+
+  console.log(`Processing queued prompt: ${queued.text.slice(0, 50)}...`);
+
+  // Notify that we're processing a queued command
+  sendSessionNotification("queued_command", {
+    type: "queued_command",
+    promptId: queued.id,
+    text: queued.text,
+  });
+
+  // Execute the queued prompt
+  await executePrompt(queued.text, queued.attachments);
+}
+
+// Execute a prompt (extracted from handleSessionPrompt for reuse)
+async function executePrompt(text: string, attachments?: import("./acp-types").Attachment[]): Promise<void> {
+  // Expand @path references in the prompt
+  let promptText = text;
+  if (hasPathReferences(promptText)) {
+    const { expandedPrompt, refs } = await expandPrompt(promptText);
+    promptText = expandedPrompt;
+
+    if (refs.length > 0) {
+      console.log(`Expanded ${refs.length} @path reference(s)`);
+    }
+  }
+
+  // Convert ACP attachments to TaskAttachments
+  const taskAttachments = attachments?.map((a) => ({
+    type: a.type,
+    content: a.content,
+    mimeType: a.mimeType,
+  }));
+
+  const task = taskStore.create(promptText, {}, taskAttachments);
+  runningTaskId = task.id;
+  promptQueue.setProcessing(true);
+
+  // Subscribe to task events and broadcast via SSE
+  const unsubscribe = taskStore.subscribe(task.id, (event) => {
+    sendSessionNotification(event.type, event.data);
+
+    if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
+      runningTaskId = null;
+      promptQueue.setProcessing(false);
+
+      // Process next queued prompt if available
+      if (autoProcessQueue && !promptQueue.isEmpty) {
+        // Use setImmediate to avoid blocking
+        setTimeout(() => processNextQueuedPrompt(), 0);
+      }
+    }
+  });
+
+  // Start task execution (don't await)
+  runTask(task.id).catch((err) => {
+    console.error(`Task ${task.id} failed:`, err);
+    runningTaskId = null;
+    promptQueue.setProcessing(false);
+    unsubscribe();
+
+    // Still try to process next queued prompt
+    if (autoProcessQueue && !promptQueue.isEmpty) {
+      setTimeout(() => processNextQueuedPrompt(), 0);
+    }
+  });
+}
 
 // SSE clients waiting for events
 const sseClients: Set<(event: string, data: unknown) => void> = new Set();
@@ -234,55 +332,29 @@ async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSession
   };
 }
 
-async function handleSessionPrompt(params: PromptParams): Promise<PromptResult> {
+async function handleSessionPrompt(params: PromptParams): Promise<PromptResult & { queued?: boolean; queuePosition?: number }> {
   if (!currentSessionId) {
     throw new Error("No active session. Call session/new or session/load first.");
   }
 
-  // Expand @path references in the prompt
-  let promptText = params.text;
-  if (hasPathReferences(promptText)) {
-    const { expandedPrompt, refs, hasErrors } = await expandPrompt(promptText);
-    promptText = expandedPrompt;
+  // If a task is already running, queue this prompt
+  if (runningTaskId) {
+    const queued = promptQueue.enqueue(params.text, params.attachments);
+    console.log(`Queued prompt (position ${promptQueue.length}): ${params.text.slice(0, 50)}...`);
 
-    // Log expanded paths for debugging
-    if (refs.length > 0) {
-      console.log(`Expanded ${refs.length} @path reference(s):`);
-      for (const ref of refs) {
-        if (ref.error) {
-          console.log(`  ${ref.original} -> ERROR: ${ref.error}`);
-        } else {
-          console.log(`  ${ref.original} -> ${ref.absolutePath}`);
-        }
-      }
-    }
+    // Notify that the prompt was queued
+    sendSessionNotification("prompt_queued", {
+      type: "prompt_queued",
+      promptId: queued.id,
+      position: promptQueue.length,
+      text: params.text.slice(0, 100),
+    });
+
+    return { success: true, queued: true, queuePosition: promptQueue.length };
   }
 
-  // Convert ACP attachments to TaskAttachments
-  const attachments = params.attachments?.map((a) => ({
-    type: a.type,
-    content: a.content,
-    mimeType: a.mimeType,
-  }));
-
-  const task = taskStore.create(promptText, {}, attachments);
-  runningTaskId = task.id;
-
-  // Subscribe to task events and broadcast via SSE
-  const unsubscribe = taskStore.subscribe(task.id, (event) => {
-    sendSessionNotification(event.type, event.data);
-
-    if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
-      runningTaskId = null;
-    }
-  });
-
-  // Start task execution (don't await)
-  runTask(task.id).catch((err) => {
-    console.error(`Task ${task.id} failed:`, err);
-    unsubscribe();
-  });
-
+  // Execute immediately
+  await executePrompt(params.text, params.attachments);
   return { success: true };
 }
 
@@ -531,6 +603,79 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         clearPlan();
         sendSessionNotification("plan_update", { type: "plan_update", entries: [] });
         result = { success: true };
+        break;
+
+      // Queue Management
+      case AcpMethod.QueueEnqueue:
+        {
+          const queueParams = params as QueueEnqueueParams;
+          if (!queueParams.text) {
+            throw new Error("Missing text parameter");
+          }
+          const queued = promptQueue.enqueue(
+            queueParams.text,
+            queueParams.attachments,
+            queueParams.mode
+          );
+          result = {
+            id: queued.id,
+            position: promptQueue.length,
+          } as QueueEnqueueResult;
+        }
+        break;
+
+      case AcpMethod.QueueDequeue:
+        {
+          const dequeued = promptQueue.dequeue();
+          result = {
+            prompt: dequeued ? toQueuedPromptInfo(dequeued) : null,
+            remaining: promptQueue.length,
+          } as QueueDequeueResult;
+        }
+        break;
+
+      case AcpMethod.QueuePeek:
+        {
+          const peeked = promptQueue.peek();
+          result = {
+            prompt: peeked ? toQueuedPromptInfo(peeked) : null,
+            queueLength: promptQueue.length,
+          } as QueuePeekResult;
+        }
+        break;
+
+      case AcpMethod.QueueList:
+        {
+          const all = promptQueue.getAll();
+          result = {
+            prompts: all.map(toQueuedPromptInfo),
+            processing: promptQueue.isProcessing,
+          } as QueueListResult;
+        }
+        break;
+
+      case AcpMethod.QueueRemove:
+        {
+          const removeParams = params as QueueRemoveParams;
+          if (!removeParams.ids || !Array.isArray(removeParams.ids)) {
+            throw new Error("Missing or invalid ids parameter");
+          }
+          const removed = promptQueue.remove(removeParams.ids);
+          result = {
+            removed: removed.length,
+            remaining: promptQueue.length,
+          } as QueueRemoveResult;
+        }
+        break;
+
+      case AcpMethod.QueueClear:
+        {
+          const count = promptQueue.length;
+          promptQueue.clear();
+          result = {
+            cleared: count,
+          } as QueueClearResult;
+        }
         break;
 
       default:

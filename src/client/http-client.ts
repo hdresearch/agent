@@ -5,7 +5,7 @@ import {
   type JsonRpcResponse,
   createRequest,
   ErrorCode,
-} from "./jsonrpc";
+} from "../protocol/jsonrpc";
 import {
   AcpMethod,
   type InitializeParams,
@@ -25,7 +25,16 @@ import {
   type SessionNotificationParams,
   type AgentCapabilities,
   type Attachment,
-} from "./acp-types";
+  type QueueEnqueueParams,
+  type QueueEnqueueResult,
+  type QueueDequeueResult,
+  type QueuePeekResult,
+  type QueueListResult,
+  type QueueRemoveParams,
+  type QueueRemoveResult,
+  type QueueClearResult,
+  type SessionMode,
+} from "../protocol/acp-types";
 
 export type NotificationHandler = (params: SessionNotificationParams) => void;
 
@@ -288,6 +297,37 @@ export class HttpAcpClient {
 
   async clearPlan(): Promise<{ success: boolean }> {
     return this.request(AcpMethod.SessionClearPlan, {});
+  }
+
+  // Queue management
+  async queueEnqueue(
+    text: string,
+    attachments?: Attachment[],
+    mode?: SessionMode
+  ): Promise<QueueEnqueueResult> {
+    const params: QueueEnqueueParams = { text, attachments, mode };
+    return this.request(AcpMethod.QueueEnqueue, params);
+  }
+
+  async queueDequeue(): Promise<QueueDequeueResult> {
+    return this.request(AcpMethod.QueueDequeue, {});
+  }
+
+  async queuePeek(): Promise<QueuePeekResult> {
+    return this.request(AcpMethod.QueuePeek, {});
+  }
+
+  async queueList(): Promise<QueueListResult> {
+    return this.request(AcpMethod.QueueList, {});
+  }
+
+  async queueRemove(ids: string[]): Promise<QueueRemoveResult> {
+    const params: QueueRemoveParams = { ids };
+    return this.request(AcpMethod.QueueRemove, params);
+  }
+
+  async queueClear(): Promise<QueueClearResult> {
+    return this.request(AcpMethod.QueueClear, {});
   }
 
   onNotification(handler: NotificationHandler): void {

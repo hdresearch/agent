@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { render, Box, Text, useInput, useApp } from "ink";
 import { ControlledMultilineInput } from "ink-multiline-input";
-import { HttpAcpClient, connectToAcpServer } from "./http-client";
-import type { SessionNotificationParams, SessionConfig, Attachment } from "./acp-types";
-import { detectKeys, computeKeysHash, formatKeysDisplay } from "./keys";
-import { setConfig, getConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./config";
+import { HttpAcpClient, connectToAcpServer } from "../client/http-client";
+import type { SessionNotificationParams, SessionConfig, Attachment } from "../protocol/acp-types";
+import { detectKeys, computeKeysHash, formatKeysDisplay } from "../utils/keys";
+import { setConfig, getConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "../utils/config";
 import {
   processImagesInPrompt,
   extractImageReferences,
   readImageAsBase64,
   type ProcessedImage,
-} from "./image-utils";
+} from "../utils/image-utils";
 import {
   loadHistory,
   saveHistory,
   createHistory,
   addMessage,
   type ConversationHistory,
-} from "./history";
+} from "../utils/history";
 
 // Slash commands
 const COMMANDS = [

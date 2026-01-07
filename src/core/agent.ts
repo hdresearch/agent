@@ -1,14 +1,14 @@
 import { taskStore } from "./tasks";
 import { runQuery, type QueryHandle, type AnyQueryEvent } from "./query-runner";
-import { readProjectDocs, type ProjectDocs } from "./project-docs";
+import { readProjectDocs, type ProjectDocs } from "../utils/project-docs";
 import {
   getDocs,
   setDocsFromFilesystem,
   formatStoredDocsAsSystemPrompt,
   formatStoredDocsForReinjection,
   loadDocsStore,
-} from "./docs-store";
-import { processImagesInPrompt, type ProcessedImage } from "./image-utils";
+} from "../utils/docs-store";
+import { processImagesInPrompt, type ProcessedImage } from "../utils/image-utils";
 
 // Track running query handles for cancellation
 const runningQueries: Map<string, QueryHandle> = new Map();
