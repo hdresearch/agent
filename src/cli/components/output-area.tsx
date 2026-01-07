@@ -5,13 +5,28 @@ import type { OutputLine } from "../types";
 interface OutputAreaProps {
   lines: OutputLine[];
   maxLines?: number;
+  scrollOffset?: number;
 }
 
-export function OutputArea({ lines, maxLines = 20 }: OutputAreaProps) {
-  const visibleLines = lines.slice(-maxLines);
+export function OutputArea({ lines, maxLines = 20, scrollOffset = 0 }: OutputAreaProps) {
+  // Calculate visible window with scroll offset
+  // scrollOffset 0 = bottom (most recent), higher = scrolled up
+  const endIndex = lines.length - scrollOffset;
+  const startIndex = Math.max(0, endIndex - maxLines);
+  const visibleLines = lines.slice(startIndex, endIndex);
+
+  // Check if we can scroll in either direction
+  const canScrollUp = startIndex > 0;
+  const canScrollDown = scrollOffset > 0;
 
   return (
     <Box flexDirection="column" paddingX={1}>
+      {/* Scroll up indicator */}
+      {canScrollUp && (
+        <Box justifyContent="center">
+          <Text dimColor>↑ {startIndex} more messages (PgUp to scroll)</Text>
+        </Box>
+      )}
       {visibleLines.map((line) => {
         switch (line.type) {
           case "user":
@@ -72,6 +87,12 @@ export function OutputArea({ lines, maxLines = 20 }: OutputAreaProps) {
             return <Text key={line.id}>{line.content}</Text>;
         }
       })}
+      {/* Scroll down indicator */}
+      {canScrollDown && (
+        <Box justifyContent="center">
+          <Text dimColor>↓ {scrollOffset} more messages (PgDn to scroll)</Text>
+        </Box>
+      )}
     </Box>
   );
 }

@@ -319,7 +319,7 @@ export function InputBar({
         </Box>
         <Box justifyContent="flex-end">
           <Text dimColor>
-            Enter: send  Shift+Enter: ⏎  Ctrl+C: clear  ESC: cancel
+            Enter: send  Shift+Enter: ⏎  Ctrl+C: clear  ESC: cancel  PgUp/PgDn: scroll
           </Text>
         </Box>
       </Box>

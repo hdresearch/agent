@@ -36,6 +36,7 @@ export function App({ initialContinue, serverUrl }: AppProps) {
   const [queuedInput, setQueuedInput] = useState<string | null>(null);
   const [output, setOutput] = useState<OutputLine[]>([]);
   const [state, setState] = useState<AppState>({ status: "idle" });
+  const [scrollOffset, setScrollOffset] = useState(0);
   // In remote mode, default to continuing the most recent session
   const [continueMode, setContinueMode] = useState(initialContinue || !!serverUrl);
 
@@ -54,9 +55,10 @@ export function App({ initialContinue, serverUrl }: AppProps) {
     setSessionConfigState(prev => ({ ...prev, ...updates }));
   }, []);
 
-  // Output helper
+  // Output helper - auto-scroll to bottom when adding output
   const addOutput = useCallback((line: Omit<OutputLine, "id">) => {
     setOutput((prev) => [...prev, { ...line, id: uniqueId() }]);
+    setScrollOffset(0); // Reset scroll to bottom on new output
   }, []);
 
   // Image attachments hook
@@ -258,13 +260,6 @@ export function App({ initialContinue, serverUrl }: AppProps) {
     }
   }, [addOutput, client, state.status]);
 
-  // Handle ESC key to cancel running query
-  useInput((inputChar, key) => {
-    if (key.escape && state.status !== "idle") {
-      cancelQuery();
-    }
-  });
-
   // Calculate output area size based on input lines
   const inputLineCount = input.split("\n").length;
   const terminalHeight = process.stdout.rows || 24;
@@ -273,10 +268,54 @@ export function App({ initialContinue, serverUrl }: AppProps) {
   const topStatusBarHeight = 3;
   const inputBoxHeight = 4 + inputLineCount;
   const suggestionsHeight = showSuggestions ? 1 : 0;
-  const outputMaxLines = Math.max(3, terminalHeight - topStatusBarHeight - inputBoxHeight - activityBarHeight - suggestionsHeight);
+  const attachmentsHeight = pendingAttachments.length > 0 ? 1 : 0;
+
+  // Reserve 10% of terminal as minimum bottom space
+  const minBottomBuffer = Math.max(2, Math.floor(terminalHeight * 0.1));
+  const fixedElementsHeight = topStatusBarHeight + inputBoxHeight + activityBarHeight + suggestionsHeight + attachmentsHeight;
+
+  // Max lines before input would go below the 90% mark
+  const outputMaxLines = Math.max(3, terminalHeight - fixedElementsHeight - minBottomBuffer);
+
+  // Estimate actual output height (rough: each output line + margin)
+  const estimatedOutputLines = Math.min(output.length * 2, outputMaxLines);
+
+  // If content is short, don't fill the terminal - let input follow content
+  // If content is long, fill terminal and cap output
+  const contentFillsScreen = estimatedOutputLines >= outputMaxLines;
+  const containerHeight = contentFillsScreen ? terminalHeight : undefined;
+
+  // Handle ESC key to cancel running query and Page Up/Down for scrolling
+  useInput((inputChar, key) => {
+    if (key.escape && state.status !== "idle") {
+      cancelQuery();
+    }
+
+    // Page Up - scroll up through history
+    if (key.pageUp) {
+      const maxScroll = Math.max(0, output.length - outputMaxLines);
+      setScrollOffset(prev => Math.min(maxScroll, prev + 5));
+    }
+
+    // Page Down - scroll down through history
+    if (key.pageDown) {
+      setScrollOffset(prev => Math.max(0, prev - 5));
+    }
+
+    // Home - scroll to top
+    if (key.home) {
+      const maxScroll = Math.max(0, output.length - outputMaxLines);
+      setScrollOffset(maxScroll);
+    }
+
+    // End - scroll to bottom
+    if (key.end) {
+      setScrollOffset(0);
+    }
+  });
 
   return (
-    <Box flexDirection="column" height={terminalHeight}>
+    <Box flexDirection="column" height={containerHeight}>
       <TopStatusBar
         model={statusInfo.model}
         thinking={statusInfo.thinking}
@@ -285,9 +324,7 @@ export function App({ initialContinue, serverUrl }: AppProps) {
         planMode={statusInfo.planMode}
         sessionId={statusInfo.sessionId}
       />
-      <Box flexDirection="column" flexGrow={1}>
-        <OutputArea lines={output} maxLines={outputMaxLines} />
-      </Box>
+      <OutputArea lines={output} maxLines={outputMaxLines} scrollOffset={scrollOffset} />
       <StatusBar state={state} />
       {/* Show pending attachments above input like Claude Code */}
       {pendingAttachments.length > 0 && (
