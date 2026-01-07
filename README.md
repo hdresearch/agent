@@ -240,14 +240,51 @@ curl -N http://localhost:9999/tasks/{id}/stream
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check (returns `{"status": "ok"}`) |
+| `/health` | GET | Health check with basic metrics |
+| `/metrics` | GET | Prometheus-format metrics |
+| `/metrics?format=json` | GET | Metrics as JSON |
+| `/logs` | GET | SSE stream of server logs |
+| `/logs?level=debug` | GET | Include debug logs (default: info) |
+| `/logs?recent=false` | GET | Skip recent log history |
 
 **Example: Streaming Task Events**
 ```bash
 curl -N http://localhost:9999/tasks/550e8400-e29b-41d4-a716-446655440000/stream
 ```
 
+**Example: Prometheus Metrics**
+```bash
+curl http://localhost:9999/metrics
+```
+Output:
+```
+# TYPE vers_agent_prompts_total counter
+vers_agent_prompts_total 42
+# TYPE vers_agent_sessions_created_total counter
+vers_agent_sessions_created_total 5
+# TYPE vers_agent_tokens_input_total counter
+vers_agent_tokens_input_total 125000
+# TYPE vers_agent_cost_usd_total gauge
+vers_agent_cost_usd_total 0.1234
+# TYPE vers_agent_prompt_duration_ms histogram
+vers_agent_prompt_duration_ms_bucket{le="1000"} 10
+vers_agent_prompt_duration_ms_bucket{le="5000"} 35
+vers_agent_prompt_duration_ms_sum 87500
+vers_agent_prompt_duration_ms_count 42
+```
+
+**Example: Log Streaming (tail -f style)**
+```bash
+curl -N http://localhost:9999/logs?level=debug
+```
 Output (SSE format):
+```
+data: {"timestamp":"2026-01-07T12:00:01Z","level":"info","message":"Task created","data":{"taskId":"abc123"}}
+data: {"timestamp":"2026-01-07T12:00:02Z","level":"debug","message":"Task event","data":{"type":"tool_use"}}
+data: {"timestamp":"2026-01-07T12:00:03Z","level":"info","message":"Task finished","data":{"status":"completed"}}
+```
+
+**Task Events Output (SSE format):**
 ```
 data: {"type":"started","timestamp":"2026-01-06T12:00:01Z"}
 
@@ -728,9 +765,9 @@ Some ideas for extending this project:
 
 - [x] Add database persistence (SQLite via `bun:sqlite`)
 - [ ] Add authentication (API keys, JWT)
-- [ ] Add task queuing (only run N tasks concurrently)
-- [ ] Add metrics endpoint (Prometheus format)
-- [ ] Add log streaming (tail -f style for debugging)
+- [x] Add task queuing (sequential prompt queue)
+- [x] Add metrics endpoint (Prometheus format)
+- [x] Add log streaming (tail -f style for debugging)
 - [x] Add Docker support (Dockerfile, docker-compose)
 - [x] Add tests (Bun has built-in test runner)
 - [ ] Add web UI (Bun can serve HTML + React)

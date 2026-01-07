@@ -6,6 +6,7 @@ import {
   createRequest,
   ErrorCode,
 } from "../protocol/jsonrpc";
+import { tokenStore } from "../utils/token-store";
 import {
   AcpMethod,
   type InitializeParams,
@@ -42,6 +43,14 @@ import {
 
 export type NotificationHandler = (params: SessionNotificationParams) => void;
 
+export interface ClaimResponse {
+  claimed: boolean;
+  isOwner: boolean;
+  token?: string;
+  error?: string;
+  message?: string;
+}
+
 export class HttpAcpClient {
   private baseUrl: string;
   private eventSource: EventSource | null = null;
@@ -49,22 +58,93 @@ export class HttpAcpClient {
   private agentCapabilities: AgentCapabilities | null = null;
   private _sessionId: string | null = null;
   private _connected = false;
+  private _authToken: string | null = null;
+  private _isOwner = false;
   private requestId = 0;
+  private clientId: string;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, clientId = "vers-cli") {
     // Normalize URL (remove trailing slash)
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.clientId = clientId;
+
+    // Load stored token for this server
+    this._authToken = tokenStore.getToken(baseUrl);
+  }
+
+  // Claim or verify ownership of the server
+  async claim(): Promise<ClaimResponse> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Client-Id": this.clientId,
+    };
+
+    // Include token if we have one
+    if (this._authToken) {
+      headers["Authorization"] = `Bearer ${this._authToken}`;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/claim`, {
+        method: "POST",
+        headers,
+      });
+    } catch (err) {
+      throw new Error(`Failed to connect to server: ${err instanceof Error ? err.message : "Network error"}`);
+    }
+
+    // Check if response is JSON
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new Error(`Server returned non-JSON response: ${text.slice(0, 100)}`);
+    }
+
+    let result: ClaimResponse;
+    try {
+      result = (await response.json()) as ClaimResponse;
+    } catch {
+      throw new Error("Failed to parse server response as JSON");
+    }
+
+    // If we got a new token, store it
+    if (result.token) {
+      this._authToken = result.token;
+      tokenStore.setToken(this.baseUrl, result.token);
+    }
+
+    this._isOwner = result.isOwner;
+    return result;
   }
 
   // Connect to SSE stream
-  connect(): Promise<void> {
+  async connect(): Promise<void> {
+    // First, try to claim or verify ownership
+    const claimResult = await this.claim();
+
+    if (!claimResult.isOwner) {
+      throw new Error(claimResult.error || "Failed to authenticate with server");
+    }
+
     return new Promise((resolve, reject) => {
-      const eventsUrl = `${this.baseUrl}/events`;
+      // Add token to events URL if we have one
+      let eventsUrl = `${this.baseUrl}/events`;
+      if (this._authToken) {
+        eventsUrl += `?token=${encodeURIComponent(this._authToken)}`;
+      }
 
       // Use fetch with streaming instead of EventSource for better Bun compatibility
       fetch(eventsUrl)
         .then(async (response) => {
           if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              // Token might be invalid, clear it
+              tokenStore.removeToken(this.baseUrl);
+              this._authToken = null;
+              reject(new Error("Authentication failed. Token may be invalid."));
+              return;
+            }
             reject(new Error(`Failed to connect to ${eventsUrl}: ${response.status}`));
             return;
           }
@@ -127,13 +207,25 @@ export class HttpAcpClient {
     const id = ++this.requestId;
     const request = createRequest(id, method, params);
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    // Include auth token if we have one
+    if (this._authToken) {
+      headers["Authorization"] = `Bearer ${this._authToken}`;
+    }
+
     const response = await fetch(`${this.baseUrl}/rpc`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(request),
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Authentication failed. Server may be claimed by another client.");
+      }
       throw new Error(`HTTP error: ${response.status}`);
     }
 
@@ -373,6 +465,21 @@ export class HttpAcpClient {
 
   get isConnected(): boolean {
     return this._connected;
+  }
+
+  get authToken(): string | null {
+    return this._authToken;
+  }
+
+  get isOwner(): boolean {
+    return this._isOwner;
+  }
+
+  // Clear stored token (useful for logout/reset)
+  clearToken(): void {
+    tokenStore.removeToken(this.baseUrl);
+    this._authToken = null;
+    this._isOwner = false;
   }
 
   close(): void {

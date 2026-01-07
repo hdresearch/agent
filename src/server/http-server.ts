@@ -51,6 +51,9 @@ import { getConfig, setConfig, getSession, resetSession, updateSession, loadConf
 import { sessionStore, sessionOutputStore } from "../utils/session-store";
 import { loadStoredKeys, saveKeys, computeKeysHash, type KeysState } from "../utils/keys";
 import { expandPrompt, hasPathReferences } from "../utils/path-expansion";
+import { metrics, MetricNames } from "../utils/metrics";
+import { logStream, shouldIncludeLevel, type LogLevel } from "../utils/log-stream";
+import { authStore } from "../utils/auth-store";
 import { randomUUID } from "crypto";
 
 const AGENT_INFO = {
@@ -58,21 +61,75 @@ const AGENT_INFO = {
   version: "1.0.0",
 };
 
-// Debug logging
-const DEBUG = process.env.DEBUG === "1" || process.env.DEBUG === "true";
+// Logging via logStream (supports streaming to /logs endpoint)
+function debug(message: string, data?: unknown): void {
+  logStream.debug(message, data);
+}
 
-function debug(...args: unknown[]): void {
-  if (DEBUG) {
-    console.log("[DEBUG]", new Date().toISOString(), ...args);
+function info(message: string, data?: unknown): void {
+  logStream.info(message, data);
+}
+
+function error(message: string, data?: unknown): void {
+  logStream.error(message, data);
+  metrics.incCounter(MetricNames.ERRORS_TOTAL);
+}
+
+// Authentication helpers
+function getAuthToken(req: Request): string | null {
+  // Check Authorization header (Bearer token)
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
   }
+
+  // Check X-Auth-Token header
+  const tokenHeader = req.headers.get("X-Auth-Token");
+  if (tokenHeader) {
+    return tokenHeader;
+  }
+
+  // Check query parameter (for SSE connections)
+  const url = new URL(req.url);
+  const tokenParam = url.searchParams.get("token");
+  if (tokenParam) {
+    return tokenParam;
+  }
+
+  return null;
 }
 
-function info(...args: unknown[]): void {
-  console.log("[INFO]", new Date().toISOString(), ...args);
+interface AuthResult {
+  authorized: boolean;
+  error?: string;
+  claimToken?: string; // Only set when claiming
 }
 
-function error(...args: unknown[]): void {
-  console.error("[ERROR]", new Date().toISOString(), ...args);
+function checkAuth(req: Request, clientId?: string): AuthResult {
+  const claimState = authStore.getClaimState();
+
+  // If server is unclaimed, allow and initiate claim
+  if (!claimState.isClaimed) {
+    const claimResult = authStore.claim(clientId || "unknown-client");
+    if (claimResult.success) {
+      info("Server claimed by client", { clientId });
+      return { authorized: true, claimToken: claimResult.token };
+    }
+    // Race condition - someone else claimed it
+    return { authorized: false, error: "Server was just claimed by another client" };
+  }
+
+  // Server is claimed, check token
+  const token = getAuthToken(req);
+  if (!token) {
+    return { authorized: false, error: "Authentication required. Server is claimed." };
+  }
+
+  if (!authStore.verifyToken(token)) {
+    return { authorized: false, error: "Invalid authentication token" };
+  }
+
+  return { authorized: true };
 }
 
 const AGENT_CAPABILITIES: AgentCapabilities = {
@@ -162,9 +219,10 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
   }));
 
   const task = taskStore.create(promptText, {}, taskAttachments);
-  info("Task created:", { taskId: task.id, status: task.status });
+  info("Task created", { taskId: task.id, status: task.status });
   runningTaskId = task.id;
   promptQueue.setProcessing(true);
+  metrics.setGauge(MetricNames.RUNNING_TASKS, 1);
 
   // Subscribe to task events and broadcast via SSE
   const unsubscribe = taskStore.subscribe(task.id, (event) => {
@@ -172,9 +230,11 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
     sendSessionNotification(event.type, event.data);
 
     if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
-      info("Task finished:", { taskId: task.id, status: event.type });
+      info("Task finished", { taskId: task.id, status: event.type });
       runningTaskId = null;
       promptQueue.setProcessing(false);
+      metrics.setGauge(MetricNames.RUNNING_TASKS, 0);
+      metrics.setGauge(MetricNames.QUEUE_LENGTH, promptQueue.length);
 
       // Process next queued prompt if available
       if (autoProcessQueue && !promptQueue.isEmpty) {
@@ -185,12 +245,12 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
   });
 
   // Start task execution (don't await)
-  info("Starting task execution:", task.id);
+  info("Starting task execution", { taskId: task.id });
   runTask(task.id).catch((err) => {
-    error(`Task ${task.id} failed:`, err);
-    error("Error stack:", err instanceof Error ? err.stack : "(no stack)");
+    error(`Task ${task.id} failed`, { error: err instanceof Error ? err.message : String(err) });
     runningTaskId = null;
     promptQueue.setProcessing(false);
+    metrics.setGauge(MetricNames.RUNNING_TASKS, 0);
     unsubscribe();
 
     // Still try to process next queued prompt
@@ -202,6 +262,16 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
 
 // SSE clients waiting for events
 const sseClients: Set<(event: string, data: unknown) => void> = new Set();
+
+function addSseClient(send: (event: string, data: unknown) => void): void {
+  sseClients.add(send);
+  metrics.setGauge(MetricNames.SSE_CLIENTS, sseClients.size);
+}
+
+function removeSseClient(send: (event: string, data: unknown) => void): void {
+  sseClients.delete(send);
+  metrics.setGauge(MetricNames.SSE_CLIENTS, sseClients.size);
+}
 
 function broadcastEvent(type: string, data: unknown): void {
   for (const send of sseClients) {
@@ -227,6 +297,8 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       };
 
     case "tool_use":
+      // Track tool call metrics
+      metrics.incCounter(MetricNames.TOOL_CALLS_TOTAL, { tool: (d.toolName as string) || "unknown" });
       return {
         type: "tool_call",
         data: {
@@ -253,6 +325,11 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       if (currentSessionId) {
         sessionStore.recordCompletion(currentSessionId, (d.totalCostUsd as number) || 0);
       }
+      // Track metrics
+      metrics.incCounter(MetricNames.TOKENS_INPUT, undefined, (d.inputTokens as number) || 0);
+      metrics.incCounter(MetricNames.TOKENS_OUTPUT, undefined, (d.outputTokens as number) || 0);
+      metrics.incGauge(MetricNames.COST_USD, (d.totalCostUsd as number) || 0);
+      metrics.observeHistogram(MetricNames.PROMPT_DURATION_MS, (d.durationMs as number) || 0);
       return {
         type: "completed",
         data: {
@@ -406,6 +483,8 @@ async function handleAuthenticate(params: AuthenticateParams): Promise<Authentic
 
 async function handleSessionNew(params: NewSessionParams): Promise<NewSessionResult & { mode?: string }> {
   info("Creating new session");
+  metrics.incCounter(MetricNames.SESSIONS_CREATED);
+  metrics.incGauge(MetricNames.ACTIVE_SESSIONS);
   resetSession();
   clearProjectDocsCache(); // Force re-read of CLAUDE.md, AGENT.md, etc.
 
@@ -472,6 +551,8 @@ async function handleSessionList(): Promise<ListSessionsResult> {
 }
 
 async function handleSessionPrompt(params: PromptParams): Promise<PromptResult & { queued?: boolean; queuePosition?: number }> {
+  metrics.incCounter(MetricNames.PROMPTS_TOTAL);
+
   // Auto-create session if needed
   if (!currentSessionId) {
     info("Auto-creating session for incoming prompt");
@@ -490,7 +571,9 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
   // If a task is already running, queue this prompt
   if (runningTaskId) {
     const queued = promptQueue.enqueue(params.text, params.attachments);
-    console.log(`Queued prompt (position ${promptQueue.length}): ${params.text.slice(0, 50)}...`);
+    metrics.incCounter(MetricNames.PROMPTS_QUEUED);
+    metrics.setGauge(MetricNames.QUEUE_LENGTH, promptQueue.length);
+    info(`Queued prompt (position ${promptQueue.length}): ${params.text.slice(0, 50)}...`);
 
     // Notify that the prompt was queued
     sendSessionNotification("prompt_queued", {
@@ -958,12 +1041,89 @@ export function createHttpServer(port: number): { close: () => void } {
       const corsHeaders = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Auth-Token, X-Client-Id",
       };
 
       // Handle CORS preflight
       if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
+      }
+
+      // Health check - allowed without auth, shows claim status
+      if (url.pathname === "/health") {
+        const claimState = authStore.getClaimState();
+        return Response.json({
+          status: "ok",
+          initialized,
+          sessionId: currentSessionId,
+          claimed: claimState.isClaimed,
+          claimedAt: claimState.claimedAt,
+          metrics: {
+            prompts: metrics.getCounter(MetricNames.PROMPTS_TOTAL),
+            sessions: metrics.getCounter(MetricNames.SESSIONS_CREATED),
+            queueLength: metrics.getGauge(MetricNames.QUEUE_LENGTH),
+            sseClients: metrics.getGauge(MetricNames.SSE_CLIENTS),
+          },
+        }, { headers: corsHeaders });
+      }
+
+      // Claim endpoint - check/claim server
+      if (url.pathname === "/claim" && req.method === "POST") {
+        const clientId = req.headers.get("X-Client-Id") || "unknown-client";
+        const claimState = authStore.getClaimState();
+
+        if (claimState.isClaimed) {
+          // Already claimed - check if this client has valid token
+          const token = getAuthToken(req);
+          if (token && authStore.verifyToken(token)) {
+            return Response.json({
+              claimed: true,
+              isOwner: true,
+              claimedAt: claimState.claimedAt,
+            }, { headers: corsHeaders });
+          }
+          return Response.json({
+            claimed: true,
+            isOwner: false,
+            error: "Server is already claimed by another client",
+          }, { status: 403, headers: corsHeaders });
+        }
+
+        // Unclaimed - claim it
+        const result = authStore.claim(clientId);
+        if (result.success) {
+          info("Server claimed via /claim endpoint", { clientId });
+          return Response.json({
+            claimed: true,
+            isOwner: true,
+            token: result.token,
+            message: "Server claimed successfully. Save this token!",
+          }, { headers: corsHeaders });
+        }
+
+        return Response.json({
+          claimed: true,
+          isOwner: false,
+          error: result.error,
+        }, { status: 403, headers: corsHeaders });
+      }
+
+      // All other endpoints require auth (if server is claimed)
+      const claimState = authStore.getClaimState();
+      if (claimState.isClaimed) {
+        const token = getAuthToken(req);
+        if (!token) {
+          return Response.json({
+            error: "Authentication required",
+            message: "Server is claimed. Provide token via Authorization header or ?token= parameter",
+          }, { status: 401, headers: corsHeaders });
+        }
+        if (!authStore.verifyToken(token)) {
+          return Response.json({
+            error: "Invalid token",
+            message: "The provided authentication token is invalid",
+          }, { status: 403, headers: corsHeaders });
+        }
       }
 
       // JSON-RPC endpoint
@@ -992,6 +1152,8 @@ export function createHttpServer(port: number): { close: () => void } {
 
       // SSE endpoint for notifications
       if (url.pathname === "/events" && req.method === "GET") {
+        let clientSend: ((event: string, data: unknown) => void) | null = null;
+
         const stream = new ReadableStream({
           start(controller) {
             const encoder = new TextEncoder();
@@ -1000,22 +1162,21 @@ export function createHttpServer(port: number): { close: () => void } {
             controller.enqueue(encoder.encode("event: connected\ndata: {}\n\n"));
 
             // Register this client
-            const send = (event: string, data: unknown) => {
+            clientSend = (event: string, data: unknown) => {
               const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
               try {
                 controller.enqueue(encoder.encode(payload));
               } catch {
                 // Client disconnected
-                sseClients.delete(send);
+                if (clientSend) removeSseClient(clientSend);
               }
             };
 
-            sseClients.add(send);
-
-            // Cleanup on close (handled by ReadableStream cancel)
+            addSseClient(clientSend);
           },
           cancel() {
-            // Client disconnected - cleanup handled by try/catch in send
+            // Client disconnected
+            if (clientSend) removeSseClient(clientSend);
           },
         });
 
@@ -1029,12 +1190,72 @@ export function createHttpServer(port: number): { close: () => void } {
         });
       }
 
-      // Health check
-      if (url.pathname === "/health") {
-        return Response.json({ status: "ok", initialized, sessionId: currentSessionId }, { headers: corsHeaders });
+      // Prometheus metrics endpoint
+      if (url.pathname === "/metrics" && req.method === "GET") {
+        const format = url.searchParams.get("format");
+        if (format === "json") {
+          return Response.json(metrics.toJSON(), { headers: corsHeaders });
+        }
+        return new Response(metrics.toPrometheus(), {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+          },
+        });
       }
 
-      return new Response("Not Found", { status: 404, headers: corsHeaders });
+      // Log streaming endpoint (SSE)
+      if (url.pathname === "/logs" && req.method === "GET") {
+        const minLevel = (url.searchParams.get("level") || "info") as LogLevel;
+        const includeRecent = url.searchParams.get("recent") !== "false";
+
+        const stream = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+
+            // Send recent logs first if requested
+            if (includeRecent) {
+              const recent = logStream.getRecent(50);
+              for (const entry of recent) {
+                if (shouldIncludeLevel(entry.level, minLevel)) {
+                  const payload = `data: ${logStream.formatForSSE(entry)}\n\n`;
+                  controller.enqueue(encoder.encode(payload));
+                }
+              }
+            }
+
+            // Subscribe to new logs
+            const unsubscribe = logStream.subscribe((entry) => {
+              if (shouldIncludeLevel(entry.level, minLevel)) {
+                const payload = `data: ${logStream.formatForSSE(entry)}\n\n`;
+                try {
+                  controller.enqueue(encoder.encode(payload));
+                } catch {
+                  unsubscribe();
+                }
+              }
+            });
+
+            // Store unsubscribe for cleanup
+            (controller as any)._unsubscribe = unsubscribe;
+          },
+          cancel(controller) {
+            const unsubscribe = (controller as any)._unsubscribe;
+            if (unsubscribe) unsubscribe();
+          },
+        });
+
+        return new Response(stream, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        });
+      }
+
+      return Response.json({ error: "Not Found" }, { status: 404, headers: corsHeaders });
     },
   });
 

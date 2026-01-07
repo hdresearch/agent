@@ -15,6 +15,7 @@ export const COMMANDS = [
   { name: "keys", alias: "k", description: "Show/sync API keys with server" },
   { name: "mcp", alias: null, description: "Manage MCP servers (list/add/remove)" },
   { name: "plan", alias: "p", description: "Toggle plan mode (or: on/off/show/clear)" },
+  { name: "token", alias: null, description: "Show connection token for this server" },
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];

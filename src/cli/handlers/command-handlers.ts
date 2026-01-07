@@ -105,6 +105,10 @@ export function handleSlashCommand(
       handlePlan(arg, ctx);
       return { handled: true };
 
+    case "token":
+      handleToken(ctx);
+      return { handled: true };
+
     default:
       ctx.addOutput({ type: "error", content: `Unknown command: /${cmd}. Type /help for commands.` });
       return { handled: true };
@@ -629,4 +633,29 @@ function handlePlan(arg: string | undefined, ctx: CommandHandlerContext): void {
   ctx.addOutput({ type: "system", content: "  off    - Disable plan mode (normal execution)" });
   ctx.addOutput({ type: "system", content: "  show   - Show current plan and mode" });
   ctx.addOutput({ type: "system", content: "  clear  - Clear the current plan" });
+}
+
+function handleToken(ctx: CommandHandlerContext): void {
+  if (!ctx.client) {
+    ctx.addOutput({ type: "error", content: "Not connected to server" });
+    return;
+  }
+
+  const token = ctx.client.authToken;
+  const isOwner = ctx.client.isOwner;
+
+  ctx.addOutput({ type: "system", content: "" });
+  if (token) {
+    ctx.addOutput({ type: "system", content: "Connection Token:" });
+    ctx.addOutput({ type: "system", content: `  ${token}` });
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: isOwner ? "  Status: Owner (claimed this server)" : "  Status: Authorized" });
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "  Keep this token safe! Anyone with this token can" });
+    ctx.addOutput({ type: "system", content: "  access this server." });
+  } else {
+    ctx.addOutput({ type: "system", content: "No connection token available." });
+    ctx.addOutput({ type: "system", content: "  Server may not be claimed yet." });
+  }
+  ctx.addOutput({ type: "system", content: "" });
 }
