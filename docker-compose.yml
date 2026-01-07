@@ -1,0 +1,18 @@
+services:
+  vers-agent:
+    build: .
+    ports:
+      - "9999:9999"
+    environment:
+      - PORT=9999
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DEBUG=1
+    volumes:
+      # Persist conversation history (using non-root user home)
+      - vers-data:/home/agent/.vers
+      - claude-data:/home/agent/.claude
+    restart: unless-stopped
+
+volumes:
+  vers-data:
+  claude-data:
