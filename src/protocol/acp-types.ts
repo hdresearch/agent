@@ -402,6 +402,10 @@ export const AcpMethod = {
   QueueList: "queue/list",
   QueueRemove: "queue/remove",
   QueueClear: "queue/clear",
+
+  // Bash Execution (for remote CLI)
+  BashExecute: "bash/execute",
+  GetCwd: "system/cwd",
 } as const;
 
 // ============================================================
@@ -453,4 +457,24 @@ export interface QueueRemoveResult {
 
 export interface QueueClearResult {
   cleared: number;
+}
+
+// ============================================================
+// Bash Execution (Client → Agent for remote execution)
+// ============================================================
+
+export interface BashExecuteParams {
+  command: string;
+  cwd?: string;
+  timeout?: number;
+}
+
+export interface BashExecuteResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export interface GetCwdResult {
+  cwd: string;
 }

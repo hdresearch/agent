@@ -2,9 +2,28 @@ import { query, type Query, type SDKUserMessage } from "@anthropic-ai/claude-age
 import { getConfig, addToSession, updateSession, getMcpServers, getSessionMode } from "../utils/config";
 import type { ProcessedImage } from "../utils/image-utils";
 
+// Debug logging
+const DEBUG = process.env.DEBUG === "1" || process.env.DEBUG === "true";
+
+function debug(...args: unknown[]): void {
+  if (DEBUG) {
+    console.log("[DEBUG][query]", new Date().toISOString(), ...args);
+  }
+}
+
+function info(...args: unknown[]): void {
+  console.log("[INFO][query]", new Date().toISOString(), ...args);
+}
+
+function error(...args: unknown[]): void {
+  console.error("[ERROR][query]", new Date().toISOString(), ...args);
+}
+
 // Get Claude Code executable path at runtime (not module load time)
 function getClaudeCodeExecutable(): string | undefined {
-  return process.env.CLAUDE_CODE_EXECUTABLE;
+  const path = process.env.CLAUDE_CODE_EXECUTABLE;
+  debug("getClaudeCodeExecutable:", path || "(not set)");
+  return path;
 }
 
 // Query event types that consumers can subscribe to
@@ -218,12 +237,22 @@ export function runQuery(options: RunQueryOptions): QueryHandle {
         promptInput = options.prompt;
       }
 
-      const q = query({
-        prompt: promptInput,
-        options: queryOptions,
-      });
+      info("Creating query with options:", JSON.stringify(queryOptions, null, 2));
+
+      let q;
+      try {
+        q = query({
+          prompt: promptInput,
+          options: queryOptions,
+        });
+        info("Query created successfully");
+      } catch (err) {
+        error("Failed to create query:", err);
+        throw err;
+      }
       queryInstance = q;
 
+      info("Starting to iterate query events...");
       for await (const msg of q) {
         // Track session ID
         if ("session_id" in msg && msg.session_id) {

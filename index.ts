@@ -3,6 +3,16 @@ import { createHttpServer } from "./src/server/http-server";
 import { loadConfig, loadMcpServers } from "./src/utils/config";
 import { loadDocsStore } from "./src/utils/docs-store";
 
+// Global error handlers to prevent crashes
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] Uncaught exception:", err);
+  console.error(err.stack);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[FATAL] Unhandled rejection at:", promise, "reason:", reason);
+});
+
 // Auto-detect Claude Code executable if not already set
 async function findClaudeCode(): Promise<string | null> {
   // Already set

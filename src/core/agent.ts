@@ -75,18 +75,40 @@ function detectCompaction(text: string): boolean {
   return COMPACTION_PATTERNS.some(pattern => pattern.test(text));
 }
 
+// Debug logging
+const DEBUG = process.env.DEBUG === "1" || process.env.DEBUG === "true";
+
+function debug(...args: unknown[]): void {
+  if (DEBUG) {
+    console.log("[DEBUG][agent]", new Date().toISOString(), ...args);
+  }
+}
+
+function info(...args: unknown[]): void {
+  console.log("[INFO][agent]", new Date().toISOString(), ...args);
+}
+
+function error(...args: unknown[]): void {
+  console.error("[ERROR][agent]", new Date().toISOString(), ...args);
+}
+
 export async function runTask(taskId: string): Promise<void> {
+  info("runTask called:", taskId);
+
   const task = taskStore.get(taskId);
   if (!task) {
+    error("Task not found:", taskId);
     throw new Error(`Task ${taskId} not found`);
   }
 
+  info("Task prompt:", task.prompt.slice(0, 100));
   taskStore.updateStatus(taskId, "running");
   taskStore.addEvent(taskId, "started");
 
   try {
     const taskConfig = task.config;
     const cwd = taskConfig.cwd || process.cwd();
+    info("Task config:", { cwd, model: taskConfig.model, maxTurns: taskConfig.maxTurns });
 
     // Ensure project docs are loaded (from store or filesystem)
     await ensureDocsLoaded(cwd);

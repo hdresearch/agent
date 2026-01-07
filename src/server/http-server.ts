@@ -52,6 +52,23 @@ const AGENT_INFO = {
   version: "1.0.0",
 };
 
+// Debug logging
+const DEBUG = process.env.DEBUG === "1" || process.env.DEBUG === "true";
+
+function debug(...args: unknown[]): void {
+  if (DEBUG) {
+    console.log("[DEBUG]", new Date().toISOString(), ...args);
+  }
+}
+
+function info(...args: unknown[]): void {
+  console.log("[INFO]", new Date().toISOString(), ...args);
+}
+
+function error(...args: unknown[]): void {
+  console.error("[ERROR]", new Date().toISOString(), ...args);
+}
+
 const AGENT_CAPABILITIES: AgentCapabilities = {
   session: {
     modes: ["default", "plan"],
@@ -112,14 +129,22 @@ async function processNextQueuedPrompt(): Promise<void> {
 
 // Execute a prompt (extracted from handleSessionPrompt for reuse)
 async function executePrompt(text: string, attachments?: import("./acp-types").Attachment[]): Promise<void> {
+  info("executePrompt called", { textLength: text.length, hasAttachments: !!attachments?.length });
+  debug("Prompt text:", text.slice(0, 200));
+
+  // Log Claude Code executable path
+  const claudeCodePath = process.env.CLAUDE_CODE_EXECUTABLE;
+  info("Claude Code executable:", claudeCodePath || "(not set - will auto-detect)");
+
   // Expand @path references in the prompt
   let promptText = text;
   if (hasPathReferences(promptText)) {
+    debug("Expanding @path references...");
     const { expandedPrompt, refs } = await expandPrompt(promptText);
     promptText = expandedPrompt;
 
     if (refs.length > 0) {
-      console.log(`Expanded ${refs.length} @path reference(s)`);
+      info(`Expanded ${refs.length} @path reference(s)`);
     }
   }
 
@@ -131,14 +156,17 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
   }));
 
   const task = taskStore.create(promptText, {}, taskAttachments);
+  info("Task created:", { taskId: task.id, status: task.status });
   runningTaskId = task.id;
   promptQueue.setProcessing(true);
 
   // Subscribe to task events and broadcast via SSE
   const unsubscribe = taskStore.subscribe(task.id, (event) => {
+    debug("Task event:", event.type, event.data);
     sendSessionNotification(event.type, event.data);
 
     if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
+      info("Task finished:", { taskId: task.id, status: event.type });
       runningTaskId = null;
       promptQueue.setProcessing(false);
 
@@ -151,8 +179,10 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
   });
 
   // Start task execution (don't await)
+  info("Starting task execution:", task.id);
   runTask(task.id).catch((err) => {
-    console.error(`Task ${task.id} failed:`, err);
+    error(`Task ${task.id} failed:`, err);
+    error("Error stack:", err instanceof Error ? err.stack : "(no stack)");
     runningTaskId = null;
     promptQueue.setProcessing(false);
     unsubscribe();
@@ -278,11 +308,20 @@ function sendSessionNotification(type: string, data: unknown): void {
 
 // JSON-RPC method handlers
 async function handleInitialize(params: InitializeParams): Promise<InitializeResult> {
+  info("Server initialized");
   initialized = true;
   return {
     agentInfo: AGENT_INFO,
     capabilities: AGENT_CAPABILITIES,
   };
+}
+
+// Auto-initialize if needed (for resilience after server restart)
+function ensureInitialized(): void {
+  if (!initialized) {
+    info("Auto-initializing server (client reconnected after restart)");
+    initialized = true;
+  }
 }
 
 async function handleAuthenticate(params: AuthenticateParams): Promise<AuthenticateResult> {
@@ -303,7 +342,8 @@ async function handleAuthenticate(params: AuthenticateParams): Promise<Authentic
   return { success: true };
 }
 
-async function handleSessionNew(params: NewSessionParams): Promise<NewSessionResult> {
+async function handleSessionNew(params: NewSessionParams): Promise<NewSessionResult & { mode?: string }> {
+  info("Creating new session");
   resetSession();
   clearProjectDocsCache(); // Force re-read of CLAUDE.md, AGENT.md, etc.
 
@@ -319,7 +359,14 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
   currentSessionId = randomUUID();
   updateSession({ sessionId: currentSessionId });
 
-  return { sessionId: currentSessionId };
+  // Get the current mode (should be "default" after reset)
+  const mode = getSessionMode();
+  info("New session created:", { sessionId: currentSessionId, mode });
+
+  // Broadcast mode update to ensure all clients know the mode
+  sendSessionNotification("mode_update", { type: "mode_update", mode });
+
+  return { sessionId: currentSessionId, mode };
 }
 
 async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSessionResult> {
@@ -333,8 +380,10 @@ async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSession
 }
 
 async function handleSessionPrompt(params: PromptParams): Promise<PromptResult & { queued?: boolean; queuePosition?: number }> {
+  // Auto-create session if needed
   if (!currentSessionId) {
-    throw new Error("No active session. Call session/new or session/load first.");
+    info("Auto-creating session for incoming prompt");
+    await handleSessionNew({});
   }
 
   // If a task is already running, queue this prompt
@@ -449,6 +498,8 @@ async function handleFsListDirectory(
 async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
   const { id, method, params } = request;
 
+  debug("RPC request:", { id, method, paramsKeys: params ? Object.keys(params as object) : [] });
+
   try {
     let result: unknown;
 
@@ -462,38 +513,38 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         break;
 
       case AcpMethod.SessionNew:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         result = await handleSessionNew(params as NewSessionParams);
         break;
 
       case AcpMethod.SessionLoad:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         result = await handleSessionLoad(params as LoadSessionParams);
         break;
 
       case AcpMethod.SessionPrompt:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         result = await handleSessionPrompt(params as PromptParams);
         break;
 
       case AcpMethod.SessionCancel:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         result = await handleSessionCancel(params as CancelParams);
         break;
 
       case AcpMethod.SessionSetMode:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         result = await handleSessionSetMode(params as SetModeParams);
         break;
 
       case AcpMethod.SessionReloadDocs:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         markDocsForReinjection();
         result = { success: true, message: "Project docs will be re-injected on next message" };
         break;
 
       case AcpMethod.SessionGetDocs:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         result = {
           docs: getDocs(),
           store: getDocsStore(),
@@ -501,7 +552,7 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         break;
 
       case AcpMethod.SessionSetDocs:
-        if (!initialized) throw new Error("Not initialized");
+        ensureInitialized();
         {
           const docsParams = params as { docs: Array<{ name: string; content: string; path?: string }> };
           if (!docsParams.docs || !Array.isArray(docsParams.docs)) {
@@ -676,6 +727,59 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
             cleared: count,
           } as QueueClearResult;
         }
+        break;
+
+      // Bash Execution (for remote CLI)
+      case AcpMethod.BashExecute:
+        {
+          const bashParams = params as { command: string; cwd?: string; timeout?: number };
+          if (!bashParams.command) {
+            throw new Error("Missing command parameter");
+          }
+          const cwd = bashParams.cwd || process.cwd();
+          const timeout = bashParams.timeout || 30000;
+
+          try {
+            const proc = Bun.spawn(["bash", "-c", bashParams.command], {
+              stdout: "pipe",
+              stderr: "pipe",
+              cwd,
+            });
+
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => {
+                proc.kill();
+                reject(new Error(`Command timed out after ${timeout}ms`));
+              }, timeout);
+            });
+
+            const [stdout, stderr] = await Promise.race([
+              Promise.all([
+                new Response(proc.stdout).text(),
+                new Response(proc.stderr).text(),
+              ]),
+              timeoutPromise,
+            ]);
+
+            const exitCode = await proc.exited;
+
+            result = {
+              stdout,
+              stderr,
+              exitCode,
+            };
+          } catch (err) {
+            result = {
+              stdout: "",
+              stderr: err instanceof Error ? err.message : String(err),
+              exitCode: 1,
+            };
+          }
+        }
+        break;
+
+      case AcpMethod.GetCwd:
+        result = { cwd: process.cwd() };
         break;
 
       default:

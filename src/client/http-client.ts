@@ -330,6 +330,19 @@ export class HttpAcpClient {
     return this.request(AcpMethod.QueueClear, {});
   }
 
+  // Bash execution (for remote CLI)
+  async bashExecute(command: string, cwd?: string, timeout?: number): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+  }> {
+    return this.request(AcpMethod.BashExecute, { command, cwd, timeout });
+  }
+
+  async getCwd(): Promise<{ cwd: string }> {
+    return this.request(AcpMethod.GetCwd, {});
+  }
+
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
   }
