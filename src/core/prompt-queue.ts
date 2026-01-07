@@ -24,7 +24,7 @@ export interface QueueOperation {
 
 type QueueEventHandler = (event: QueueOperation) => void;
 
-class PromptQueue {
+export class PromptQueue {
   private queue: QueuedPrompt[] = [];
   private sessionId: string | null = null;
   private eventHandlers: Set<QueueEventHandler> = new Set();

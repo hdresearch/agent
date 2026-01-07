@@ -4,7 +4,7 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-class TaskStore {
+export class TaskStore {
   private tasks: Map<string, Task> = new Map();
   private subscribers: Map<string, Set<(event: TaskEvent) => void>> = new Map();
 
