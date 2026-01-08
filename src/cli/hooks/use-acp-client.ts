@@ -54,6 +54,7 @@ export function useAcpClient({
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isReconnectingRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
+  const seenToolCallsRef = useRef<Set<string>>(new Set());
 
   // Remote mode: only when connecting to a non-localhost server
   const isRemoteMode = (() => {
@@ -152,7 +153,7 @@ export function useAcpClient({
       if (!isMounted || isReconnectingRef.current) return;
 
       const attempt = reconnectAttemptRef.current;
-      const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)];
+      const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)] ?? 30000;
 
       onOutput({
         type: "system",
@@ -290,19 +291,63 @@ export function useAcpClient({
 
           case "tool_call":
             if ("toolName" in data) {
+              const toolCallId = (data.toolCallId as string) || undefined;
+
+              // Deduplicate tool calls by toolCallId
+              if (toolCallId && seenToolCallsRef.current.has(toolCallId)) {
+                break;
+              }
+              if (toolCallId) {
+                seenToolCallsRef.current.add(toolCallId);
+              }
+
               const toolName = data.toolName as string;
               const toolArgs = formatToolArgs(toolName, (data.input || {}) as Record<string, unknown>);
-              onOutput({ type: "tool", content: toolArgs, toolName });
+              // Extract rich ACP tool information
+              const toolTitle = (data.title as string) || undefined;
+              const toolKind = (data.kind as string) || undefined;
+              const toolStatus = (data.status as string) || "in_progress";
+              const toolLocations = data.locations as import("../types").ToolLocation[] | undefined;
+              const toolContent = data.content as import("../types").ToolContent[] | undefined;
+
+              onOutput({
+                type: "tool",
+                content: toolArgs,
+                toolName,
+                toolTitle,
+                toolKind: toolKind as import("../types").ToolKind | undefined,
+                toolStatus: toolStatus as import("../types").ToolStatus,
+                toolCallId,
+                toolLocations,
+                toolContent,
+              });
               if (historyRef.current) {
-                addMessage(historyRef.current, "tool", toolArgs, toolName);
+                addMessage(historyRef.current, "tool", toolTitle || toolArgs, toolName);
                 saveHistory(historyRef.current);
               }
             }
             break;
 
-          case "tool_result":
-            onOutput({ type: "tool-result", content: "" });
+          case "tool_result": {
+            // Type assertion since we know this is ToolResultData from the switch
+            const resultData = data as import("../../protocol/acp-types").ToolResultData & {
+              locations?: import("../types").ToolLocation[];
+              richContent?: import("../types").ToolContent[];
+            };
+            const toolCallId = resultData.toolCallId || resultData.toolId;
+            const status = resultData.status || (resultData.success ? "completed" : "failed");
+            const content = resultData.content ? String(resultData.content).slice(0, 100) : "";
+
+            onOutput({
+              type: "tool-result",
+              content: content || "Done",
+              toolCallId,
+              toolStatus: status as import("../types").ToolStatus,
+              toolLocations: resultData.locations,
+              toolContent: resultData.richContent,
+            });
             break;
+          }
 
           case "completed":
             if ("totalCostUsd" in data && "inputTokens" in data && "outputTokens" in data) {
@@ -370,7 +415,7 @@ export function useAcpClient({
         try {
           const sessions = await client.listSessions();
           if (sessions.sessions.length > 0) {
-            const mostRecent = sessions.sessions[0];
+            const mostRecent = sessions.sessions[0]!;
             const loadResult = await client.loadSession(mostRecent.id);
             currentSessionId = loadResult.sessionId;
             sessionLoaded = true;
@@ -381,6 +426,7 @@ export function useAcpClient({
       }
 
       if (!sessionLoaded) {
+        seenToolCallsRef.current.clear(); // Clear dedup set for new session
         const newResult = await client.newSession(sessionConfigRef.current);
         currentSessionId = newResult.sessionId;
       }

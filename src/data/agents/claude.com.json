@@ -1,0 +1,26 @@
+{
+  "identity": "claude.com",
+  "name": "Claude Code",
+  "shortName": "claude",
+  "url": "https://www.claude.com/product/claude-code",
+  "protocol": "acp",
+  "type": "coding",
+  "authorName": "Anthropic",
+  "authorUrl": "https://www.anthropic.com/",
+  "publisherName": "vers-agent",
+  "publisherUrl": "",
+  "description": "Claude's raw power in your terminal via ACP",
+  "tags": [],
+  "runCommand": {
+    "*": "claude-code-acp"
+  },
+  "actions": {
+    "*": {
+      "install": {
+        "command": "npm install -g @anthropic-ai/claude-code-acp",
+        "description": "Install Claude Code ACP adapter"
+      }
+    }
+  },
+  "active": true
+}

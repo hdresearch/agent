@@ -3,6 +3,49 @@ import { createHttpServer } from "./src/server/http-server";
 import { loadConfig, loadMcpServers, getConfig, setConfig } from "./src/utils/config";
 import { loadDocsStore } from "./src/utils/docs-store";
 
+// CRITICAL: Emergency exit handler - must be first!
+// Track rapid SIGINT presses for force exit (works even when Ink blocks SIGINT)
+let sigintCount = 0;
+let lastSigintTime = 0;
+const FORCE_EXIT_HANDLER = () => {
+  const now = Date.now();
+  if (now - lastSigintTime < 1500) {
+    sigintCount++;
+  } else {
+    sigintCount = 1;
+  }
+  lastSigintTime = now;
+
+  // Force exit after 3 rapid Ctrl+C presses
+  if (sigintCount >= 3) {
+    console.log("\n\nForce exit (3x Ctrl+C)");
+    process.exit(0);
+  }
+};
+
+// Register SIGINT handler immediately and make it hard to remove
+process.on("SIGINT", FORCE_EXIT_HANDLER);
+
+// Periodically re-register the handler in case something removes it
+setInterval(() => {
+  if (!process.listeners("SIGINT").includes(FORCE_EXIT_HANDLER)) {
+    process.on("SIGINT", FORCE_EXIT_HANDLER);
+  }
+}, 1000);
+
+// ALSO handle Ctrl+C at stdin level (Ink raw mode sends \x03 as data, not SIGINT)
+// This is a low-level fallback for when Ink captures Ctrl+C
+if (process.stdin.isTTY) {
+  process.stdin.setRawMode?.(true);
+  process.stdin.on("data", (data: Buffer) => {
+    // Check for Ctrl+C (\x03)
+    if (data.includes(0x03)) {
+      FORCE_EXIT_HANDLER();
+    }
+  });
+  process.stdin.resume();
+}
+
 // Global error handlers to prevent crashes
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] Uncaught exception:", err);

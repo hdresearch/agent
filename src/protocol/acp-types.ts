@@ -335,16 +335,23 @@ export interface ContentChunkData {
 export interface ToolCallData {
   type: "tool_call";
   toolId: string;
+  toolCallId?: string;  // Alias for toolId for compatibility
   toolName: string;
   input: Record<string, unknown>;
+  // Rich display fields
+  title?: string;       // Human-readable title like "Read(file.ts)"
+  kind?: string;        // Tool category: read, edit, search, execute, etc.
 }
 
 export interface ToolResultData {
   type: "tool_result";
   toolId: string;
+  toolCallId?: string;  // Alias for toolId for compatibility
   success: boolean;
   output?: unknown;
   error?: string;
+  status?: string;      // Status string: completed, failed, etc.
+  content?: string;     // Result content preview
 }
 
 export interface ThinkingData {
@@ -451,6 +458,11 @@ export const AcpMethod = {
   // Bash Execution (for remote CLI)
   BashExecute: "bash/execute",
   GetCwd: "system/cwd",
+
+  // Agent Management
+  AgentList: "agent/list",
+  AgentSelect: "agent/select",
+  AgentStatus: "agent/status",
 } as const;
 
 // ============================================================
@@ -522,4 +534,39 @@ export interface BashExecuteResult {
 
 export interface GetCwdResult {
   cwd: string;
+}
+
+// ============================================================
+// Agent Management Types
+// ============================================================
+
+export interface AgentInfo {
+  identity: string;
+  name: string;
+  shortName: string;
+  description: string;
+  protocol: "acp" | "claude-sdk";
+  type: "coding" | "chat";
+  active: boolean;
+}
+
+export interface AgentListResult {
+  agents: AgentInfo[];
+  currentAgent: string | null;
+}
+
+export interface AgentSelectParams {
+  agentId: string;
+}
+
+export interface AgentSelectResult {
+  success: boolean;
+  agentId: string;
+  message?: string;
+}
+
+export interface AgentStatusResult {
+  currentAgent: string | null;
+  isRunning: boolean;
+  protocol: "acp" | "claude-sdk" | null;
 }

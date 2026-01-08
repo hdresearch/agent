@@ -22,6 +22,7 @@ function createMockContext(overrides?: Partial<CommandHandlerContext>): CommandH
       thinking: { enabled: false, budget: null },
       cost: { totalCost: 0, inputTokens: 0, outputTokens: 0 },
       planMode: false,
+      sessionId: null,
     },
     setStatusInfo: mock(() => {}),
     addOutput: (line: Omit<OutputLine, "id">) => outputs.push(line),
