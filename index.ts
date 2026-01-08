@@ -2,6 +2,7 @@ import { runCli } from "./src/cli/cli.js";
 import { createHttpServer } from "./src/server/http-server";
 import { loadConfig, loadMcpServers, getConfig, setConfig } from "./src/utils/config";
 import { loadDocsStore } from "./src/utils/docs-store";
+import { authStore } from "./src/utils/auth-store";
 
 // CRITICAL: Emergency exit handler - must be first!
 // Track rapid SIGINT presses for force exit (works even when Ink blocks SIGINT)
@@ -225,7 +226,8 @@ Example:
       // CLI only (connects to local HTTP server)
       await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
     } else if (serverOnly) {
-      // HTTP server only (daemon mode)
+      // HTTP server only (daemon mode) - reset claim for local access
+      authStore.resetClaim();
       const server = createHttpServer(PORT);
       console.log("ACP server running. Press Ctrl+C to stop.");
 
@@ -243,6 +245,8 @@ Example:
       await new Promise(() => {});
     } else {
       // Both: start HTTP server, then CLI
+      // Reset claim for local mode - local client should have automatic access
+      authStore.resetClaim();
       const server = createHttpServer(PORT);
       const actualPort = server.port;
 

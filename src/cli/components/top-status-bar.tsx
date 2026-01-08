@@ -5,39 +5,39 @@ import { formatTokens } from "../utils/formatting";
 
 interface TopStatusBarProps {
   model: string;
-  thinking: { enabled: boolean; budget?: number | null };
   cost: { totalCost: number; inputTokens: number; outputTokens: number };
   connected: boolean;
   planMode: boolean;
   sessionId: string | null;
   serverUrl?: string;
+  agentName?: string | null;
 }
 
 export function TopStatusBar({
   model,
-  thinking,
   cost,
   connected,
   planMode,
   sessionId,
   serverUrl,
+  agentName,
 }: TopStatusBarProps) {
-  // Extract host:port from serverUrl for compact display
+  // Extract host:port from serverUrl for display
   const serverDisplay = (() => {
     if (!serverUrl) return null;
     try {
       const url = new URL(serverUrl);
       const host = url.hostname;
       const port = url.port || (url.protocol === "https:" ? "443" : "80");
-      // For localhost, just show the port
-      if (host === "localhost" || host === "127.0.0.1") {
-        return `:${port}`;
-      }
+      // Show full hostname:port
       return `${host}:${port}`;
     } catch {
       return null;
     }
   })();
+
+  // Display name: combine agent shortName with model (e.g., "claude-opus")
+  const displayName = agentName ? `${agentName}-${model}` : model;
   const contextLimit = MODEL_CONTEXT_LIMITS[model] || 200000;
   const contextUsed = cost.inputTokens; // Input tokens represent context usage
   const contextPercent = Math.min(100, (contextUsed / contextLimit) * 100);
@@ -62,19 +62,13 @@ export function TopStatusBar({
         {serverDisplay && (
           <Text color={connected ? "green" : "red"}>●</Text>
         )}
-        <Text color="cyan" bold>agent</Text>
+        <Text color="cyan" bold>{displayName}</Text>
         {serverDisplay && (
           <>
             <Text dimColor>@</Text>
             <Text color="blue">{serverDisplay}</Text>
           </>
         )}
-        <Text dimColor>│</Text>
-        <Text color="magenta">{model}</Text>
-        <Text dimColor>│</Text>
-        <Text color={thinking.enabled ? "yellow" : "gray"}>
-          {thinking.enabled ? `🧠 ${(thinking.budget || 10000).toLocaleString()}` : "🧠 off"}
-        </Text>
         {planMode && (
           <>
             <Text dimColor>│</Text>
