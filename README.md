@@ -1,5 +1,7 @@
 # vers-agent
 
+[![CI](https://github.com/hdresearch/agent/actions/workflows/ci.yml/badge.svg)](https://github.com/hdresearch/agent/actions/workflows/ci.yml)
+
 ACP-compliant agent harness with dual CLI/HTTP interface.
 
 ## Quick Start
@@ -13,7 +15,11 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 ## What is ACP?
 
-[Agent Control Protocol](https://agentclientprotocol.com/) is a JSON-RPC 2.0 based protocol for controlling AI agents. vers-agent implements ACP to provide:
+[Agent Client Protocol](https://agentclientprotocol.com/) is a JSON-RPC 2.0 based protocol for controlling AI agents.
+
+**LLM-friendly docs:** [`docs/acp-llms.txt`](docs/acp-llms.txt) | [`docs/acp-llms-full.txt`](docs/acp-llms-full.txt)
+
+vers-agent implements ACP to provide:
 
 - **Session management** - Create, load, list, and persist sessions
 - **Streaming notifications** - Real-time tool use, text deltas, and completion events
