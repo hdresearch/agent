@@ -1,0 +1,26 @@
+{
+  "identity": "openai.com",
+  "name": "OpenAI Codex",
+  "shortName": "codex",
+  "url": "https://github.com/zed-industries/codex-acp",
+  "protocol": "acp",
+  "type": "coding",
+  "authorName": "OpenAI",
+  "authorUrl": "https://openai.com/",
+  "publisherName": "Zed Industries",
+  "publisherUrl": "https://zed.dev/",
+  "description": "OpenAI's Codex via Zed's ACP adapter",
+  "tags": ["openai", "codex"],
+  "runCommand": {
+    "*": "codex-acp"
+  },
+  "actions": {
+    "*": {
+      "install": {
+        "command": "npm install -g @zed-industries/codex-acp",
+        "description": "Install Codex ACP adapter"
+      }
+    }
+  },
+  "active": true
+}
