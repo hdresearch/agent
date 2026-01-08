@@ -13,26 +13,16 @@ import type {
   AcpSessionPromptResult,
   AcpMcpServer,
 } from "./types";
+import {
+  type AcpAgentConfig,
+  DEFAULT_ACP_CONFIG,
+} from "../protocol/acp-types";
 
 // ============================================================
 // Protocol Constants
 // ============================================================
 
 const PROTOCOL_VERSION = 1;
-
-const CLIENT_INFO: AcpImplementation = {
-  name: "vers-agent",
-  version: "1.0.0",
-  title: "vers-agent ACP Host",
-};
-
-const DEFAULT_CLIENT_CAPABILITIES: AcpClientCapabilities = {
-  fs: {
-    readTextFile: true,
-    writeTextFile: true,
-  },
-  terminal: true,
-};
 
 // ============================================================
 // ACP Client
@@ -41,12 +31,25 @@ const DEFAULT_CLIENT_CAPABILITIES: AcpClientCapabilities = {
 export class AcpClient {
   private subprocess: SubprocessManager;
   private agentId: string;
+  private config: AcpAgentConfig;
   private sessionId: string | null = null;
   private capabilities: AcpAgentCapabilities = {};
 
-  constructor(subprocess: SubprocessManager, agentId: string) {
+  constructor(
+    subprocess: SubprocessManager,
+    agentId: string,
+    config?: AcpAgentConfig
+  ) {
     this.subprocess = subprocess;
     this.agentId = agentId;
+    this.config = config ?? DEFAULT_ACP_CONFIG;
+  }
+
+  /**
+   * Get the current config
+   */
+  getConfig(): AcpAgentConfig {
+    return this.config;
   }
 
   /**
@@ -68,15 +71,29 @@ export class AcpClient {
    * https://agentclientprotocol.com/protocol/initialization
    */
   async initialize(
-    capabilities?: AcpClientCapabilities
+    capabilitiesOverride?: AcpClientCapabilities
   ): Promise<AcpInitializeResult> {
+    // Use override if provided, otherwise use config capabilities
+    // Convert ClientCapabilities to AcpClientCapabilities format
+    const capabilities = capabilitiesOverride ?? {
+      fs: {
+        readTextFile: this.config.capabilities.fileSystem?.read ?? true,
+        writeTextFile: this.config.capabilities.fileSystem?.write ?? true,
+      },
+      terminal: this.config.capabilities.terminal?.create ?? true,
+    };
+
     const result = await this.subprocess.request<AcpInitializeResult>(
       this.agentId,
       "initialize",
       {
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: capabilities ?? DEFAULT_CLIENT_CAPABILITIES,
-        clientInfo: CLIENT_INFO,
+        clientCapabilities: capabilities,
+        clientInfo: {
+          name: this.config.clientInfo.name,
+          version: this.config.clientInfo.version,
+          title: `${this.config.clientInfo.name} ACP Host`,
+        },
       }
     );
 
