@@ -14,6 +14,8 @@ import type {
   AcpToolCallUpdate,
   AcpPlan,
   AcpContentBlock,
+  AcpRequestPermissionParams,
+  AcpRequestPermissionResult,
 } from "./types";
 import { getAgent, getRunCommand, getAgentEnv, ensureAgentInstalled } from "./registry";
 import { SubprocessManager, getSubprocessManager } from "./subprocess-manager";
@@ -24,6 +26,12 @@ import { AcpServer } from "./acp-server";
 // ============================================================
 // Subprocess Agent Runner
 // ============================================================
+
+// Pending permission request awaiting user response
+interface PendingPermissionRequest {
+  resolve: (result: AcpRequestPermissionResult) => void;
+  params: AcpRequestPermissionParams;
+}
 
 export class SubprocessAgentRunner implements AgentRunner {
   readonly agentId: string;
@@ -36,6 +44,8 @@ export class SubprocessAgentRunner implements AgentRunner {
   private running = false;
   private currentEventTarget: EventTarget | null = null;
   private currentAbortController: AbortController | null = null;
+  private pendingPermissions: Map<string, PendingPermissionRequest> = new Map();
+  private permissionRequestCounter = 0;
 
   constructor(agent: AgentDefinition, cwd: string) {
     this.agentId = agent.identity;
@@ -49,6 +59,116 @@ export class SubprocessAgentRunner implements AgentRunner {
 
     // Set up notification handler for subprocess (for session/update notifications)
     this.subprocess.onNotification(this.handleAgentNotification.bind(this));
+
+    // Set up permission handler to emit events and wait for user response
+    this.server.onPermissionRequest(this.handlePermissionRequest.bind(this));
+  }
+
+  /**
+   * Handle a permission request from the agent.
+   * Emits an event and waits for respondToPermission to be called.
+   */
+  private async handlePermissionRequest(
+    _agentId: string,
+    params: AcpRequestPermissionParams
+  ): Promise<AcpRequestPermissionResult> {
+    // Generate unique request ID
+    const requestId = `perm-${++this.permissionRequestCounter}`;
+
+    // Create promise that will be resolved when respondToPermission is called
+    return new Promise((resolve) => {
+      // Store the pending request
+      this.pendingPermissions.set(requestId, { resolve, params });
+
+      // Emit permission request event
+      if (this.currentEventTarget) {
+        // Filter out invalid titles (undefined, empty, or literal "undefined" strings)
+        const isValidTitle = (s: string | undefined): boolean =>
+          !!s && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+        // Use title with fallback to toolCallId or "Tool" - never show "undefined"
+        const permissionTitle = isValidTitle(params.toolCall.title)
+          ? params.toolCall.title!
+          : (params.toolCall.toolCallId || "Tool");
+        const event: PromptEvent = {
+          type: "permission_request",
+          data: {
+            requestId,
+            toolCall: {
+              toolCallId: params.toolCall.toolCallId,
+              title: permissionTitle,
+              kind: params.toolCall.kind,
+              status: params.toolCall.status,
+              locations: params.toolCall.locations,
+              content: params.toolCall.content,
+            },
+            options: params.options.map((opt) => ({
+              optionId: opt.optionId,
+              kind: opt.kind,
+              name: opt.name,
+            })),
+          },
+        };
+        this.currentEventTarget.dispatchEvent(
+          new CustomEvent("prompt-event", { detail: event })
+        );
+      } else {
+        // No event target - auto-approve (fallback behavior)
+        const allowOption = params.options.find(
+          (opt) => opt.kind === "allow_once" || opt.kind === "allow_always"
+        );
+        resolve({
+          outcome: {
+            outcome: "selected",
+            optionId: allowOption?.optionId ?? params.options[0]?.optionId ?? "allow",
+          },
+        });
+        this.pendingPermissions.delete(requestId);
+      }
+    });
+  }
+
+  /**
+   * Respond to a pending permission request.
+   * Called by external code (e.g., CLI) when user makes a selection.
+   */
+  respondToPermission(requestId: string, optionId: string): boolean {
+    const pending = this.pendingPermissions.get(requestId);
+    if (!pending) {
+      return false;
+    }
+
+    // Resolve the promise with the selected option
+    pending.resolve({
+      outcome: {
+        outcome: "selected",
+        optionId,
+      },
+    });
+
+    // Clean up
+    this.pendingPermissions.delete(requestId);
+    return true;
+  }
+
+  /**
+   * Cancel a pending permission request.
+   */
+  cancelPermission(requestId: string): boolean {
+    const pending = this.pendingPermissions.get(requestId);
+    if (!pending) {
+      return false;
+    }
+
+    // Resolve the promise with cancelled outcome
+    pending.resolve({
+      outcome: {
+        outcome: "cancelled",
+      },
+    });
+
+    // Clean up
+    this.pendingPermissions.delete(requestId);
+    return true;
   }
 
   async start(): Promise<void> {
@@ -312,13 +432,18 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       case "tool_call": {
         const toolCall = update as AcpToolCall;
+        // Filter out invalid titles (undefined, empty, or literal "undefined" strings)
+        const isValidTitle = (s: string | undefined): boolean =>
+          !!s && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+        // Use title if valid, fallback to toolCallId or "Tool"
+        const displayTitle = isValidTitle(toolCall.title) ? toolCall.title : (toolCall.toolCallId || "Tool");
         return {
           type: "tool_use",
           data: {
             toolCallId: toolCall.toolCallId,
-            name: toolCall.title,
+            name: displayTitle,
             input: toolCall.rawInput || {},
-            title: toolCall.title,
+            title: displayTitle,
             kind: toolCall.kind,
             status: toolCall.status,
             locations: toolCall.locations,

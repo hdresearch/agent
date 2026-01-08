@@ -111,6 +111,7 @@ class LogStream {
   private maxBufferSize = 1000;
   private fileWriter: RotatingFileWriter | null = null;
   private consoleEnabled: boolean;
+  private consoleSuppressed: boolean = false;
 
   constructor() {
     // Only enable console logging if not in production or DEBUG is set
@@ -135,6 +136,11 @@ class LogStream {
   // Get listener count
   get listenerCount(): number {
     return this.listeners.size;
+  }
+
+  // Suppress console output (useful for CLI mode where it interferes with the UI)
+  suppressConsole(suppress: boolean = true): void {
+    this.consoleSuppressed = suppress;
   }
 
   // Get recent logs from buffer
@@ -189,6 +195,11 @@ class LogStream {
     // Write to rotating file
     if (this.fileWriter) {
       this.fileWriter.write(logLine);
+    }
+
+    // Skip console output if suppressed (e.g., CLI mode)
+    if (this.consoleSuppressed) {
+      return;
     }
 
     // Only log errors and warnings to console in production

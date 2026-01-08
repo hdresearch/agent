@@ -84,3 +84,27 @@ export interface ProcessedImage {
   mediaType: string;
   base64: string;
 }
+
+// Permission request types
+export type PermissionOptionKind = "allow_once" | "allow_always" | "reject_once" | "reject_always";
+
+export interface PermissionOption {
+  optionId: string;
+  kind: PermissionOptionKind;
+  name: string;
+}
+
+export interface PermissionToolCall {
+  toolCallId: string;
+  title?: string;
+  kind?: ToolKind;
+  status?: ToolStatus;
+  locations?: ToolLocation[];
+  content?: ToolContent[];
+}
+
+export interface PermissionRequest {
+  requestId: string;
+  toolCall: PermissionToolCall;
+  options: PermissionOption[];
+}

@@ -33,18 +33,8 @@ setInterval(() => {
   }
 }, 1000);
 
-// ALSO handle Ctrl+C at stdin level (Ink raw mode sends \x03 as data, not SIGINT)
-// This is a low-level fallback for when Ink captures Ctrl+C
-if (process.stdin.isTTY) {
-  process.stdin.setRawMode?.(true);
-  process.stdin.on("data", (data: Buffer) => {
-    // Check for Ctrl+C (\x03)
-    if (data.includes(0x03)) {
-      FORCE_EXIT_HANDLER();
-    }
-  });
-  process.stdin.resume();
-}
+// Note: We don't add a stdin data handler here because it conflicts with Ink's input handling.
+// The SIGINT handler above handles Ctrl+C for force exit (3x rapid presses).
 
 // Global error handlers to prevent crashes
 process.on("uncaughtException", (err) => {

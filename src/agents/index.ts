@@ -75,6 +75,7 @@ export type {
   PromptResultEvent,
   PromptErrorEvent,
   PromptCancelledEvent,
+  PromptPermissionRequestEvent,
   ProcessedImage,
   PromptAttachment,
 } from "./types";

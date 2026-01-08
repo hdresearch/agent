@@ -528,6 +528,15 @@ export class HttpAcpClient {
     return this.request(AcpMethod.AgentStatus, {});
   }
 
+  // Permission management
+  async permissionRespond(requestId: string, optionId: string): Promise<{ success: boolean }> {
+    return this.request(AcpMethod.PermissionRespond, { requestId, optionId });
+  }
+
+  async permissionCancel(requestId: string): Promise<{ success: boolean }> {
+    return this.request(AcpMethod.PermissionCancel, { requestId });
+  }
+
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
   }
