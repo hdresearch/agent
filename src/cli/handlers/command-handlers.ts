@@ -42,6 +42,11 @@ export function handleSlashCommand(
   const cmd = parts[0]?.toLowerCase() ?? "";
   const arg = parts[1];
 
+  // Agent commands take precedence over local commands
+  if (ctx.agentCommands && isAgentCommand(cmd, ctx.agentCommands)) {
+    return { handled: false };
+  }
+
   switch (cmd) {
     case "help":
     case "h":
@@ -127,11 +132,6 @@ export function handleSlashCommand(
       return { handled: true };
 
     default:
-      // Check if this is an agent command - if so, let it pass through to the agent
-      if (ctx.agentCommands && isAgentCommand(cmd, ctx.agentCommands)) {
-        // Return handled: false so the command gets sent to the agent as a prompt
-        return { handled: false };
-      }
       ctx.addOutput({ type: "error", content: `Unknown command: /${cmd}. Type /help for commands.` });
       return { handled: true };
   }
