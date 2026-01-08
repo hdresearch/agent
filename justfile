@@ -1,5 +1,8 @@
 # vers-agent justfile | #c778ea | https://github.com/hdresearch/agent
 #
+# ACP Docs: docs/acp-llms.txt (index) | docs/acp-llms-full.txt (full spec)
+# Protocol: https://agentclientprotocol.com/
+#
 # Auth: First client claims server → gets token → stored in ~/.vers-agent/
 # Reset: `just nuke` or `just reset-claim` if locked out
 
