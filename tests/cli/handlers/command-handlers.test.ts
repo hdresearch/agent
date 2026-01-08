@@ -4,11 +4,16 @@ import type { OutputLine, StatusInfo } from "../../../src/cli/types";
 import type { SessionConfig } from "../../../src/protocol/acp-types";
 
 // Create mock context
-function createMockContext(): CommandHandlerContext & { outputs: Omit<OutputLine, "id">[] } {
+function createMockContext(overrides?: Partial<CommandHandlerContext>): CommandHandlerContext & {
+  outputs: Omit<OutputLine, "id">[];
+  getReconnectUrl: () => string | null;
+} {
   const outputs: Omit<OutputLine, "id">[] = [];
+  const state = { reconnectUrl: null as string | null };
 
-  return {
+  const ctx = {
     outputs,
+    getReconnectUrl: () => state.reconnectUrl,
     client: null,
     sessionConfig: { model: "opus", thinkingBudget: null },
     setSessionConfig: mock(() => {}),
@@ -19,13 +24,18 @@ function createMockContext(): CommandHandlerContext & { outputs: Omit<OutputLine
       planMode: false,
     },
     setStatusInfo: mock(() => {}),
-    addOutput: (line) => outputs.push(line),
+    addOutput: (line: Omit<OutputLine, "id">) => outputs.push(line),
     setOutput: mock(() => {}),
     clearOutput: mock(() => {}),
     setContinueMode: mock(() => {}),
     historyRef: { current: null },
     exit: mock(() => {}),
+    reconnect: (url: string) => { state.reconnectUrl = url; },
+    currentServerUrl: undefined,
+    ...overrides,
   };
+
+  return ctx;
 }
 
 describe("handleSlashCommand", () => {
@@ -157,6 +167,60 @@ describe("handleSlashCommand", () => {
 
       expect(result.handled).toBe(true);
       expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+    });
+  });
+
+  describe("/connect", () => {
+    test("shows usage when no URL provided", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/connect", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.content.includes("Usage: /connect <url>"))).toBe(true);
+    });
+
+    test("shows current connection when no URL provided and connected", () => {
+      const ctx = createMockContext({ currentServerUrl: "http://localhost:9999" });
+      const result = handleSlashCommand("/connect", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.content.includes("Currently connected to: http://localhost:9999"))).toBe(true);
+    });
+
+    test("triggers reconnect with valid URL", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/connect http://localhost:9999", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.getReconnectUrl()).toBe("http://localhost:9999");
+    });
+
+    test("triggers reconnect with remote URL", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/connect http://192.168.1.100:9999", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.getReconnectUrl()).toBe("http://192.168.1.100:9999");
+    });
+
+    test("rejects invalid URL", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/connect not-a-url", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Invalid URL"))).toBe(true);
+      expect(ctx.getReconnectUrl()).toBeNull();
+    });
+  });
+
+  describe("/local", () => {
+    test("clears saved server and shows message", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/local", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.content.includes("Cleared saved remote server"))).toBe(true);
+      expect(ctx.outputs.some(o => o.content.includes("Next launch will start in local mode"))).toBe(true);
     });
   });
 });

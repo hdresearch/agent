@@ -699,9 +699,9 @@ function handleConnect(url: string | undefined, ctx: CommandHandlerContext): voi
   ctx.reconnect(url);
 }
 
-async function handleLocal(ctx: CommandHandlerContext): Promise<void> {
+function handleLocal(ctx: CommandHandlerContext): void {
   // Clear saved server URL and inform user
-  await setConfig({ lastServerUrl: null });
+  setConfig({ lastServerUrl: null }).catch(() => {});
   ctx.addOutput({ type: "system", content: "Cleared saved remote server." });
   ctx.addOutput({ type: "system", content: "Next launch will start in local mode." });
   ctx.addOutput({ type: "system", content: "" });
