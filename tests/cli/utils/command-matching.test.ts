@@ -22,10 +22,11 @@ describe("getMatchingCommands", () => {
 
   test("matches multiple commands", () => {
     const matches = getMatchingCommands("/c");
-    expect(matches.length).toBe(3); // clear, continue, compact
+    expect(matches.length).toBe(4); // clear, continue, compact, connect
     expect(matches.map(m => m.name)).toContain("clear");
     expect(matches.map(m => m.name)).toContain("continue");
     expect(matches.map(m => m.name)).toContain("compact");
+    expect(matches.map(m => m.name)).toContain("connect");
   });
 
   test("matches by alias", () => {

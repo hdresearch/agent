@@ -59,6 +59,9 @@ export function TopStatusBar({
       marginBottom={1}
     >
       <Box flexGrow={1} gap={1}>
+        {serverDisplay && (
+          <Text color={connected ? "green" : "red"}>●</Text>
+        )}
         <Text color="cyan" bold>agent</Text>
         {serverDisplay && (
           <>

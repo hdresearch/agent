@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { HttpAcpClient, type ConnectResult } from "../../client/http-client";
 import type { SessionNotificationParams, SessionConfig } from "../../protocol/acp-types";
 import { detectKeys } from "../../utils/keys";
@@ -34,6 +34,9 @@ export interface UseAcpClientResult {
   submitToken: (token: string) => void;
 }
 
+// Reconnect configuration
+const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000]; // Exponential backoff
+
 export function useAcpClient({
   serverUrl,
   continueMode,
@@ -47,6 +50,10 @@ export function useAcpClient({
   const historyRef = useRef<ConversationHistory | null>(null);
   const sessionConfigRef = useRef(sessionConfig);
   const pendingTokenResolve = useRef<((token: string) => void) | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isReconnectingRef = useRef(false);
+  const lastSessionIdRef = useRef<string | null>(null);
 
   // Remote mode: only when connecting to a non-localhost server
   const isRemoteMode = (() => {
@@ -126,6 +133,7 @@ export function useAcpClient({
   // Initialize ACP client
   useEffect(() => {
     const url = serverUrl || `http://localhost:${process.env.PORT || 9999}`;
+    let isMounted = true;
 
     // Helper to wait for token from user
     const waitForToken = (): Promise<string> => {
@@ -137,6 +145,114 @@ export function useAcpClient({
           content: "🔐 Server is claimed. Enter your access token:",
         });
       });
+    };
+
+    // Schedule a reconnect attempt
+    const scheduleReconnect = () => {
+      if (!isMounted || isReconnectingRef.current) return;
+
+      const attempt = reconnectAttemptRef.current;
+      const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)];
+
+      onOutput({
+        type: "system",
+        content: `🔄 Connection lost. Reconnecting in ${delay / 1000}s...`,
+      });
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (!isMounted) return;
+        reconnectAttemptRef.current++;
+        attemptReconnect();
+      }, delay);
+    };
+
+    // Attempt to reconnect
+    const attemptReconnect = async () => {
+      if (!isMounted || isReconnectingRef.current) return;
+      isReconnectingRef.current = true;
+
+      onOutput({
+        type: "system",
+        content: "🔄 Attempting to reconnect...",
+      });
+
+      try {
+        // Close old client
+        clientRef.current?.close();
+
+        // Create new client
+        const client = new HttpAcpClient(url);
+        clientRef.current = client;
+        setupHandlers(client);
+
+        // Try to connect
+        const result = await client.connect();
+
+        if (!result.success) {
+          if (result.needsToken) {
+            // Token required - can't auto-reconnect, need user input
+            onOutput({ type: "error", content: "Server requires authentication. Use /connect to reconnect." });
+            isReconnectingRef.current = false;
+            return;
+          }
+          throw new Error(result.error || "Connection failed");
+        }
+
+        // Re-initialize
+        await client.initialize();
+
+        // Re-authenticate
+        const localKeys = detectKeys();
+        if (localKeys.length > 0) {
+          const keysMap = Object.fromEntries(localKeys.map(k => [k.name, k.value]));
+          await client.authenticate(keysMap);
+        }
+
+        // Load existing session if we have one
+        if (lastSessionIdRef.current) {
+          try {
+            await client.loadSession(lastSessionIdRef.current);
+          } catch {
+            // Session may have expired, create new one
+            const newResult = await client.newSession(sessionConfigRef.current);
+            lastSessionIdRef.current = newResult.sessionId;
+          }
+        } else {
+          const newResult = await client.newSession(sessionConfigRef.current);
+          lastSessionIdRef.current = newResult.sessionId;
+        }
+
+        // Success!
+        setConnected(true);
+        reconnectAttemptRef.current = 0;
+        isReconnectingRef.current = false;
+        onOutput({
+          type: "system",
+          content: "✅ Reconnected to server",
+        });
+      } catch (err) {
+        isReconnectingRef.current = false;
+        if (reconnectAttemptRef.current < RECONNECT_DELAYS.length + 2) {
+          scheduleReconnect();
+        } else {
+          onOutput({
+            type: "error",
+            content: "❌ Failed to reconnect after multiple attempts. Use /connect to try again.",
+          });
+        }
+      }
+    };
+
+    // Setup handlers (notifications + disconnect)
+    const setupHandlers = (client: HttpAcpClient) => {
+      // Disconnect handler for auto-reconnect
+      client.onDisconnect(() => {
+        if (!isMounted) return;
+        setConnected(false);
+        scheduleReconnect();
+      });
+
+      setupNotificationHandler(client);
     };
 
     // Setup notification handlers
@@ -270,6 +386,7 @@ export function useAcpClient({
       }
 
       if (currentSessionId) {
+        lastSessionIdRef.current = currentSessionId;
         setStatusInfo(prev => ({ ...prev, sessionId: currentSessionId }));
       }
 
@@ -310,7 +427,7 @@ export function useAcpClient({
     const connectWithTokenFlow = async () => {
       const client = new HttpAcpClient(url);
       clientRef.current = client;
-      setupNotificationHandler(client);
+      setupHandlers(client);
 
       // Try to connect
       let result = await client.connect();
@@ -349,6 +466,10 @@ export function useAcpClient({
     });
 
     return () => {
+      isMounted = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       clientRef.current?.close();
     };
   }, [serverUrl, continueMode, onOutput, isRemoteMode]);

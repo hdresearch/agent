@@ -42,6 +42,7 @@ import {
 } from "../protocol/acp-types";
 
 export type NotificationHandler = (params: SessionNotificationParams) => void;
+export type DisconnectHandler = () => void;
 
 export interface ClaimResponse {
   claimed: boolean;
@@ -61,6 +62,7 @@ export class HttpAcpClient {
   private baseUrl: string;
   private eventSource: EventSource | null = null;
   private notificationHandler: NotificationHandler | null = null;
+  private disconnectHandler: DisconnectHandler | null = null;
   private agentCapabilities: AgentCapabilities | null = null;
   private _sessionId: string | null = null;
   private _connected = false;
@@ -199,6 +201,9 @@ export class HttpAcpClient {
             const { done, value } = await reader.read();
             if (done) {
               this._connected = false;
+              if (this.disconnectHandler) {
+                this.disconnectHandler();
+              }
               break;
             }
 
@@ -234,6 +239,9 @@ export class HttpAcpClient {
         })
         .catch((err) => {
           this._connected = false;
+          if (this.disconnectHandler) {
+            this.disconnectHandler();
+          }
           resolve({ success: false, error: err instanceof Error ? err.message : "Connection failed" });
         });
     });
@@ -490,6 +498,10 @@ export class HttpAcpClient {
 
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
+  }
+
+  onDisconnect(handler: DisconnectHandler): void {
+    this.disconnectHandler = handler;
   }
 
   get sessionId(): string | null {
