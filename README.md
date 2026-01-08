@@ -67,7 +67,103 @@ vers --help
 - **Dual-mode operation** - run server + CLI simultaneously or separately
 - **Docker support** - run in containers with docker-compose
 
-## Quick Reference
+## Justfile Workflows
+
+All commands are available via [just](https://github.com/casey/just). Run `just` to see all recipes.
+
+### Setup → Build → Run Flow
+
+```mermaid
+flowchart LR
+    subgraph Setup
+        A[just install] --> B[just build]
+    end
+    subgraph Run
+        B --> C{Mode?}
+        C -->|Combined| D[just agent]
+        C -->|Server only| E[just server]
+        C -->|CLI only| F[just cli]
+        E -.->|connects to| F
+    end
+    style A fill:#c778ea,color:#000
+    style B fill:#c778ea,color:#000
+    style D fill:#98c379,color:#000
+```
+
+### Development Flow
+
+```mermaid
+flowchart LR
+    A[just dev] -->|edit code| A
+    A -->|ready?| B[just typecheck]
+    B -->|pass| C[just test]
+    C -->|pass| D[just build]
+    D --> E[just agent]
+    
+    B -->|fail| A
+    C -->|fail| A
+    style A fill:#61afef,color:#000
+    style E fill:#98c379,color:#000
+```
+
+### Token/Claim Authentication Flow
+
+```mermaid
+flowchart TD
+    A[just agent] --> B{Server claimed?}
+    B -->|No| C[First client claims server]
+    C --> D[Token generated & stored]
+    D --> E[Connected]
+    
+    B -->|Yes| F{Have token?}
+    F -->|Yes| G[Auto-authenticate]
+    G --> E
+    F -->|No| H[Prompt for token]
+    H --> E
+    
+    I[just reset-claim] --> J[Clear server claim]
+    K[just clear-tokens] --> L[Clear client tokens]
+    M[just nuke] --> I
+    M --> K
+    
+    style A fill:#c778ea,color:#000
+    style E fill:#98c379,color:#000
+    style M fill:#e06c75,color:#000
+```
+
+### Recovery Flow
+
+```mermaid
+flowchart LR
+    A[Locked out?] --> B[just nuke]
+    B --> C[Kills port 9999]
+    B --> D[Resets server claim]
+    B --> E[Clears client tokens]
+    C & D & E --> F[just agent]
+    F --> G[Fresh start - reclaim]
+    
+    style B fill:#e06c75,color:#000
+    style G fill:#98c379,color:#000
+```
+
+### Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `just` | List all recipes |
+| `just install` | Install dependencies |
+| `just build` | Compile executable |
+| `just agent` | Run with env sourced |
+| `just server` | HTTP server only |
+| `just cli` | CLI only (needs server) |
+| `just dev` | Development with hot reload |
+| `just test` | Run tests |
+| `just health` | Check server status |
+| `just show-tokens` | View stored tokens |
+| `just claim-status` | Check server claim |
+| `just nuke` | Full reset |
+
+## Quick Reference (bun)
 
 ```bash
 # Development

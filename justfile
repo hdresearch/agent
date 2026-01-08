@@ -1,94 +1,117 @@
-# hdresearch/agent justfile
-# Local control over remote ACP agents
+# vers-agent justfile | #c778ea | https://github.com/hdresearch/agent
+#
+# Auth: First client claims server → gets token → stored in ~/.vers-agent/
+# Reset: `just nuke` or `just reset-claim` if locked out
 
-# Default: show commands
 default:
     @just --list
 
-# 🏗️ Build standalone executable
-build:
-    bun run build
+# ── Setup ─────────────────────────────────────────────────────────────────────
+install:
+    bun install
 
-# 🧪 Run tests  
-test:
-    bun test
+install-global:
+    ./install.sh
 
-# 🔧 Development with hot reload
+uninstall-global:
+    ./uninstall.sh
+
+# ── Development ───────────────────────────────────────────────────────────────
 dev:
     bun run dev
 
-# 🖥️ Start ACP server only (daemon mode)
-server port="9999":
-    PORT={{port}} ./vers-agent --server
+start:
+    bun run start
 
-# 💻 Start CLI only (connects to server)
-cli:
-    ./vers-agent --cli
+typecheck:
+    bun run typecheck
 
-# 🔗 Connect to remote ACP server
-connect url:
-    ./vers-agent --url {{url}}
+test:
+    bun test
 
-# 🐸 Both server + CLI (default mode)
+test-watch:
+    bun test --watch
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+build:
+    bun run build
+
+bundle:
+    bun run build:bundle
+
+clean:
+    rm -rf dist/ vers-agent
+
+rebuild: clean build
+
+# ── Run (source ~/.topos/.env first) ──────────────────────────────────────────
 run:
     ./vers-agent
 
-# 📋 Health check a running server  
-health url="http://localhost:9999":
-    curl -s {{url}}/health | jq .
+agent:
+    source ~/.topos/.env && ./vers-agent
 
-# 🔑 Claim a server and get token
-claim url="http://localhost:9999":
-    curl -s -X POST {{url}}/claim -H "Content-Type: application/json" -H "X-Client-Id: just-cli" | jq .
+cli:
+    ./vers-agent --cli
 
-# 📊 Get metrics from server
-metrics url="http://localhost:9999":
-    curl -s {{url}}/metrics
+server:
+    ./vers-agent --server
 
-# 🧹 Reset server claim (clear auth.db)
+continue:
+    ./vers-agent --continue
+
+remote url:
+    ./vers-agent --url {{url}}
+
+help:
+    ./vers-agent --help
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+docker-up:
+    docker compose up --build
+
+docker-down:
+    docker compose down
+
+# ── API (port default 9999) ───────────────────────────────────────────────────
+health port="9999":
+    curl -s http://localhost:{{port}}/health | jq
+
+tasks port="9999":
+    curl -s http://localhost:{{port}}/tasks | jq
+
+tasks-auth token port="9999":
+    curl -s -H "Authorization: Bearer {{token}}" http://localhost:{{port}}/tasks | jq
+
+task prompt port="9999":
+    curl -s -X POST http://localhost:{{port}}/tasks -H "Content-Type: application/json" -d '{"prompt": "{{prompt}}"}' | jq
+
+stream id port="9999":
+    curl -N http://localhost:{{port}}/tasks/{{id}}/stream
+
+# ── Token/Claim Management ────────────────────────────────────────────────────
+show-tokens:
+    @cat ~/.vers-agent/tokens.json 2>/dev/null | jq || echo "No tokens"
+
+claim-status:
+    @sqlite3 ~/.vers-agent/auth.db "SELECT claimed_at, client_id FROM server_claim WHERE id = 1" 2>/dev/null || echo "No claim"
+
+clear-tokens:
+    @rm -f ~/.vers-agent/tokens.json && echo "Tokens cleared"
+
 reset-claim:
-    rm -f ~/.vers-agent/auth.db
-    @echo "✅ Claim reset. Next connection will claim the server."
+    @sqlite3 ~/.vers-agent/auth.db "UPDATE server_claim SET claimed_at = NULL, token_hash = NULL, client_id = NULL WHERE id = 1" 2>/dev/null || true
+    @echo "Claim reset - restart server"
 
-# 🐳 Docker build
-docker-build:
-    docker build -t vers-agent .
+server-fresh:
+    VERS_AGENT_RESET_CLAIM=true ./vers-agent --server
 
-# 🐳 Docker run  
-docker-run:
-    docker compose up
+# ── Utilities ─────────────────────────────────────────────────────────────────
+kill-port port="9999":
+    lsof -ti:{{port}} | xargs kill -9 2>/dev/null || echo "No process on :{{port}}"
 
-# === Vers VM Integration ===
-
-# 🚀 Deploy to vers VM
-deploy-vm vm_id:
-    #!/usr/bin/env bash
-    echo "📦 Building..."
-    just build
-    echo "📤 Copying to VM {{vm_id}}..."
-    vers copy {{vm_id}} ./vers-agent /usr/local/bin/vers-agent
-    vers execute {{vm_id}} "chmod +x /usr/local/bin/vers-agent"
-    echo "✅ Deployed!"
-
-# 🖥️ Start server in VM
-vm-server-start vm_id:
-    vers execute {{vm_id}} "nohup /usr/local/bin/vers-agent --server > /var/log/vers-agent.log 2>&1 &"
-    @echo "✅ Server started on {{vm_id}}:9999"
-
-# 🛑 Stop server in VM
-vm-server-stop vm_id:
-    vers execute {{vm_id}} "pkill -f vers-agent || true"
-
-# 📋 Check VM server health
-vm-health vm_id:
-    vers execute {{vm_id}} "curl -s http://localhost:9999/health" | jq .
-
-# 🔗 Connect local CLI to VM (via SSH tunnel)
-vm-connect vm_id:
-    #!/usr/bin/env bash
-    echo "🔗 Tunneling to {{vm_id}}..."
-    ssh -L 9999:localhost:9999 -N {{vm_id}}.vm.vers.sh &
-    SSH_PID=$!
-    sleep 2
-    ./vers-agent --url http://localhost:9999
-    kill $SSH_PID 2>/dev/null
+nuke port="9999":
+    @just kill-port {{port}}
+    @just reset-claim
+    @just clear-tokens
+    @echo "Done. Run: source ~/.topos/.env && just run"
