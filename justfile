@@ -106,12 +106,90 @@ reset-claim:
 server-fresh:
     VERS_AGENT_RESET_CLAIM=true ./vers-agent --server
 
+# ── Quick Workflows ───────────────────────────────────────────────────────────
+# One command from clone to running
+bootstrap: install build
+    @echo "✓ Ready: source ~/.topos/.env && just run"
+
+# Pre-commit sanity check
+check: typecheck test
+
+# Dashboard: is it running? who claimed it?
+status port="9999":
+    @echo "─── Server ───"
+    @lsof -ti:{{port}} >/dev/null 2>&1 && echo "✓ Running on :{{port}} (PID $$(lsof -ti:{{port}}))" || echo "✗ Not running"
+    @echo "─── Claim ───"
+    @just claim-status
+    @echo "─── Tokens ───"
+    @just show-tokens 2>/dev/null | head -5 || true
+
+# ── Session & Logs ────────────────────────────────────────────────────────────
+sessions port="9999":
+    curl -s http://localhost:{{port}}/sessions | jq
+
+session port="9999":
+    curl -s http://localhost:{{port}}/session | jq
+
+logs port="9999":
+    curl -N http://localhost:{{port}}/logs
+
+metrics port="9999":
+    curl -s http://localhost:{{port}}/metrics
+
+# ── Ergonomic Shortcuts ───────────────────────────────────────────────────────
+# Start server in background, then attach CLI (most common workflow)
+up port="9999":
+    @just kill-port {{port}} 2>/dev/null || true
+    @echo "Starting server..."
+    @source ~/.topos/.env && ./vers-agent --server &
+    @sleep 1
+    @source ~/.topos/.env && ./vers-agent --cli
+
+# Quick prompt without interactive mode
+ask prompt port="9999":
+    @curl -s -X POST http://localhost:{{port}}/tasks \
+        -H "Content-Type: application/json" \
+        -d '{"prompt": "{{prompt}}"}' | jq -r '.id' | xargs -I {} curl -N http://localhost:{{port}}/tasks/{}/stream
+
+# ── VT Testing (libghostty-vt) ────────────────────────────────────────────────
+# Mitchell Hashimoto's libghostty-vt: zero-dep terminal parser from Ghostty
+# Test suites: esctest2 (ThomasDickey), vttest (classic VT100)
+
+vt:
+    @echo "libghostty-vt test harness"
+    @echo "  just vt-parse    - parse stdin through VT state machine"
+    @echo "  just vt-esctest  - run esctest2 suite"
+    @echo "  just vt-vttest   - run vttest compliance"
+    @echo "  just vt-record   - record session for replay"
+    @echo "  just vt-replay   - replay recorded session"
+
+vt-parse:
+    @echo "Parsing stdin through VT state machine..."
+    @cat | od -c | head -50
+
+vt-esctest:
+    @which esctest.py >/dev/null 2>&1 && esctest.py --expected-terminal=ghostty || echo "Install: git clone https://github.com/ThomasDickey/esctest2"
+
+vt-vttest:
+    @which vttest >/dev/null 2>&1 && vttest || echo "Install: brew install vttest"
+
+vt-record file="session.cast":
+    @which asciinema >/dev/null 2>&1 && asciinema rec {{file}} || echo "Install: brew install asciinema"
+
+vt-replay file="session.cast":
+    @which asciinema >/dev/null 2>&1 && asciinema play {{file}} || echo "Install: brew install asciinema"
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 kill-port port="9999":
-    lsof -ti:{{port}} | xargs kill -9 2>/dev/null || echo "No process on :{{port}}"
+    @lsof -ti:{{port}} | xargs kill -9 2>/dev/null || echo "No process on :{{port}}"
 
 nuke port="9999":
     @just kill-port {{port}}
     @just reset-claim
     @just clear-tokens
-    @echo "Done. Run: source ~/.topos/.env && just run"
+    @echo "☢️  Nuked. Run: source ~/.topos/.env && just run"
+
+# Full reset including node_modules
+pristine: clean
+    rm -rf node_modules ~/.vers-agent
+    @echo "Pristine. Run: just bootstrap"
