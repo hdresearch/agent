@@ -266,13 +266,14 @@ describe("handleSlashCommand", () => {
       expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
     });
 
-    test("local command still handled when agent has same command", () => {
-      // "compact" is both local and agent - local should still be handled locally
+    test("agent command takes precedence over local command with same name", () => {
+      // "compact" is both local and agent - agent should win
       const ctx = createMockContext({ agentCommands });
       const result = handleSlashCommand("/compact", ctx);
 
-      // Local /compact is handled by the local handler
-      expect(result.handled).toBe(true);
+      // Agent /compact takes precedence, passes through to agent
+      expect(result.handled).toBe(false);
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
     });
   });
 });
