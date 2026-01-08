@@ -12,7 +12,7 @@ import {
   addMessage,
   type ConversationHistory,
 } from "../../utils/history";
-import { getConfig } from "../../utils/config";
+import { getConfig, setConfig } from "../../utils/config";
 
 export interface UseAcpClientOptions {
   serverUrl?: string;
@@ -48,8 +48,17 @@ export function useAcpClient({
   const sessionConfigRef = useRef(sessionConfig);
   const pendingTokenResolve = useRef<((token: string) => void) | null>(null);
 
-  // Remote mode: always use server for bash when connected via URL
-  const isRemoteMode = !!serverUrl;
+  // Remote mode: only when connecting to a non-localhost server
+  const isRemoteMode = (() => {
+    if (!serverUrl) return false;
+    try {
+      const url = new URL(serverUrl);
+      const host = url.hostname.toLowerCase();
+      return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
+    } catch {
+      return false;
+    }
+  })();
 
   // Callback to submit token when prompted
   const submitToken = useCallback((token: string) => {
@@ -325,6 +334,11 @@ export function useAcpClient({
 
       // Connected successfully
       await completeInitialization(client);
+
+      // Save remote server URL for auto-reconnect on next launch
+      if (isRemoteMode && serverUrl) {
+        setConfig({ lastServerUrl: serverUrl }).catch(() => {});
+      }
     };
 
     connectWithTokenFlow().catch((err) => {

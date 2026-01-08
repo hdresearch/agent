@@ -1,6 +1,6 @@
 import { runCli } from "./src/cli/cli.js";
 import { createHttpServer } from "./src/server/http-server";
-import { loadConfig, loadMcpServers } from "./src/utils/config";
+import { loadConfig, loadMcpServers, getConfig, setConfig } from "./src/utils/config";
 import { loadDocsStore } from "./src/utils/docs-store";
 
 // Global error handlers to prevent crashes
@@ -82,13 +82,11 @@ const showHelp = args.includes("--help") || args.includes("-h");
 const cliOnly = args.includes("--cli");
 const serverOnly = args.includes("--server");
 const continueSession = args.includes("--continue") || args.includes("-c");
+const forceLocal = args.includes("--local");
 
 // Parse --url option
 const urlIndex = args.indexOf("--url");
-const serverUrl = urlIndex !== -1 && args[urlIndex + 1] ? args[urlIndex + 1] : undefined;
-
-// Remote mode: connect to existing server (implies CLI-only)
-const remoteMode = serverUrl !== undefined;
+const explicitServerUrl = urlIndex !== -1 && args[urlIndex + 1] ? args[urlIndex + 1] : undefined;
 
 if (showHelp) {
   console.log(`vers-agent - ACP-compliant agent harness with CLI
@@ -100,8 +98,9 @@ Options:
   --cli             Run interactive CLI only (connects to HTTP server)
   --server          Run ACP server only (HTTP, no CLI)
   --url <url>       Connect CLI to remote server (e.g., --url http://192.168.1.100:9999)
+  --local           Force local mode (clears saved remote server)
   --continue, -c    Continue the last conversation
-  (default)         Run both HTTP server and CLI simultaneously
+  (default)         Run both HTTP server and CLI simultaneously (or reconnect to last remote server)
 
 Environment:
   PORT              HTTP server port (default: 9999)
@@ -131,7 +130,42 @@ async function main() {
   // Load persisted docs store
   await loadDocsStore();
 
-  if (remoteMode) {
+  // Helper to check if URL is a remote server (not localhost)
+  const isRemoteUrl = (url: string): boolean => {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
+    } catch {
+      return false;
+    }
+  };
+
+  // Determine server URL: explicit > saved > local
+  const savedConfig = getConfig();
+  let serverUrl: string | undefined;
+  let remoteMode = false;
+
+  if (forceLocal) {
+    // Clear saved server URL when forcing local mode
+    if (savedConfig.lastServerUrl) {
+      await setConfig({ lastServerUrl: null });
+      console.log("Cleared saved remote server. Running locally.");
+    }
+  } else if (explicitServerUrl) {
+    // Explicit --url takes precedence
+    serverUrl = explicitServerUrl;
+    remoteMode = true;
+    // Save for auto-reconnect (explicit --url always saves)
+    await setConfig({ lastServerUrl: serverUrl });
+  } else if (savedConfig.lastServerUrl && !cliOnly && !serverOnly) {
+    // Use saved URL (set via /connect or --url)
+    serverUrl = savedConfig.lastServerUrl;
+    remoteMode = true;
+    console.log(`Reconnecting to saved server: ${serverUrl}`);
+  }
+
+  if (remoteMode && serverUrl) {
     // Remote mode: connect to existing server (no local Claude Code needed)
     console.log(`Connecting to ${serverUrl}...`);
     await runCli({ continueSession, serverUrl });
@@ -177,6 +211,7 @@ Example:
     } else {
       // Both: start HTTP server, then CLI
       const server = createHttpServer(PORT);
+      const actualPort = server.port;
 
       // Handle shutdown
       process.on("SIGINT", () => {
@@ -189,7 +224,7 @@ Example:
       });
 
       console.log(""); // blank line before CLI prompt
-      await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
+      await runCli({ continueSession, serverUrl: `http://localhost:${actualPort}` });
     }
   }
 }

@@ -1029,239 +1029,282 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
   }
 }
 
-// Create the HTTP server
-export function createHttpServer(port: number): { close: () => void } {
-  const server = Bun.serve({
-    port,
-    idleTimeout: 255, // Max timeout in seconds (prevents hanging on shutdown)
-    async fetch(req) {
-      const url = new URL(req.url);
+// Try to create server on port, returns null if port is in use
+function tryCreateServer(port: number): ReturnType<typeof Bun.serve> | null {
+  try {
+    return Bun.serve({
+      port,
+      idleTimeout: 255,
+      async fetch(req) {
+        return handleRequest(req);
+      },
+    });
+  } catch (err: unknown) {
+    // Check for EADDRINUSE error (port in use)
+    const errWithCode = err as { code?: string };
+    if (errWithCode.code === "EADDRINUSE") {
+      return null;
+    }
+    // Also check message for broader compatibility
+    if (err instanceof Error && err.message.includes("EADDRINUSE")) {
+      return null;
+    }
+    throw err;
+  }
+}
 
-      // CORS headers
-      const corsHeaders = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Auth-Token, X-Client-Id",
-      };
+// Shared request handler
+async function handleRequest(req: Request): Promise<Response> {
+  const url = new URL(req.url);
 
-      // Handle CORS preflight
-      if (req.method === "OPTIONS") {
-        return new Response(null, { headers: corsHeaders });
-      }
+  // CORS headers
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Auth-Token, X-Client-Id",
+  };
 
-      // Health check - allowed without auth, shows claim status
-      if (url.pathname === "/health") {
-        const claimState = authStore.getClaimState();
-        return Response.json({
-          status: "ok",
-          initialized,
-          sessionId: currentSessionId,
-          claimed: claimState.isClaimed,
-          claimedAt: claimState.claimedAt,
-          metrics: {
-            prompts: metrics.getCounter(MetricNames.PROMPTS_TOTAL),
-            sessions: metrics.getCounter(MetricNames.SESSIONS_CREATED),
-            queueLength: metrics.getGauge(MetricNames.QUEUE_LENGTH),
-            sseClients: metrics.getGauge(MetricNames.SSE_CLIENTS),
-          },
-        }, { headers: corsHeaders });
-      }
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
-      // Claim endpoint - check/claim server
-      if (url.pathname === "/claim" && req.method === "POST") {
-        const clientId = req.headers.get("X-Client-Id") || "unknown-client";
-        const claimState = authStore.getClaimState();
+  // Health check - allowed without auth, shows claim status
+  if (url.pathname === "/health") {
+    const claimState = authStore.getClaimState();
+    return Response.json({
+      status: "ok",
+      initialized,
+      sessionId: currentSessionId,
+      claimed: claimState.isClaimed,
+      claimedAt: claimState.claimedAt,
+      metrics: {
+        prompts: metrics.getCounter(MetricNames.PROMPTS_TOTAL),
+        sessions: metrics.getCounter(MetricNames.SESSIONS_CREATED),
+        queueLength: metrics.getGauge(MetricNames.QUEUE_LENGTH),
+        sseClients: metrics.getGauge(MetricNames.SSE_CLIENTS),
+      },
+    }, { headers: corsHeaders });
+  }
 
-        if (claimState.isClaimed) {
-          // Already claimed - check if this client has valid token
-          const token = getAuthToken(req);
-          if (token && authStore.verifyToken(token)) {
-            return Response.json({
-              claimed: true,
-              isOwner: true,
-              claimedAt: claimState.claimedAt,
-            }, { headers: corsHeaders });
-          }
-          return Response.json({
-            claimed: true,
-            isOwner: false,
-            error: "Server is already claimed by another client",
-          }, { status: 403, headers: corsHeaders });
-        }
+  // Claim endpoint - check/claim server
+  if (url.pathname === "/claim" && req.method === "POST") {
+    const clientId = req.headers.get("X-Client-Id") || "unknown-client";
+    const claimState = authStore.getClaimState();
 
-        // Unclaimed - claim it
-        const result = authStore.claim(clientId);
-        if (result.success) {
-          info("Server claimed via /claim endpoint", { clientId });
-          return Response.json({
-            claimed: true,
-            isOwner: true,
-            token: result.token,
-            message: "Server claimed successfully. Save this token!",
-          }, { headers: corsHeaders });
-        }
-
+    if (claimState.isClaimed) {
+      // Already claimed - check if this client has valid token
+      const token = getAuthToken(req);
+      if (token && authStore.verifyToken(token)) {
         return Response.json({
           claimed: true,
-          isOwner: false,
-          error: result.error,
-        }, { status: 403, headers: corsHeaders });
+          isOwner: true,
+          claimedAt: claimState.claimedAt,
+        }, { headers: corsHeaders });
+      }
+      return Response.json({
+        claimed: true,
+        isOwner: false,
+        error: "Server is already claimed by another client",
+      }, { status: 403, headers: corsHeaders });
+    }
+
+    // Unclaimed - claim it
+    const result = authStore.claim(clientId);
+    if (result.success) {
+      info("Server claimed via /claim endpoint", { clientId });
+      return Response.json({
+        claimed: true,
+        isOwner: true,
+        token: result.token,
+        message: "Server claimed successfully. Save this token!",
+      }, { headers: corsHeaders });
+    }
+
+    return Response.json({
+      claimed: true,
+      isOwner: false,
+      error: result.error,
+    }, { status: 403, headers: corsHeaders });
+  }
+
+  // All other endpoints require auth (if server is claimed)
+  const claimState = authStore.getClaimState();
+  if (claimState.isClaimed) {
+    const token = getAuthToken(req);
+    if (!token) {
+      return Response.json({
+        error: "Authentication required",
+        message: "Server is claimed. Provide token via Authorization header or ?token= parameter",
+      }, { status: 401, headers: corsHeaders });
+    }
+    if (!authStore.verifyToken(token)) {
+      return Response.json({
+        error: "Invalid token",
+        message: "The provided authentication token is invalid",
+      }, { status: 403, headers: corsHeaders });
+    }
+  }
+
+  // JSON-RPC endpoint
+  if (url.pathname === "/rpc" && req.method === "POST") {
+    try {
+      const body = await req.text();
+      const message = parseMessage(body);
+
+      if (!message || !("method" in message)) {
+        return Response.json(
+          createErrorResponse(null, ErrorCode.InvalidRequest, "Invalid JSON-RPC request"),
+          { headers: corsHeaders }
+        );
       }
 
-      // All other endpoints require auth (if server is claimed)
-      const claimState = authStore.getClaimState();
-      if (claimState.isClaimed) {
-        const token = getAuthToken(req);
-        if (!token) {
-          return Response.json({
-            error: "Authentication required",
-            message: "Server is claimed. Provide token via Authorization header or ?token= parameter",
-          }, { status: 401, headers: corsHeaders });
-        }
-        if (!authStore.verifyToken(token)) {
-          return Response.json({
-            error: "Invalid token",
-            message: "The provided authentication token is invalid",
-          }, { status: 403, headers: corsHeaders });
-        }
-      }
+      const response = await handleRpcRequest(message as JsonRpcRequest);
+      return Response.json(response, { headers: corsHeaders });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return Response.json(
+        createErrorResponse(null, ErrorCode.ParseError, message),
+        { headers: corsHeaders }
+      );
+    }
+  }
 
-      // JSON-RPC endpoint
-      if (url.pathname === "/rpc" && req.method === "POST") {
-        try {
-          const body = await req.text();
-          const message = parseMessage(body);
+  // SSE endpoint for notifications
+  if (url.pathname === "/events" && req.method === "GET") {
+    let clientSend: ((event: string, data: unknown) => void) | null = null;
 
-          if (!message || !("method" in message)) {
-            return Response.json(
-              createErrorResponse(null, ErrorCode.InvalidRequest, "Invalid JSON-RPC request"),
-              { headers: corsHeaders }
-            );
-          }
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
 
-          const response = await handleRpcRequest(message as JsonRpcRequest);
-          return Response.json(response, { headers: corsHeaders });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          return Response.json(
-            createErrorResponse(null, ErrorCode.ParseError, message),
-            { headers: corsHeaders }
-          );
-        }
-      }
+        // Send initial connection event
+        controller.enqueue(encoder.encode("event: connected\ndata: {}\n\n"));
 
-      // SSE endpoint for notifications
-      if (url.pathname === "/events" && req.method === "GET") {
-        let clientSend: ((event: string, data: unknown) => void) | null = null;
-
-        const stream = new ReadableStream({
-          start(controller) {
-            const encoder = new TextEncoder();
-
-            // Send initial connection event
-            controller.enqueue(encoder.encode("event: connected\ndata: {}\n\n"));
-
-            // Register this client
-            clientSend = (event: string, data: unknown) => {
-              const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-              try {
-                controller.enqueue(encoder.encode(payload));
-              } catch {
-                // Client disconnected
-                if (clientSend) removeSseClient(clientSend);
-              }
-            };
-
-            addSseClient(clientSend);
-          },
-          cancel() {
+        // Register this client
+        clientSend = (event: string, data: unknown) => {
+          const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+          try {
+            controller.enqueue(encoder.encode(payload));
+          } catch {
             // Client disconnected
             if (clientSend) removeSseClient(clientSend);
-          },
-        });
+          }
+        };
 
-        return new Response(stream, {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-          },
-        });
-      }
+        addSseClient(clientSend);
+      },
+      cancel() {
+        // Client disconnected
+        if (clientSend) removeSseClient(clientSend);
+      },
+    });
 
-      // Prometheus metrics endpoint
-      if (url.pathname === "/metrics" && req.method === "GET") {
-        const format = url.searchParams.get("format");
-        if (format === "json") {
-          return Response.json(metrics.toJSON(), { headers: corsHeaders });
-        }
-        return new Response(metrics.toPrometheus(), {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
-          },
-        });
-      }
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
+  }
 
-      // Log streaming endpoint (SSE)
-      if (url.pathname === "/logs" && req.method === "GET") {
-        const minLevel = (url.searchParams.get("level") || "info") as LogLevel;
-        const includeRecent = url.searchParams.get("recent") !== "false";
+  // Prometheus metrics endpoint
+  if (url.pathname === "/metrics" && req.method === "GET") {
+    const format = url.searchParams.get("format");
+    if (format === "json") {
+      return Response.json(metrics.toJSON(), { headers: corsHeaders });
+    }
+    return new Response(metrics.toPrometheus(), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+      },
+    });
+  }
 
-        const stream = new ReadableStream({
-          start(controller) {
-            const encoder = new TextEncoder();
+  // Log streaming endpoint (SSE)
+  if (url.pathname === "/logs" && req.method === "GET") {
+    const minLevel = (url.searchParams.get("level") || "info") as LogLevel;
+    const includeRecent = url.searchParams.get("recent") !== "false";
 
-            // Send recent logs first if requested
-            if (includeRecent) {
-              const recent = logStream.getRecent(50);
-              for (const entry of recent) {
-                if (shouldIncludeLevel(entry.level, minLevel)) {
-                  const payload = `data: ${logStream.formatForSSE(entry)}\n\n`;
-                  controller.enqueue(encoder.encode(payload));
-                }
-              }
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+
+        // Send recent logs first if requested
+        if (includeRecent) {
+          const recent = logStream.getRecent(50);
+          for (const entry of recent) {
+            if (shouldIncludeLevel(entry.level, minLevel)) {
+              const payload = `data: ${logStream.formatForSSE(entry)}\n\n`;
+              controller.enqueue(encoder.encode(payload));
             }
+          }
+        }
 
-            // Subscribe to new logs
-            const unsubscribe = logStream.subscribe((entry) => {
-              if (shouldIncludeLevel(entry.level, minLevel)) {
-                const payload = `data: ${logStream.formatForSSE(entry)}\n\n`;
-                try {
-                  controller.enqueue(encoder.encode(payload));
-                } catch {
-                  unsubscribe();
-                }
-              }
-            });
-
-            // Store unsubscribe for cleanup
-            (controller as any)._unsubscribe = unsubscribe;
-          },
-          cancel(controller) {
-            const unsubscribe = (controller as any)._unsubscribe;
-            if (unsubscribe) unsubscribe();
-          },
+        // Subscribe to new logs
+        const unsubscribe = logStream.subscribe((entry) => {
+          if (shouldIncludeLevel(entry.level, minLevel)) {
+            const payload = `data: ${logStream.formatForSSE(entry)}\n\n`;
+            try {
+              controller.enqueue(encoder.encode(payload));
+            } catch {
+              unsubscribe();
+            }
+          }
         });
 
-        return new Response(stream, {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-          },
-        });
-      }
+        // Store unsubscribe for cleanup
+        (controller as any)._unsubscribe = unsubscribe;
+      },
+      cancel(controller) {
+        const unsubscribe = (controller as any)._unsubscribe;
+        if (unsubscribe) unsubscribe();
+      },
+    });
 
-      return Response.json({ error: "Not Found" }, { status: 404, headers: corsHeaders });
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
+  }
 
-  console.log(`ACP HTTP server listening on http://localhost:${server.port}`);
+  return Response.json({ error: "Not Found" }, { status: 404, headers: corsHeaders });
+}
+
+// Create the HTTP server with automatic port finding
+export function createHttpServer(requestedPort: number, maxAttempts = 10): { close: () => void; port: number } {
+  let server: ReturnType<typeof Bun.serve> | null = null;
+  let actualPort = requestedPort;
+
+  // Try the requested port first, then increment
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const tryPort = requestedPort + attempt;
+    server = tryCreateServer(tryPort);
+    if (server) {
+      actualPort = tryPort;
+      break;
+    }
+    if (attempt === 0) {
+      console.log(`Port ${tryPort} is in use, trying alternate ports...`);
+    }
+  }
+
+  if (!server) {
+    throw new Error(`Could not find an available port after ${maxAttempts} attempts (tried ${requestedPort}-${requestedPort + maxAttempts - 1})`);
+  }
+
+  console.log(`ACP HTTP server listening on http://localhost:${actualPort}`);
 
   return {
-    close: () => server.stop(),
+    close: () => server!.stop(),
+    port: actualPort,
   };
 }
+

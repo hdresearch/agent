@@ -34,6 +34,7 @@ export interface AgentConfig {
   model: string;
   thinkingBudget: number | null; // null = off, number = budget tokens (min 1024)
   lastSessionId: string | null;  // For --continue functionality
+  lastServerUrl: string | null;  // Last remote server URL for auto-reconnect
 }
 
 export interface SessionStats {
@@ -69,6 +70,7 @@ const defaultConfig: AgentConfig = {
   model: "opus",
   thinkingBudget: null,
   lastSessionId: null,
+  lastServerUrl: null,
 };
 
 let config: AgentConfig = { ...defaultConfig };
@@ -167,6 +169,10 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
     config.lastSessionId = updates.lastSessionId;
   }
 
+  if (updates.lastServerUrl !== undefined) {
+    config.lastServerUrl = updates.lastServerUrl;
+  }
+
   // Persist changes
   await saveConfig();
 
@@ -192,6 +198,10 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
 
   if (updates.lastSessionId !== undefined) {
     config.lastSessionId = updates.lastSessionId;
+  }
+
+  if (updates.lastServerUrl !== undefined) {
+    config.lastServerUrl = updates.lastServerUrl;
   }
 
   // Fire and forget save

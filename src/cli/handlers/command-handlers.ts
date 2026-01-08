@@ -20,6 +20,8 @@ export interface CommandHandlerContext {
   setContinueMode: (mode: boolean) => void;
   historyRef: React.MutableRefObject<ConversationHistory | null>;
   exit: () => void;
+  reconnect: (url: string) => void;
+  currentServerUrl?: string;
 }
 
 export type CommandResult = {
@@ -107,6 +109,14 @@ export function handleSlashCommand(
 
     case "token":
       handleToken(ctx);
+      return { handled: true };
+
+    case "connect":
+      handleConnect(arg, ctx);
+      return { handled: true };
+
+    case "local":
+      handleLocal(ctx);
       return { handled: true };
 
     default:
@@ -658,4 +668,42 @@ function handleToken(ctx: CommandHandlerContext): void {
     ctx.addOutput({ type: "system", content: "  Server may not be claimed yet." });
   }
   ctx.addOutput({ type: "system", content: "" });
+}
+
+function handleConnect(url: string | undefined, ctx: CommandHandlerContext): void {
+  if (!url) {
+    // Show current connection
+    if (ctx.currentServerUrl) {
+      ctx.addOutput({ type: "system", content: `Currently connected to: ${ctx.currentServerUrl}` });
+    } else {
+      ctx.addOutput({ type: "system", content: "Not connected to any server." });
+    }
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "Usage: /connect <url>" });
+    ctx.addOutput({ type: "system", content: "Example: /connect http://192.168.1.100:9999" });
+    return;
+  }
+
+  // Validate URL
+  try {
+    new URL(url);
+  } catch {
+    ctx.addOutput({ type: "error", content: `Invalid URL: ${url}` });
+    return;
+  }
+
+  // Save URL for auto-reconnect (explicit /connect always saves)
+  setConfig({ lastServerUrl: url }).catch(() => {});
+
+  // Trigger reconnection
+  ctx.reconnect(url);
+}
+
+async function handleLocal(ctx: CommandHandlerContext): Promise<void> {
+  // Clear saved server URL and inform user
+  await setConfig({ lastServerUrl: null });
+  ctx.addOutput({ type: "system", content: "Cleared saved remote server." });
+  ctx.addOutput({ type: "system", content: "Next launch will start in local mode." });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "To connect to a server now, use: /connect <url>" });
 }

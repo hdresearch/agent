@@ -16,6 +16,8 @@ export const COMMANDS = [
   { name: "mcp", alias: null, description: "Manage MCP servers (list/add/remove)" },
   { name: "plan", alias: "p", description: "Toggle plan mode (or: on/off/show/clear)" },
   { name: "token", alias: null, description: "Show connection token for this server" },
+  { name: "connect", alias: null, description: "Connect to server (or: /connect <url>)" },
+  { name: "local", alias: null, description: "Clear saved remote server for next launch" },
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];

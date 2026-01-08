@@ -10,6 +10,7 @@ interface TopStatusBarProps {
   connected: boolean;
   planMode: boolean;
   sessionId: string | null;
+  serverUrl?: string;
 }
 
 export function TopStatusBar({
@@ -19,7 +20,24 @@ export function TopStatusBar({
   connected,
   planMode,
   sessionId,
+  serverUrl,
 }: TopStatusBarProps) {
+  // Extract host:port from serverUrl for compact display
+  const serverDisplay = (() => {
+    if (!serverUrl) return null;
+    try {
+      const url = new URL(serverUrl);
+      const host = url.hostname;
+      const port = url.port || (url.protocol === "https:" ? "443" : "80");
+      // For localhost, just show the port
+      if (host === "localhost" || host === "127.0.0.1") {
+        return `:${port}`;
+      }
+      return `${host}:${port}`;
+    } catch {
+      return null;
+    }
+  })();
   const contextLimit = MODEL_CONTEXT_LIMITS[model] || 200000;
   const contextUsed = cost.inputTokens; // Input tokens represent context usage
   const contextPercent = Math.min(100, (contextUsed / contextLimit) * 100);
@@ -41,7 +59,13 @@ export function TopStatusBar({
       marginBottom={1}
     >
       <Box flexGrow={1} gap={1}>
-        <Text color="cyan" bold>vers-agent</Text>
+        <Text color="cyan" bold>agent</Text>
+        {serverDisplay && (
+          <>
+            <Text dimColor>@</Text>
+            <Text color="blue">{serverDisplay}</Text>
+          </>
+        )}
         <Text dimColor>│</Text>
         <Text color="magenta">{model}</Text>
         <Text dimColor>│</Text>

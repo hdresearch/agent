@@ -29,7 +29,7 @@ interface AppProps {
   serverUrl?: string;
 }
 
-export function App({ initialContinue, serverUrl }: AppProps) {
+export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) {
   const { exit } = useApp();
   const [input, setInputRaw] = useState("");
   const [suggestionIndex, setSuggestionIndex] = useState(0);
@@ -37,8 +37,10 @@ export function App({ initialContinue, serverUrl }: AppProps) {
   const [output, setOutput] = useState<OutputLine[]>([]);
   const [state, setState] = useState<AppState>({ status: "idle" });
   const [scrollOffset, setScrollOffset] = useState(0);
+  // Server URL - can be changed with /connect command
+  const [serverUrl, setServerUrl] = useState(initialServerUrl);
   // In remote mode, default to continuing the most recent session
-  const [continueMode, setContinueMode] = useState(initialContinue || !!serverUrl);
+  const [continueMode, setContinueMode] = useState(initialContinue || !!initialServerUrl);
 
   // Submission guards
   const isSubmittingRef = useRef(false);
@@ -192,6 +194,11 @@ export function App({ initialContinue, serverUrl }: AppProps) {
           setContinueMode,
           historyRef,
           exit,
+          reconnect: (url: string) => {
+            setServerUrl(url);
+            addOutput({ type: "system", content: `Connecting to ${url}...` });
+          },
+          currentServerUrl: serverUrl,
         };
 
         const result = handleSlashCommand(value, ctx);
@@ -339,6 +346,7 @@ export function App({ initialContinue, serverUrl }: AppProps) {
         connected={connected}
         planMode={statusInfo.planMode}
         sessionId={statusInfo.sessionId}
+        serverUrl={serverUrl}
       />
       <OutputArea lines={output} maxLines={outputMaxLines} scrollOffset={scrollOffset} />
       <StatusBar state={state} />

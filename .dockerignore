@@ -25,3 +25,6 @@ tests
 # Misc
 *.md
 *.log
+
+# CLI bin folder
+bin
