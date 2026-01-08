@@ -2,6 +2,17 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 
 const SERVER_URL = "http://localhost:9999";
 let authToken: string | null = null;
+let serverClaimedByOther = false;
+
+// Helper to fail test with clear message if server is claimed
+function failIfClaimed() {
+  if (serverClaimedByOther) {
+    throw new Error(
+      "Server is claimed by another client (likely a running vers instance). " +
+      "Stop vers or use a different port to run these integration tests."
+    );
+  }
+}
 
 // Helper to make JSON-RPC requests
 async function rpc(method: string, params: Record<string, unknown> = {}) {
@@ -37,26 +48,30 @@ async function isServerRunning(): Promise<boolean> {
 
 // Helper to claim the server or verify existing token
 async function claimOrVerify(): Promise<string | null> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "X-Client-Id": "test-client",
-  };
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Client-Id": "test-client",
+    };
 
-  const response = await fetch(`${SERVER_URL}/claim`, {
-    method: "POST",
-    headers,
-  });
+    const response = await fetch(`${SERVER_URL}/claim`, {
+      method: "POST",
+      headers,
+    });
 
-  const result = await response.json();
-  if (result.token) {
-    return result.token;
+    const result = await response.json();
+    if (result.token) {
+      return result.token;
+    }
+    if (result.isOwner) {
+      // Already claimed by us (from previous run with same token)
+      return authToken;
+    }
+  } catch {
+    // Server not running
   }
-  if (result.isOwner) {
-    // Already claimed by us (from previous run with same token)
-    return authToken;
-  }
-  // Server is claimed by someone else - tests can't run
-  console.warn("Server is claimed by another client. Tests may fail.");
+  // Server is claimed by another client
+  serverClaimedByOther = true;
   return null;
 }
 
@@ -74,30 +89,33 @@ describe("Remote Server Submission Tests", () => {
   beforeAll(async () => {
     const running = await isServerRunning();
     if (!running) {
-      throw new Error(
-        "Server not running! Start with: docker compose up -d"
-      );
+      serverClaimedByOther = true; // Treat as skip
+      return;
     }
 
     // Claim server or get token
     authToken = await claimOrVerify();
+    if (serverClaimedByOther) return;
 
     // Clear any existing queue
     await clearQueue();
   });
 
   afterAll(async () => {
+    if (serverClaimedByOther) return;
     // Clean up queue after tests
     await clearQueue();
   });
 
   test("server health check", async () => {
+    failIfClaimed();
     const response = await fetch(`${SERVER_URL}/health`);
     const data = await response.json();
     expect(data.status).toBe("ok");
   });
 
   test("single prompt submission only queues once", async () => {
+    failIfClaimed();
     // Clear queue first
     await clearQueue();
 
@@ -122,6 +140,7 @@ describe("Remote Server Submission Tests", () => {
   });
 
   test("rapid submissions should be queued not duplicated", async () => {
+    failIfClaimed();
     // Clear queue first
     await clearQueue();
 

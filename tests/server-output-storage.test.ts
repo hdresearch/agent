@@ -2,26 +2,42 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 
 const SERVER_URL = "http://localhost:9999";
 let authToken: string | null = null;
+let serverClaimedByOther = false;
 
 // Helper to claim the server or verify existing token
 async function claimOrVerify(): Promise<string | null> {
-  const response = await fetch(`${SERVER_URL}/claim`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Client-Id": "test-client",
-    },
-  });
+  try {
+    const response = await fetch(`${SERVER_URL}/claim`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Client-Id": "test-client",
+      },
+    });
 
-  const result = await response.json();
-  if (result.token) {
-    return result.token;
+    const result = await response.json();
+    if (result.token) {
+      return result.token;
+    }
+    if (result.isOwner) {
+      return authToken;
+    }
+  } catch {
+    // Server not running
   }
-  if (result.isOwner) {
-    return authToken;
-  }
-  console.warn("Server is claimed by another client. Tests may fail.");
+  // Server is claimed by another client
+  serverClaimedByOther = true;
   return null;
+}
+
+// Helper to fail test with clear message if server is claimed
+function failIfClaimed() {
+  if (serverClaimedByOther) {
+    throw new Error(
+      "Server is claimed by another client (likely a running vers instance). " +
+      "Stop vers or use a different port to run these integration tests."
+    );
+  }
 }
 
 describe("Server Output Storage Integration", () => {
@@ -56,6 +72,7 @@ describe("Server Output Storage Integration", () => {
   beforeAll(async () => {
     // Claim server or get token
     authToken = await claimOrVerify();
+    if (serverClaimedByOther) return;
 
     // Initialize and create a session
     await rpc("initialize", {
@@ -69,6 +86,7 @@ describe("Server Output Storage Integration", () => {
   });
 
   test("session/outputs returns empty array for new session", async () => {
+    failIfClaimed();
     const result = await rpc("session/outputs", {});
 
     expect(result.sessionId).toBe(sessionId);
@@ -78,6 +96,7 @@ describe("Server Output Storage Integration", () => {
   });
 
   test("session/sync returns correct info", async () => {
+    failIfClaimed();
     const result = await rpc("session/sync", {});
 
     expect(result.sessionId).toBe(sessionId);
@@ -86,6 +105,7 @@ describe("Server Output Storage Integration", () => {
   });
 
   test("sending prompt stores user message", async () => {
+    failIfClaimed();
     // This test requires the server to actually process a prompt
     // Skip if not running against a real server
     const skipReason = "Requires real Claude API - run manually";
@@ -107,6 +127,7 @@ describe("Server Output Storage Integration", () => {
   });
 
   test("session list shows correct turn count", async () => {
+    failIfClaimed();
     const result = await rpc("session/list", {});
 
     expect(result.sessions).toBeInstanceOf(Array);
