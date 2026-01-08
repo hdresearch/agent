@@ -307,7 +307,8 @@ export type SessionNotificationType =
   | "completed"
   | "failed"
   | "cancelled"
-  | "permission_request";
+  | "permission_request"
+  | "available_commands";
 
 export interface SessionNotificationParams {
   sessionId: string;
@@ -326,7 +327,8 @@ export type SessionNotificationData =
   | CompletedData
   | FailedData
   | CancelledData
-  | PermissionRequestData;
+  | PermissionRequestData
+  | AvailableCommandsData;
 
 export interface ContentChunkData {
   type: "content_chunk";
@@ -423,6 +425,17 @@ export interface PermissionRequestData {
     kind: string;
     name: string;
   }>;
+}
+
+export interface AvailableCommandData {
+  name: string;
+  description: string;
+  input?: { hint: string };
+}
+
+export interface AvailableCommandsData {
+  type: "available_commands";
+  commands: AvailableCommandData[];
 }
 
 // ============================================================

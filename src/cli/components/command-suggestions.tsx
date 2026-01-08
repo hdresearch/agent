@@ -1,18 +1,16 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { getMatchingCommands } from "../utils/command-matching";
+import type { MatchedCommand } from "../utils/command-matching";
 
 interface CommandSuggestionsProps {
-  input: string;
+  matches: MatchedCommand[];
   selectedIndex: number;
 }
 
 export function CommandSuggestions({
-  input,
+  matches,
   selectedIndex,
 }: CommandSuggestionsProps) {
-  const matches = getMatchingCommands(input);
-
   if (matches.length === 0) return null;
 
   return (
@@ -21,10 +19,11 @@ export function CommandSuggestions({
         <Text
           key={cmd.name}
           dimColor={idx !== selectedIndex}
-          color={idx === selectedIndex ? "cyan" : undefined}
+          color={idx === selectedIndex ? "cyan" : cmd.source === "agent" ? "magenta" : undefined}
           inverse={idx === selectedIndex}
         >
           {" "}
+          {cmd.source === "agent" && <Text color="magenta">[A] </Text>}
           /{cmd.name}
           {cmd.alias && <Text color="gray"> ({cmd.alias})</Text>}{" "}
         </Text>

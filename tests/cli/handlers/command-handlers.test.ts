@@ -224,4 +224,141 @@ describe("handleSlashCommand", () => {
       expect(ctx.outputs.some(o => o.content.includes("Next launch will start in local mode"))).toBe(true);
     });
   });
+
+  describe("agent commands", () => {
+    const agentCommands = [
+      { name: "compact", description: "Compact context" },
+      { name: "config", description: "Show configuration" },
+      { name: "cost", description: "Show cost" },
+    ];
+
+    test("unknown command shows error when no agent commands", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/unknown", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+    });
+
+    test("unknown command shows error when not in agent commands", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/unknown", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+    });
+
+    test("agent command returns handled: false to pass through", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/cost", ctx);
+
+      // Agent commands should NOT be handled locally - they pass through to the agent
+      expect(result.handled).toBe(false);
+      // No error message should be shown
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
+    });
+
+    test("agent command with args returns handled: false", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/config set foo bar", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
+    });
+
+    test("agent command takes precedence over local command with same name", () => {
+      // "compact" is both local and agent - agent should win
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/compact", ctx);
+
+      // Agent /compact takes precedence, passes through to agent
+      expect(result.handled).toBe(false);
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
+    });
+  });
+
+  describe("synced agent commands", () => {
+    const agentCommands = [
+      { name: "new", description: "Start new conversation" },
+      { name: "clear", description: "Clear conversation" },
+    ];
+
+    test("/new clears local output AND passes to agent", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/new", ctx);
+
+      // Should pass through to agent
+      expect(result.handled).toBe(false);
+      // Should also clear local output
+      expect(ctx.setOutput).toHaveBeenCalled();
+      expect(ctx.setContinueMode).toHaveBeenCalled();
+    });
+
+    test("/clear clears local output AND passes to agent", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/clear", ctx);
+
+      // Should pass through to agent
+      expect(result.handled).toBe(false);
+      // Should also clear local output
+      expect(ctx.setOutput).toHaveBeenCalled();
+    });
+
+    test("/n alias also syncs", () => {
+      const agentCommandsWithAlias = [
+        { name: "n", description: "New conversation alias" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithAlias });
+      const result = handleSlashCommand("/n", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setOutput).toHaveBeenCalled();
+      expect(ctx.setContinueMode).toHaveBeenCalled();
+    });
+
+    test("/model sonnet syncs to status bar", () => {
+      const agentCommandsWithModel = [
+        { name: "model", description: "Change model" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithModel });
+      const result = handleSlashCommand("/model sonnet", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setStatusInfo).toHaveBeenCalled();
+    });
+
+    test("/model without arg does not change status", () => {
+      const agentCommandsWithModel = [
+        { name: "model", description: "Change model" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithModel });
+      const result = handleSlashCommand("/model", ctx);
+
+      expect(result.handled).toBe(false);
+      // setStatusInfo should not be called for model display
+      expect(ctx.setStatusInfo).not.toHaveBeenCalled();
+    });
+
+    test("/thinking off syncs to status bar", () => {
+      const agentCommandsWithThinking = [
+        { name: "thinking", description: "Toggle thinking" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
+      const result = handleSlashCommand("/thinking off", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setStatusInfo).toHaveBeenCalled();
+    });
+
+    test("/thinking on 5000 syncs budget to status bar", () => {
+      const agentCommandsWithThinking = [
+        { name: "thinking", description: "Toggle thinking" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
+      const result = handleSlashCommand("/thinking on 5000", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setStatusInfo).toHaveBeenCalled();
+    });
+  });
 });

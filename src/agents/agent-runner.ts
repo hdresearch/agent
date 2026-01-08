@@ -13,6 +13,7 @@ import type {
   AcpToolCall,
   AcpToolCallUpdate,
   AcpPlan,
+  AcpAvailableCommandsUpdate,
   AcpContentBlock,
   AcpRequestPermissionParams,
   AcpRequestPermissionResult,
@@ -486,6 +487,14 @@ export class SubprocessAgentRunner implements AgentRunner {
       case "plan": {
         // Plans are handled separately, not mapped to PromptEvent
         return null;
+      }
+
+      case "available_commands_update": {
+        const commandsUpdate = update as AcpAvailableCommandsUpdate;
+        return {
+          type: "available_commands",
+          data: { commands: commandsUpdate.availableCommands },
+        };
       }
 
       default:

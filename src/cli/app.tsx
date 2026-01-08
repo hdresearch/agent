@@ -125,12 +125,12 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     setStatusInfo,
     historyRef,
     remoteCwd,
-    isRemoteMode,
     needsToken,
     submitToken,
     permissionRequest,
     respondToPermission,
     cancelPermission,
+    agentCommands,
   } = useAcpClient({
     serverUrl,
     continueMode,
@@ -232,7 +232,6 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
 
         await executeBashCommand(command, {
           client,
-          isRemoteMode,
           remoteCwd,
           addOutput,
         });
@@ -258,6 +257,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
             addOutput({ type: "system", content: `Connecting to ${url}...` });
           },
           currentServerUrl: serverUrl,
+          agentCommands,
         };
 
         const result = handleSlashCommand(value, ctx);
@@ -317,7 +317,6 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
       exit,
       sendMessage,
       pendingAttachments,
-      isRemoteMode,
       remoteCwd,
       client,
       sessionConfig,
@@ -444,6 +443,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         history={commandHistory}
         historyIndex={historyIndex}
         onHistoryNavigate={handleHistoryNavigate}
+        agentCommands={agentCommands}
       />
     </Box>
   );

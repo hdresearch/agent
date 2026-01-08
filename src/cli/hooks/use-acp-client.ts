@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { HttpAcpClient, type ConnectResult } from "../../client/http-client";
-import type { SessionNotificationParams, SessionConfig } from "../../protocol/acp-types";
+import type { SessionNotificationParams, SessionConfig, AvailableCommandData } from "../../protocol/acp-types";
 import { detectKeys } from "../../utils/keys";
 import type { OutputLine, StatusInfo, PermissionRequest } from "../types";
 import { formatTokens, uniqueId } from "../utils/formatting";
@@ -36,6 +36,8 @@ export interface UseAcpClientResult {
   permissionRequest: PermissionRequest | null;
   respondToPermission: (optionId: string) => void;
   cancelPermission: () => void;
+  // Agent commands from subprocess
+  agentCommands: AvailableCommandData[];
 }
 
 // Reconnect configuration
@@ -51,6 +53,7 @@ export function useAcpClient({
   const [remoteCwd, setRemoteCwd] = useState<string | null>(null);
   const [needsToken, setNeedsToken] = useState(false);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
+  const [agentCommands, setAgentCommands] = useState<AvailableCommandData[]>([]);
   const clientRef = useRef<HttpAcpClient | null>(null);
   const historyRef = useRef<ConversationHistory | null>(null);
   const sessionConfigRef = useRef(sessionConfig);
@@ -485,6 +488,12 @@ export function useAcpClient({
               });
             }
             break;
+
+          case "available_commands":
+            if ("commands" in data && Array.isArray(data.commands)) {
+              setAgentCommands(data.commands as AvailableCommandData[]);
+            }
+            break;
         }
       });
     };
@@ -545,6 +554,16 @@ export function useAcpClient({
         } catch {
           // Ignore cwd fetch errors
         }
+      }
+
+      // Fetch available agent commands
+      try {
+        const commandsResult = await client.getCommands();
+        if (commandsResult.commands && commandsResult.commands.length > 0) {
+          setAgentCommands(commandsResult.commands as AvailableCommandData[]);
+        }
+      } catch {
+        // Ignore command fetch errors - commands may come via notification instead
       }
     };
 
@@ -612,5 +631,6 @@ export function useAcpClient({
     permissionRequest,
     respondToPermission,
     cancelPermission,
+    agentCommands,
   };
 }
