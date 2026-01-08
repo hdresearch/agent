@@ -496,6 +496,38 @@ export class HttpAcpClient {
     return this.request(AcpMethod.GetCwd, {});
   }
 
+  // Agent management
+  async agentList(): Promise<{
+    agents: Array<{
+      identity: string;
+      name: string;
+      shortName?: string;
+      description: string;
+      protocol: string;
+      type?: string;
+      active: boolean;
+    }>;
+    currentAgent: string;
+  }> {
+    return this.request(AcpMethod.AgentList, {});
+  }
+
+  async agentSelect(agentId: string): Promise<{
+    success: boolean;
+    agentId: string;
+    message?: string;
+  }> {
+    return this.request(AcpMethod.AgentSelect, { agentId });
+  }
+
+  async agentStatus(): Promise<{
+    currentAgent: string;
+    isRunning: boolean;
+    protocol: string;
+  }> {
+    return this.request(AcpMethod.AgentStatus, {});
+  }
+
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
   }

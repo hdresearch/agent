@@ -3,6 +3,7 @@
 
 import { homedir } from "os";
 import { join } from "path";
+import { logStream } from "./log-stream";
 
 const CONFIG_DIR = join(homedir(), ".vers");
 const HISTORY_FILE = join(CONFIG_DIR, "conversation.json");
@@ -34,7 +35,7 @@ export async function loadHistory(): Promise<ConversationHistory | null> {
       return JSON.parse(text) as ConversationHistory;
     }
   } catch (err) {
-    console.error("Failed to load conversation history:", err);
+    logStream.error("[history] Failed to load conversation history", { error: err instanceof Error ? err.message : String(err) });
   }
   return null;
 }
@@ -44,7 +45,7 @@ export async function saveHistory(history: ConversationHistory): Promise<void> {
     await ensureConfigDir();
     await Bun.write(HISTORY_FILE, JSON.stringify(history, null, 2));
   } catch (err) {
-    console.error("Failed to save conversation history:", err);
+    logStream.error("[history] Failed to save conversation history", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -55,7 +56,7 @@ export async function clearHistory(): Promise<void> {
       await Bun.write(HISTORY_FILE, "");
     }
   } catch (err) {
-    console.error("Failed to clear conversation history:", err);
+    logStream.error("[history] Failed to clear conversation history", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

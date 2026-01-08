@@ -4,6 +4,7 @@
 
 import { homedir } from "os";
 import { join } from "path";
+import { logStream } from "./log-stream";
 
 const CONFIG_DIR = join(homedir(), ".vers");
 const DOCS_FILE = join(CONFIG_DIR, "project_docs.json");
@@ -43,7 +44,7 @@ export async function loadDocsStore(): Promise<DocsStore> {
       store = JSON.parse(text) as DocsStore;
     }
   } catch (err) {
-    console.error("Failed to load docs store:", err);
+    logStream.error("[docs-store] Failed to load docs store", { error: err instanceof Error ? err.message : String(err) });
     store = { ...defaultStore };
   }
   return getDocsStore();
@@ -55,7 +56,7 @@ export async function saveDocsStore(): Promise<void> {
     await ensureConfigDir();
     await Bun.write(DOCS_FILE, JSON.stringify(store, null, 2));
   } catch (err) {
-    console.error("Failed to save docs store:", err);
+    logStream.error("[docs-store] Failed to save docs store", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
