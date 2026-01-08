@@ -131,6 +131,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     respondToPermission,
     cancelPermission,
     agentCommands,
+    agentName,
   } = useAcpClient({
     serverUrl,
     continueMode,
@@ -401,12 +402,12 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     <Box flexDirection="column" height={containerHeight}>
       <TopStatusBar
         model={statusInfo.model}
-        thinking={statusInfo.thinking}
         cost={statusInfo.cost}
         connected={connected}
         planMode={statusInfo.planMode}
         sessionId={statusInfo.sessionId}
         serverUrl={serverUrl}
+        agentName={agentName}
       />
       <OutputArea lines={output} maxLines={outputMaxLines} scrollOffset={scrollOffset} />
       <StatusBar state={state} />

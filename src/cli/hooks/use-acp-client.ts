@@ -38,6 +38,8 @@ export interface UseAcpClientResult {
   cancelPermission: () => void;
   // Agent commands from subprocess
   agentCommands: AvailableCommandData[];
+  // Current agent info
+  agentName: string | null;
 }
 
 // Reconnect configuration
@@ -54,6 +56,7 @@ export function useAcpClient({
   const [needsToken, setNeedsToken] = useState(false);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
   const [agentCommands, setAgentCommands] = useState<AvailableCommandData[]>([]);
+  const [agentName, setAgentName] = useState<string | null>(null);
   const clientRef = useRef<HttpAcpClient | null>(null);
   const historyRef = useRef<ConversationHistory | null>(null);
   const sessionConfigRef = useRef(sessionConfig);
@@ -565,6 +568,19 @@ export function useAcpClient({
       } catch {
         // Ignore command fetch errors - commands may come via notification instead
       }
+
+      // Fetch current agent info
+      try {
+        const agentResult = await client.agentList();
+        if (agentResult.currentAgent) {
+          const currentAgent = agentResult.agents.find(a => a.identity === agentResult.currentAgent);
+          if (currentAgent) {
+            setAgentName(currentAgent.shortName || currentAgent.name);
+          }
+        }
+      } catch {
+        // Ignore agent info errors
+      }
     };
 
     // Main connection flow
@@ -632,5 +648,6 @@ export function useAcpClient({
     respondToPermission,
     cancelPermission,
     agentCommands,
+    agentName,
   };
 }
