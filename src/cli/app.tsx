@@ -8,6 +8,7 @@ import {
   StatusBar,
   InputBar,
 } from "./components";
+import { PermissionDialog } from "./components/permission-dialog";
 
 // Hooks
 import { useAcpClient } from "./hooks/use-acp-client";
@@ -127,6 +128,9 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     isRemoteMode,
     needsToken,
     submitToken,
+    permissionRequest,
+    respondToPermission,
+    cancelPermission,
   } = useAcpClient({
     serverUrl,
     continueMode,
@@ -348,10 +352,11 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
   const inputBoxHeight = 4 + inputLineCount;
   const suggestionsHeight = showSuggestions ? 1 : 0;
   const attachmentsHeight = pendingAttachments.length > 0 ? 1 : 0;
+  const permissionDialogHeight = permissionRequest ? 8 : 0; // Approximate height for dialog
 
   // Reserve 10% of terminal as minimum bottom space
   const minBottomBuffer = Math.max(2, Math.floor(terminalHeight * 0.1));
-  const fixedElementsHeight = topStatusBarHeight + inputBoxHeight + activityBarHeight + suggestionsHeight + attachmentsHeight;
+  const fixedElementsHeight = topStatusBarHeight + inputBoxHeight + activityBarHeight + suggestionsHeight + attachmentsHeight + permissionDialogHeight;
 
   // Max lines before input would go below the 90% mark
   const outputMaxLines = Math.max(3, terminalHeight - fixedElementsHeight - minBottomBuffer);
@@ -406,6 +411,14 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
       />
       <OutputArea lines={output} maxLines={outputMaxLines} scrollOffset={scrollOffset} />
       <StatusBar state={state} />
+      {/* Permission dialog - shown when agent requests user permission */}
+      {permissionRequest && (
+        <PermissionDialog
+          request={permissionRequest}
+          onRespond={respondToPermission}
+          onCancel={cancelPermission}
+        />
+      )}
       {/* Show pending attachments above input like Claude Code */}
       {pendingAttachments.length > 0 && (
         <Box paddingX={1} marginBottom={0}>
@@ -421,7 +434,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         onSubmit={handleSubmit}
         onCancel={cancelQuery}
         onExit={exit}
-        disabled={state.status !== "idle"}
+        disabled={state.status !== "idle" || !!permissionRequest}
         continueMode={continueMode}
         tokenMode={needsToken}
         suggestionIndex={suggestionIndex}

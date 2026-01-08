@@ -4,6 +4,7 @@
 import React from "react";
 import { render } from "ink";
 import { App } from "./app";
+import { logStream } from "../utils/log-stream";
 
 export type { CliOptions } from "./types";
 
@@ -11,6 +12,9 @@ export type { CliOptions } from "./types";
  * Run the interactive CLI
  */
 export async function runCli(options: { continueSession?: boolean; serverUrl?: string } = {}) {
+  // Suppress console logs to avoid interfering with the Ink UI
+  logStream.suppressConsole(true);
+
   // Track SIGINT presses for force exit
   let sigintCount = 0;
   let lastSigintTime = 0;
@@ -51,6 +55,8 @@ export async function runCli(options: { continueSession?: boolean; serverUrl?: s
   try {
     await waitUntilExit();
   } finally {
+    // Restore console logging
+    logStream.suppressConsole(false);
     // Restore original SIGINT listeners
     process.removeAllListeners("SIGINT");
     for (const listener of originalSigintListeners) {

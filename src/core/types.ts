@@ -50,7 +50,8 @@ export type TaskEventType =
   | "user_input"
   | "completed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "permission_request";
 
 export interface TaskEvent {
   id: string;

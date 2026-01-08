@@ -65,6 +65,8 @@ import {
   listAgents as getAgentsList,
   clearProjectDocsCache,
   markDocsForReinjection,
+  respondToPermission,
+  cancelPermission,
 } from "../core/agent-manager";
 import { getDocs, setDocs, setDoc, getDocsStore, loadDocsStore, type StoredDoc } from "../utils/docs-store";
 import { taskStore } from "../core/tasks";
@@ -318,25 +320,34 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
         data: { type: "content_chunk", text: d.text || "", final: true },
       };
 
-    case "tool_use":
+    case "tool_use": {
+      // Filter out invalid titles (undefined, empty, or literal "undefined" strings)
+      const isValidTitle = (s: unknown): s is string =>
+        typeof s === "string" && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+      // Use title, toolName, or toolCallId as fallback - never show "undefined"
+      const toolDisplayName = isValidTitle(d.title) ? d.title
+        : isValidTitle(d.toolName) ? d.toolName
+        : isValidTitle(d.toolCallId) ? d.toolCallId
+        : "Tool";
       // Track tool call metrics
-      metrics.incCounter(MetricNames.TOOL_CALLS_TOTAL, { tool: (d.toolName as string) || "unknown" });
+      metrics.incCounter(MetricNames.TOOL_CALLS_TOTAL, { tool: toolDisplayName });
       return {
         type: "tool_call",
         data: {
           type: "tool_call",
           toolId: d.toolCallId || `tool-${Date.now()}`,
           toolCallId: d.toolCallId || `tool-${Date.now()}`,
-          toolName: d.toolName || "unknown",
+          toolName: toolDisplayName,
           input: (d.toolInput || {}) as Record<string, unknown>,
           // Rich ACP tool information
-          title: d.toolName || "unknown", // Use toolName as title for now
+          title: toolDisplayName,
           kind: d.kind || "other",
           status: d.status || "in_progress",
           locations: d.locations,
           content: d.content,
         },
       };
+    }
 
     case "tool_result":
       return {
@@ -386,6 +397,17 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       return {
         type: "cancelled",
         data: { type: "cancelled", reason: d.reason },
+      };
+
+    case "permission_request":
+      return {
+        type: "permission_request",
+        data: {
+          type: "permission_request",
+          requestId: d.requestId,
+          toolCall: d.toolCall,
+          options: d.options,
+        },
       };
 
     case "plan_update":
@@ -1160,6 +1182,29 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
 
       case AcpMethod.AgentStatus:
         result = handleAgentStatus();
+        break;
+
+      // Permission Management
+      case AcpMethod.PermissionRespond:
+        {
+          const permParams = params as { requestId: string; optionId: string };
+          if (!permParams.requestId || !permParams.optionId) {
+            throw new Error("Missing requestId or optionId parameter");
+          }
+          const success = respondToPermission(permParams.requestId, permParams.optionId);
+          result = { success };
+        }
+        break;
+
+      case AcpMethod.PermissionCancel:
+        {
+          const permParams = params as { requestId: string };
+          if (!permParams.requestId) {
+            throw new Error("Missing requestId parameter");
+          }
+          const success = cancelPermission(permParams.requestId);
+          result = { success };
+        }
         break;
 
       default:

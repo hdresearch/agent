@@ -306,7 +306,8 @@ export type SessionNotificationType =
   | "cost_update"
   | "completed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "permission_request";
 
 export interface SessionNotificationParams {
   sessionId: string;
@@ -324,7 +325,8 @@ export type SessionNotificationData =
   | CostUpdateData
   | CompletedData
   | FailedData
-  | CancelledData;
+  | CancelledData
+  | PermissionRequestData;
 
 export interface ContentChunkData {
   type: "content_chunk";
@@ -341,6 +343,9 @@ export interface ToolCallData {
   // Rich display fields
   title?: string;       // Human-readable title like "Read(file.ts)"
   kind?: string;        // Tool category: read, edit, search, execute, etc.
+  status?: string;      // Status: pending, in_progress, completed, failed
+  locations?: Array<{ path: string; line?: number }>;  // File locations
+  content?: unknown[];  // Rich content (diffs, terminal output, etc.)
 }
 
 export interface ToolResultData {
@@ -400,6 +405,24 @@ export interface FailedData {
 export interface CancelledData {
   type: "cancelled";
   reason?: string;
+}
+
+export interface PermissionRequestData {
+  type: "permission_request";
+  requestId: string;
+  toolCall: {
+    toolCallId: string;
+    title?: string;
+    kind?: string;
+    status?: string;
+    locations?: Array<{ path: string; line?: number }>;
+    content?: unknown[];
+  };
+  options: Array<{
+    optionId: string;
+    kind: string;
+    name: string;
+  }>;
 }
 
 // ============================================================
@@ -463,6 +486,10 @@ export const AcpMethod = {
   AgentList: "agent/list",
   AgentSelect: "agent/select",
   AgentStatus: "agent/status",
+
+  // Permission Management
+  PermissionRespond: "permission/respond",
+  PermissionCancel: "permission/cancel",
 } as const;
 
 // ============================================================
