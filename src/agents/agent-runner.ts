@@ -22,6 +22,7 @@ import { getAgent, getRunCommand, getAgentEnv, ensureAgentInstalled } from "./re
 import { SubprocessManager, getSubprocessManager } from "./subprocess-manager";
 import { AcpClient, createContentBlocks } from "./acp-client";
 import { AcpServer } from "./acp-server";
+import { getAgentConfig } from "./configs";
 // Note: Claude Agent SDK has been removed. All agents use ACP subprocess mode.
 
 // ============================================================
@@ -199,8 +200,11 @@ export class SubprocessAgentRunner implements AgentRunner {
     // Spawn the subprocess
     await this.subprocess.spawn(this.agentId, command, env, this.cwd);
 
-    // Create client
-    this.client = new AcpClient(this.subprocess, this.agentId);
+    // Get agent-specific config
+    const config = getAgentConfig(this.agentId);
+
+    // Create client with config
+    this.client = new AcpClient(this.subprocess, this.agentId, config);
 
     // Initialize ACP connection
     await this.client.initialize();
