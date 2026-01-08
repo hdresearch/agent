@@ -69,20 +69,46 @@ describe("AcpClient", () => {
 
       expect(client.getCapabilities()).toEqual(mockCapabilities);
     });
+
+    test("initialize uses custom config", async () => {
+      const customConfig = {
+        clientInfo: { name: "custom-client", version: "2.0.0" },
+        capabilities: {
+          fileSystem: { read: true, write: false },
+          terminal: { create: false },
+        },
+      };
+      const customClient = new AcpClient(subprocess, "test-agent", customConfig);
+
+      (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+        protocolVersion: 1,
+        agentInfo: { name: "test", version: "1.0" },
+      });
+
+      await customClient.initialize();
+
+      expect(subprocess.request).toHaveBeenCalledWith(
+        "test-agent",
+        "initialize",
+        expect.objectContaining({
+          clientInfo: expect.objectContaining({ name: "custom-client" }),
+        })
+      );
+    });
   });
 
   describe("session management", () => {
-    test("sessionNew sends correct params", async () => {
+    test("sessionNew sends correct params with cwd", async () => {
       (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
         sessionId: "sess-123",
       });
 
-      const result = await client.sessionNew({ mode: "plan" });
+      const result = await client.sessionNew("/test/cwd");
 
       expect(subprocess.request).toHaveBeenCalledWith(
         "test-agent",
         "session/new",
-        expect.objectContaining({ mode: "plan" })
+        expect.objectContaining({ cwd: "/test/cwd" })
       );
       expect(result.sessionId).toBe("sess-123");
     });
@@ -92,33 +118,35 @@ describe("AcpClient", () => {
         sessionId: "sess-456",
       });
 
-      await client.sessionNew({});
+      await client.sessionNew("/test/cwd");
 
       expect(client.getSessionId()).toBe("sess-456");
     });
 
-    test("sessionLoad restores existing session", async () => {
+    test("sessionNew accepts mcpServers", async () => {
       (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
-        sessionId: "sess-existing",
-        history: [],
+        sessionId: "sess-789",
       });
 
-      const result = await client.sessionLoad({ sessionId: "sess-existing" });
+      const mcpServers = [{ name: "test-mcp", command: "test-cmd" }];
+      await client.sessionNew("/test/cwd", mcpServers);
 
       expect(subprocess.request).toHaveBeenCalledWith(
         "test-agent",
-        "session/load",
-        { sessionId: "sess-existing" }
+        "session/new",
+        expect.objectContaining({
+          cwd: "/test/cwd",
+          mcpServers,
+        })
       );
-      expect(client.getSessionId()).toBe("sess-existing");
     });
   });
 
   describe("prompting", () => {
     test("sessionPrompt requires sessionId", async () => {
       await expect(
-        client.sessionPrompt({ prompt: "hello" })
-      ).rejects.toThrow();
+        client.sessionPrompt([{ type: "text", text: "hello" }])
+      ).rejects.toThrow("No active session");
     });
 
     test("sessionPrompt sends prompt with sessionId", async () => {
@@ -126,22 +154,69 @@ describe("AcpClient", () => {
       (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
         sessionId: "sess-789",
       });
-      await client.sessionNew({});
+      await client.sessionNew("/test/cwd");
 
       (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
-        content: [{ type: "text", text: "response" }],
+        stopReason: "end_turn",
       });
 
-      await client.sessionPrompt({ prompt: "hello" });
+      await client.sessionPrompt([{ type: "text", text: "hello" }]);
 
       expect(subprocess.request).toHaveBeenLastCalledWith(
         "test-agent",
         "session/prompt",
         expect.objectContaining({
           sessionId: "sess-789",
-          prompt: "hello",
-        })
+          prompt: [{ type: "text", text: "hello" }],
+        }),
+        expect.any(Number) // timeout
       );
+    });
+
+    test("prompt convenience method works", async () => {
+      // Setup session first
+      (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+        sessionId: "sess-123",
+      });
+      await client.sessionNew("/test/cwd");
+
+      (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+        stopReason: "end_turn",
+      });
+
+      await client.prompt("hello world");
+
+      expect(subprocess.request).toHaveBeenLastCalledWith(
+        "test-agent",
+        "session/prompt",
+        expect.objectContaining({
+          prompt: [{ type: "text", text: "hello world" }],
+        }),
+        expect.any(Number)
+      );
+    });
+  });
+
+  describe("cancellation", () => {
+    test("sessionCancel sends notification", async () => {
+      // Setup session first
+      (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+        sessionId: "sess-cancel",
+      });
+      await client.sessionNew("/test/cwd");
+
+      await client.sessionCancel();
+
+      expect(subprocess.notify).toHaveBeenCalledWith(
+        "test-agent",
+        "session/cancel",
+        expect.objectContaining({ sessionId: "sess-cancel" })
+      );
+    });
+
+    test("sessionCancel does nothing without session", async () => {
+      await client.sessionCancel();
+      expect(subprocess.notify).not.toHaveBeenCalled();
     });
   });
 
@@ -154,10 +229,10 @@ describe("AcpClient", () => {
       await expect(client.initialize()).rejects.toThrow("Subprocess not running");
     });
 
-    test("sessionNew handles invalid response", async () => {
+    test("sessionNew handles missing sessionId in response", async () => {
       (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({});
 
-      const result = await client.sessionNew({});
+      await client.sessionNew("/test/cwd");
       // Should handle gracefully - sessionId will be undefined
       expect(client.getSessionId()).toBeUndefined();
     });
@@ -183,10 +258,28 @@ describe("AcpClient multi-agent scenarios", () => {
       .mockResolvedValueOnce({ sessionId: "sess-a1" })
       .mockResolvedValueOnce({ sessionId: "sess-a2" });
 
-    await client1.sessionNew({});
-    await client2.sessionNew({});
+    await client1.sessionNew("/cwd1");
+    await client2.sessionNew("/cwd2");
 
     expect(client1.getSessionId()).toBe("sess-a1");
     expect(client2.getSessionId()).toBe("sess-a2");
+  });
+
+  test("clients can have different configs", () => {
+    const subprocess = createMockSubprocess();
+    const config1 = {
+      clientInfo: { name: "client-1", version: "1.0" },
+      capabilities: { fileSystem: { read: true, write: true } },
+    };
+    const config2 = {
+      clientInfo: { name: "client-2", version: "2.0" },
+      capabilities: { fileSystem: { read: true, write: false } },
+    };
+
+    const client1 = new AcpClient(subprocess, "agent-1", config1);
+    const client2 = new AcpClient(subprocess, "agent-2", config2);
+
+    expect(client1.getConfig().clientInfo.name).toBe("client-1");
+    expect(client2.getConfig().clientInfo.name).toBe("client-2");
   });
 });
