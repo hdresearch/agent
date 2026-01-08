@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main, just-just]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Setup Just
+        uses: extractions/setup-just@v2
+      
+      - name: Install dependencies
+        run: just install
+      
+      - name: Typecheck
+        run: just typecheck
+      
+      - name: Unit tests
+        run: just test-unit
+      
+      - name: Build
+        run: just build

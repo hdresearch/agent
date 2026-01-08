@@ -167,6 +167,12 @@ export function InputBar({
       return;
     }
 
+    // ESC: cancel running query
+    if (key.escape && disabled) {
+      onCancel();
+      return;
+    }
+
     // Emacs keybindings
     if (key.ctrl) {
       // Ctrl+C: cancel query, clear input, or exit
