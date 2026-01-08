@@ -344,8 +344,8 @@ export interface ToolCallData {
   title?: string;       // Human-readable title like "Read(file.ts)"
   kind?: string;        // Tool category: read, edit, search, execute, etc.
   status?: string;      // Status: pending, in_progress, completed, failed
-  locations?: Array<{ path: string; line?: number }>;  // File locations
-  content?: unknown[];  // Rich content (diffs, terminal output, etc.)
+  locations?: Array<{ path?: string; file?: string; line?: number; endLine?: number }>;  // File locations
+  content?: Array<{ type: string; text?: string; data?: string }> | unknown[];  // Rich content
 }
 
 export interface ToolResultData {

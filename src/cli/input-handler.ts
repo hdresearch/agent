@@ -104,6 +104,11 @@ export function processKeyInput(
     return { type: "submit", value };
   }
 
+  // ESC: cancel running query
+  if (key.escape && disabled) {
+    return { type: "cancel" };
+  }
+
   // Arrow key navigation (simplified - full impl would need line calculation)
   if (key.leftArrow) {
     return { type: "set_cursor", cursorIndex: Math.max(0, cursorIndex - 1) };

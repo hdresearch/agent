@@ -26,8 +26,18 @@ start:
 typecheck:
     bun run typecheck
 
+# Run all tests (integration tests skip if no server)
 test:
     bun test
+
+# Run only unit tests (no server needed)
+test-unit:
+    bun test tests/cli/utils tests/cli/handlers tests/core tests/utils tests/session-sync.test.ts
+
+# Run integration tests (requires: just server in another terminal)
+test-integration:
+    @curl -s http://localhost:9999/health >/dev/null 2>&1 || (echo "Start server first: just server" && exit 1)
+    bun test tests/server-output-storage.test.ts tests/cli/remote-submission.test.ts
 
 test-watch:
     bun test --watch
@@ -151,12 +161,39 @@ ask prompt port="9999":
         -H "Content-Type: application/json" \
         -d '{"prompt": "{{prompt}}"}' | jq -r '.id' | xargs -I {} curl -N http://localhost:{{port}}/tasks/{}/stream
 
-# ── gvt: libghostty-vt interactive test harness ───────────────────────────────
-# One command: `just gvt` - interactive TUI for VT sequence testing
-# Mitchell Hashimoto's libghostty-vt: zero-dep terminal parser from Ghostty
+# ── VT Testing ────────────────────────────────────────────────────────────────
+# libghostty-vt: zero-dep terminal parser from Ghostty (Mitchell Hashimoto)
 
-gvt:
+# All-in-one interactive VT test suite
+test-interactive:
     #!/usr/bin/env bash
+    # shellcheck disable=SC2292
+    if [ -z "${BASH_VERSION:-}" ]; then echo "Requires bash" >&2; exit 1; fi
+    set -e
+    echo ""
+    echo "🚀 Running VT sequence spam test..."
+    bun scripts/vt-spam.ts
+    echo ""
+    echo "🔥 Running fuzzer (500 iterations)..."
+    bun scripts/vt-fuzz.ts 500 3
+    echo ""
+    echo "🔬 Running parser visualization..."
+    bun scripts/vt-live-parse.ts
+    echo ""
+    echo "🤯 Running visual demos..."
+    bun scripts/vt-mindblown.ts
+    echo ""
+    echo "✓ All interactive VT tests complete!"
+
+# Standalone fuzz test (default 500 iterations)
+fuzz iterations="500":
+    bun scripts/vt-fuzz.ts {{iterations}} 5
+
+# Interactive VT sequence explorer (manual testing)
+vt:
+    #!/usr/bin/env bash
+    # shellcheck disable=SC2292
+    if [ -z "${BASH_VERSION:-}" ]; then echo "Requires bash" >&2; exit 1; fi
     set -e
     
     # Colors
@@ -165,7 +202,7 @@ gvt:
     
     clear
     echo -e "${M}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${M}${BOLD}║  gvt - libghostty-vt interactive test harness                ║${RESET}"
+    echo -e "${M}${BOLD}║  vt - libghostty-vt interactive explorer                      ║${RESET}"
     echo -e "${M}${BOLD}║  #c778ea                                                     ║${RESET}"
     echo -e "${M}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
@@ -174,7 +211,7 @@ gvt:
         echo -e "${C}${BOLD}[1]${RESET} SGR colors    ${C}[2]${RESET} Cursor moves   ${C}[3]${RESET} Screen modes"
         echo -e "${C}${BOLD}[4]${RESET} OSC titles    ${C}[5]${RESET} Mouse report   ${C}[6]${RESET} Bracketed paste"
         echo -e "${C}${BOLD}[7]${RESET} 256 colors    ${C}[8]${RESET} True color     ${C}[9]${RESET} Unicode/emoji"
-        echo -e "${C}${BOLD}[v]${RESET} vttest        ${C}[e]${RESET} esctest        ${C}[r]${RESET} record session"
+        echo -e "${C}${BOLD}[t]${RESET} vttest        ${C}[e]${RESET} esctest        ${C}[r]${RESET} record session"
         echo -e "${C}${BOLD}[q]${RESET} quit"
         echo
         read -n1 -p $'\033[35m>\033[0m ' choice
@@ -250,7 +287,7 @@ gvt:
                 echo "CJK: 你好世界 こんにちは 안녕하세요"
                 echo "Width test: |あ| should be 2 cells"
                 ;;
-            v)
+            t)
                 echo -e "\n${BOLD}Running vttest...${RESET}"
                 which vttest >/dev/null 2>&1 && vttest || echo "Install: brew install vttest"
                 ;;

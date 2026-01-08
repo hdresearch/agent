@@ -60,6 +60,34 @@ describe("processKeyInput", () => {
     });
   });
 
+  describe("Escape key", () => {
+    test("cancels query when disabled (tool running)", () => {
+      const state: InputState = {
+        value: "some input",
+        cursorIndex: 10,
+        disabled: true,
+      };
+      const key: KeyEvent = { escape: true };
+
+      const action = processKeyInput("", key, state);
+
+      expect(action).toEqual({ type: "cancel" });
+    });
+
+    test("does nothing when not disabled", () => {
+      const state: InputState = {
+        value: "some input",
+        cursorIndex: 10,
+        disabled: false,
+      };
+      const key: KeyEvent = { escape: true };
+
+      const action = processKeyInput("", key, state);
+
+      expect(action).toEqual({ type: "none" });
+    });
+  });
+
   describe("Ctrl+A (beginning of line)", () => {
     test("moves cursor to start of single line", () => {
       const state: InputState = {
