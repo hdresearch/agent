@@ -276,4 +276,89 @@ describe("handleSlashCommand", () => {
       expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
     });
   });
+
+  describe("synced agent commands", () => {
+    const agentCommands = [
+      { name: "new", description: "Start new conversation" },
+      { name: "clear", description: "Clear conversation" },
+    ];
+
+    test("/new clears local output AND passes to agent", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/new", ctx);
+
+      // Should pass through to agent
+      expect(result.handled).toBe(false);
+      // Should also clear local output
+      expect(ctx.setOutput).toHaveBeenCalled();
+      expect(ctx.setContinueMode).toHaveBeenCalled();
+    });
+
+    test("/clear clears local output AND passes to agent", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/clear", ctx);
+
+      // Should pass through to agent
+      expect(result.handled).toBe(false);
+      // Should also clear local output
+      expect(ctx.setOutput).toHaveBeenCalled();
+    });
+
+    test("/n alias also syncs", () => {
+      const agentCommandsWithAlias = [
+        { name: "n", description: "New conversation alias" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithAlias });
+      const result = handleSlashCommand("/n", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setOutput).toHaveBeenCalled();
+      expect(ctx.setContinueMode).toHaveBeenCalled();
+    });
+
+    test("/model sonnet syncs to status bar", () => {
+      const agentCommandsWithModel = [
+        { name: "model", description: "Change model" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithModel });
+      const result = handleSlashCommand("/model sonnet", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setStatusInfo).toHaveBeenCalled();
+    });
+
+    test("/model without arg does not change status", () => {
+      const agentCommandsWithModel = [
+        { name: "model", description: "Change model" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithModel });
+      const result = handleSlashCommand("/model", ctx);
+
+      expect(result.handled).toBe(false);
+      // setStatusInfo should not be called for model display
+      expect(ctx.setStatusInfo).not.toHaveBeenCalled();
+    });
+
+    test("/thinking off syncs to status bar", () => {
+      const agentCommandsWithThinking = [
+        { name: "thinking", description: "Toggle thinking" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
+      const result = handleSlashCommand("/thinking off", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setStatusInfo).toHaveBeenCalled();
+    });
+
+    test("/thinking on 5000 syncs budget to status bar", () => {
+      const agentCommandsWithThinking = [
+        { name: "thinking", description: "Toggle thinking" },
+      ];
+      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
+      const result = handleSlashCommand("/thinking on 5000", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.setStatusInfo).toHaveBeenCalled();
+    });
+  });
 });
