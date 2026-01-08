@@ -287,6 +287,18 @@ async function executePrompt(text: string, attachments?: import("../protocol/acp
 // SSE clients waiting for events
 const sseClients: Set<(event: string, data: unknown) => void> = new Set();
 
+// Agent commands storage - commands available from the agent subprocess
+import type { AvailableCommandData } from "../protocol/acp-types";
+let agentCommands: AvailableCommandData[] = [];
+
+function setAgentCommands(commands: AvailableCommandData[]): void {
+  agentCommands = commands;
+}
+
+function getAgentCommands(): AvailableCommandData[] {
+  return agentCommands;
+}
+
 function addSseClient(send: (event: string, data: unknown) => void): void {
   sseClients.add(send);
   metrics.setGauge(MetricNames.SSE_CLIENTS, sseClients.size);
@@ -437,6 +449,16 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       return {
         type: "mode_update",
         data: { type: "mode_update", mode: d.mode },
+      };
+
+    case "available_commands":
+      // Available commands from agent - store and forward
+      if (d.commands && Array.isArray(d.commands)) {
+        setAgentCommands(d.commands as AvailableCommandData[]);
+      }
+      return {
+        type: "available_commands",
+        data: { type: "available_commands", commands: d.commands || [] },
       };
 
     default:
@@ -1416,6 +1438,11 @@ async function handleRequest(req: Request): Promise<Response> {
         "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
       },
     });
+  }
+
+  // Agent commands endpoint - returns available commands from agent subprocess
+  if (url.pathname === "/commands" && req.method === "GET") {
+    return Response.json({ commands: getAgentCommands() }, { headers: corsHeaders });
   }
 
   // Log streaming endpoint (SSE)

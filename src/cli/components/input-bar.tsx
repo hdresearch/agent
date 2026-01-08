@@ -7,6 +7,7 @@ import { getMatchingCommands, extractPathAtCursor } from "../utils/command-match
 import { getMatchingPaths } from "../utils/path-completion";
 import type { PathMatch } from "../types";
 import type { HttpAcpClient } from "../../client/http-client";
+import type { AvailableCommandData } from "../../protocol/acp-types";
 
 interface InputBarProps {
   value: string;
@@ -26,6 +27,8 @@ interface InputBarProps {
   history?: string[];
   historyIndex?: number;
   onHistoryNavigate?: (index: number) => void;
+  // Agent commands from subprocess
+  agentCommands?: AvailableCommandData[];
 }
 
 export function InputBar({
@@ -44,9 +47,10 @@ export function InputBar({
   history = [],
   historyIndex = -1,
   onHistoryNavigate,
+  agentCommands = [],
 }: InputBarProps) {
   const showCommandSuggestions = shouldShowCommandSuggestions(value);
-  const commandMatches = getMatchingCommands(value);
+  const commandMatches = getMatchingCommands(value, agentCommands);
   const lineCount = value.split("\n").length;
   const [cursorIndex, setCursorIndex] = useState(value.length);
 
@@ -352,19 +356,25 @@ export function InputBar({
   });
 
   // Determine colors based on mode
-  const borderColor = tokenMode ? "yellow" : continueMode ? "blue" : "green";
-  const promptColor = tokenMode ? "yellow" : continueMode ? "blue" : "green";
-  const promptSymbol = tokenMode ? "🔐 " : continueMode ? "↩ " : "❯ ";
+  const bashMode = value.startsWith("!");
+  const borderColor = tokenMode ? "yellow" : bashMode ? "magenta" : continueMode ? "blue" : "green";
+  const promptColor = tokenMode ? "yellow" : bashMode ? "magenta" : continueMode ? "blue" : "green";
+  const promptSymbol = tokenMode ? "🔐 " : bashMode ? "! " : continueMode ? "↩ " : "❯ ";
   const placeholder = tokenMode
     ? "Paste your access token..."
     : disabled
     ? "Processing..."
     : "Type a message...";
 
+  // In bash mode, strip the leading ! from display (it's shown in the prompt)
+  const displayValue = bashMode ? value.slice(1) : value;
+  const displayCursor = bashMode ? Math.max(0, cursorIndex - 1) : cursorIndex;
+  const displayLineCount = displayValue.split("\n").length;
+
   return (
     <Box flexDirection="column">
       {!tokenMode && showPathSuggestions && <PathSuggestions matches={pathMatches} selectedIndex={pathSuggestionIndex} />}
-      {!tokenMode && showCommandSuggestions && <CommandSuggestions input={value} selectedIndex={suggestionIndex} />}
+      {!tokenMode && showCommandSuggestions && <CommandSuggestions matches={commandMatches} selectedIndex={suggestionIndex} />}
       <Box
         borderStyle="round"
         borderColor={borderColor}
@@ -376,15 +386,15 @@ export function InputBar({
             {promptSymbol}
           </Text>
           <Box flexGrow={1}>
-            {value.length === 0 ? (
+            {displayValue.length === 0 ? (
               <Text dimColor>
                 {placeholder}
               </Text>
             ) : (
               <ControlledMultilineInput
-                value={value}
-                cursorIndex={cursorIndex}
-                rows={lineCount}
+                value={displayValue}
+                cursorIndex={displayCursor}
+                rows={displayLineCount}
                 maxRows={10}
                 showCursor={true}
                 focus={true}
@@ -396,7 +406,9 @@ export function InputBar({
           <Text dimColor>
             {tokenMode
               ? "Enter: submit token  Ctrl+C: cancel"
-              : "Enter: send  Shift+Enter: ⏎  Ctrl+C: clear  ESC: cancel  PgUp/PgDn: scroll"}
+              : bashMode
+              ? "bash mode · Enter: run  Ctrl+C: clear"
+              : "Enter: send  Shift+Enter: ⏎  Ctrl+C: clear  ! for bash"}
           </Text>
         </Box>
       </Box>

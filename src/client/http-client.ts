@@ -496,6 +496,18 @@ export class HttpAcpClient {
     return this.request(AcpMethod.GetCwd, {});
   }
 
+  async getCommands(): Promise<{ commands: Array<{ name: string; description: string; input?: { hint: string } }> }> {
+    const headers: Record<string, string> = {};
+    if (this._authToken) {
+      headers["Authorization"] = `Bearer ${this._authToken}`;
+    }
+    const response = await fetch(`${this.baseUrl}/commands`, { headers });
+    if (!response.ok) {
+      throw new Error(`Failed to get commands: ${response.status}`);
+    }
+    return response.json();
+  }
+
   // Agent management
   async agentList(): Promise<{
     agents: Array<{
