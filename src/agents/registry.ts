@@ -356,8 +356,8 @@ export function registerBuiltinAgents(): void {
     actions: {
       "*": {
         install: {
-          command: "npm install -g @anthropic-ai/claude-code-acp",
-          description: "Install Claude Code ACP adapter",
+          command: "npm install -g @zed-industries/claude-code-acp",
+          description: "Install Claude Code ACP adapter from Zed",
         },
       },
     },

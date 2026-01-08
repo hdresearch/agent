@@ -440,6 +440,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         suggestionIndex={suggestionIndex}
         onSuggestionIndexChange={setSuggestionIndex}
         client={client}
+        remoteCwd={remoteCwd}
         history={commandHistory}
         historyIndex={historyIndex}
         onHistoryNavigate={handleHistoryNavigate}
