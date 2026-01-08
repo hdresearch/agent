@@ -390,23 +390,8 @@ export function useAcpClient({
         setStatusInfo(prev => ({ ...prev, sessionId: currentSessionId }));
       }
 
-      // Sync outputs from server
-      try {
-        const outputsResult = await client.getSessionOutputs();
-        if (outputsResult.outputs.length > 0) {
-          onOutput({ type: "system", content: `📜 Loading ${outputsResult.outputs.length} previous messages...` });
-          for (const output of outputsResult.outputs) {
-            onOutput({
-              type: output.type as OutputLine["type"],
-              content: output.content,
-              color: output.color,
-              toolName: output.toolName,
-            });
-          }
-        }
-      } catch {
-        // Ignore sync errors
-      }
+      // Note: Session outputs are loaded via SSE notifications when the session is loaded
+      // No need to call getSessionOutputs() as it would duplicate messages
 
       // Fetch remote working directory if in remote mode
       if (isRemoteMode) {
