@@ -4,6 +4,55 @@ A Claude Code agent harness that runs inside a VM, exposing both an interactive 
 
 **Key Concept**: This tool wraps the Claude Agent SDK and Claude Code CLI to provide a dual-interface system where Claude can be controlled both interactively (via CLI) and programmatically (via HTTP API). Perfect for VM-based workflows where you need both human and machine interaction with the same agent instance.
 
+## Installation
+
+### Prerequisites
+
+- [Bun](https://bun.sh) v1.0.0 or later
+- An Anthropic API key (`ANTHROPIC_API_KEY`)
+
+### Quick Install
+
+```bash
+# Clone the repo
+git clone https://github.com/your-org/vers-agent.git
+cd vers-agent
+
+# Install globally
+./install.sh
+```
+
+This installs the `vers` command globally. Make sure `~/.bun/bin` is in your PATH:
+
+```bash
+export PATH="$HOME/.bun/bin:$PATH"
+```
+
+### Usage
+
+```bash
+# Start server + interactive CLI
+vers
+
+# Server only (daemon mode)
+vers --server
+
+# CLI only (connect to local server)
+vers --cli
+
+# Connect to remote server
+vers --url http://192.168.1.100:9999
+
+# Show help
+vers --help
+```
+
+### Uninstall
+
+```bash
+./uninstall.sh
+```
+
 ## Features
 
 - **Interactive CLI** with Claude Code-style UI (spinners, diffs, tool previews) built with Ink (React for terminals)
