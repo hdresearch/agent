@@ -14,6 +14,7 @@ export const COMMANDS = [
   { name: "thinking", alias: "t", description: "Toggle thinking mode (on/off [budget])" },
   { name: "keys", alias: "k", description: "Show/sync API keys with server" },
   { name: "mcp", alias: null, description: "Manage MCP servers (list/add/remove)" },
+  { name: "agent", alias: "a", description: "Manage agents (list/select/status)" },
   { name: "plan", alias: "p", description: "Toggle plan mode (or: on/off/show/clear)" },
   { name: "token", alias: null, description: "Show connection token for this server" },
   { name: "connect", alias: null, description: "Connect to server (or: /connect <url>)" },

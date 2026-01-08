@@ -107,6 +107,11 @@ export function handleSlashCommand(
       handlePlan(arg, ctx);
       return { handled: true };
 
+    case "agent":
+    case "a":
+      handleAgent(parts, ctx);
+      return { handled: true };
+
     case "token":
       handleToken(ctx);
       return { handled: true };
@@ -234,7 +239,7 @@ function handleSession(sessionId: string | undefined, ctx: CommandHandlerContext
         return;
       }
 
-      const session = matches[0];
+      const session = matches[0]!;
 
       // Switch to this session
       return ctx.client!.loadSession(session.id)
@@ -706,4 +711,100 @@ function handleLocal(ctx: CommandHandlerContext): void {
   ctx.addOutput({ type: "system", content: "Next launch will start in local mode." });
   ctx.addOutput({ type: "system", content: "" });
   ctx.addOutput({ type: "system", content: "To connect to a server now, use: /connect <url>" });
+}
+
+function handleAgent(parts: string[], ctx: CommandHandlerContext): void {
+  const subCmd = parts[1]?.toLowerCase();
+  const agentId = parts[2];
+
+  if (!ctx.client) {
+    ctx.addOutput({ type: "error", content: "Not connected to server" });
+    return;
+  }
+
+  // Helper to display agents
+  const displayAgents = (agents: Array<{
+    identity: string;
+    name: string;
+    shortName?: string;
+    description: string;
+    protocol: string;
+    active: boolean;
+  }>, currentAgent: string) => {
+    if (agents.length === 0) {
+      ctx.addOutput({ type: "system", content: "No agents available." });
+      return;
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: `Agents (${agents.length}):` });
+    ctx.addOutput({ type: "system", content: "" });
+
+    for (const agent of agents) {
+      const isCurrent = agent.identity === currentAgent;
+      const marker = isCurrent ? "→ " : "  ";
+      const shortName = agent.shortName ? ` (${agent.shortName})` : "";
+      const status = agent.active ? "" : " [inactive]";
+      ctx.addOutput({
+        type: "system",
+        content: `${marker}${agent.identity}${shortName}${status}`,
+      });
+      ctx.addOutput({
+        type: "system",
+        content: `    ${agent.description || "No description"}`,
+      });
+      ctx.addOutput({
+        type: "system",
+        content: `    Protocol: ${agent.protocol}`,
+      });
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "Switch agent: /agent select <id>" });
+  };
+
+  if (!subCmd || subCmd === "list") {
+    // List available agents
+    ctx.client.agentList()
+      .then((result) => displayAgents(result.agents, result.currentAgent))
+      .catch((err) => ctx.addOutput({ type: "error", content: `Failed to list agents: ${err.message}` }));
+    return;
+  }
+
+  if (subCmd === "select" || subCmd === "use") {
+    if (!agentId) {
+      ctx.addOutput({ type: "error", content: "Usage: /agent select <agent-id>" });
+      ctx.addOutput({ type: "system", content: "Use /agent list to see available agents." });
+      return;
+    }
+
+    ctx.client.agentSelect(agentId)
+      .then((result) => {
+        if (result.success) {
+          ctx.addOutput({ type: "system", content: `Switched to agent: ${result.agentId}` });
+        } else {
+          ctx.addOutput({ type: "error", content: result.message || `Failed to select agent: ${agentId}` });
+        }
+      })
+      .catch((err) => ctx.addOutput({ type: "error", content: `Failed to select agent: ${err.message}` }));
+    return;
+  }
+
+  if (subCmd === "status") {
+    ctx.client.agentStatus()
+      .then((result) => {
+        ctx.addOutput({ type: "system", content: "" });
+        ctx.addOutput({ type: "system", content: `Current agent: ${result.currentAgent}` });
+        ctx.addOutput({ type: "system", content: `Protocol: ${result.protocol}` });
+        ctx.addOutput({ type: "system", content: `Running: ${result.isRunning ? "yes" : "no"}` });
+        ctx.addOutput({ type: "system", content: "" });
+      })
+      .catch((err) => ctx.addOutput({ type: "error", content: `Failed to get agent status: ${err.message}` }));
+    return;
+  }
+
+  ctx.addOutput({ type: "system", content: "Usage: /agent <list|select|status> [agent-id]" });
+  ctx.addOutput({ type: "system", content: "  list              - Show available agents" });
+  ctx.addOutput({ type: "system", content: "  select <id>       - Switch to a different agent" });
+  ctx.addOutput({ type: "system", content: "  status            - Show current agent status" });
 }

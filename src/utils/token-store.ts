@@ -5,6 +5,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { createHash } from "crypto";
+import { logStream } from "./log-stream";
 
 // Ensure data directory exists
 const dataDir = join(homedir(), ".vers-agent");
@@ -36,7 +37,7 @@ function saveStore(store: TokenStore): void {
   try {
     writeFileSync(tokensFile, JSON.stringify(store, null, 2), { mode: 0o600 });
   } catch (err) {
-    console.error("[TOKEN] Failed to save token store:", err);
+    logStream.error("[token-store] Failed to save token store", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

@@ -6,6 +6,7 @@ import { randomBytes, createHash } from "crypto";
 import { homedir } from "os";
 import { join } from "path";
 import { mkdirSync } from "fs";
+import { logStream } from "./log-stream";
 
 // Ensure data directory exists
 const dataDir = join(homedir(), ".vers-agent");
@@ -133,6 +134,6 @@ export const authStore = {
 
 // Check for reset on startup
 if (process.env.VERS_AGENT_RESET_CLAIM === "true") {
-  console.log("[AUTH] Resetting server claim due to VERS_AGENT_RESET_CLAIM=true");
+  logStream.info("[AUTH] Resetting server claim due to VERS_AGENT_RESET_CLAIM=true");
   authStore.resetClaim();
 }

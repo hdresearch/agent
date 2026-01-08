@@ -3,6 +3,7 @@
 
 import { homedir } from "os";
 import { join } from "path";
+import { logStream } from "./log-stream";
 
 const CONFIG_DIR = join(homedir(), ".vers");
 const CONFIG_FILE = join(CONFIG_DIR, "agent_config.json");
@@ -36,6 +37,7 @@ export interface AgentConfig {
   thinkingBudget: number | null; // null = off, number = budget tokens (min 1024)
   lastSessionId: string | null;  // For --continue functionality
   lastServerUrl: string | null;  // Last remote server URL for auto-reconnect
+  defaultAgent: string;          // Default agent identity (e.g., "claude-sdk", "claude.com")
 }
 
 export interface SessionStats {
@@ -72,6 +74,7 @@ const defaultConfig: AgentConfig = {
   thinkingBudget: null,
   lastSessionId: null,
   lastServerUrl: null,
+  defaultAgent: "claude.com",  // Default to Claude Code ACP subprocess mode
 };
 
 let config: AgentConfig = { ...defaultConfig };
@@ -126,7 +129,7 @@ export async function loadConfig(): Promise<AgentConfig> {
     }
   } catch (err) {
     // If file doesn't exist or is invalid, use defaults
-    console.error("Failed to load config, using defaults:", err);
+    logStream.error("[config] Failed to load config, using defaults", { error: err instanceof Error ? err.message : String(err) });
     config = { ...defaultConfig };
   }
 
@@ -138,7 +141,7 @@ export async function saveConfig(): Promise<void> {
     await ensureConfigDir();
     await Bun.write(CONFIG_FILE, JSON.stringify(config, null, 2));
   } catch (err) {
-    console.error("Failed to save config:", err);
+    logStream.error("[config] Failed to save config", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -174,6 +177,10 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
     config.lastServerUrl = updates.lastServerUrl;
   }
 
+  if (updates.defaultAgent !== undefined) {
+    config.defaultAgent = updates.defaultAgent;
+  }
+
   // Persist changes
   await saveConfig();
 
@@ -203,6 +210,10 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
 
   if (updates.lastServerUrl !== undefined) {
     config.lastServerUrl = updates.lastServerUrl;
+  }
+
+  if (updates.defaultAgent !== undefined) {
+    config.defaultAgent = updates.defaultAgent;
   }
 
   // Fire and forget save
@@ -295,8 +306,12 @@ export function updatePlanEntry(id: string, updates: Partial<PlanEntry>): PlanEn
   const index = currentPlan.findIndex(e => e.id === id);
   if (index === -1) return null;
 
-  currentPlan[index] = { ...currentPlan[index], ...updates };
-  return currentPlan[index];
+  const existing = currentPlan[index];
+  if (!existing) return null;
+
+  const updated: PlanEntry = { ...existing, ...updates };
+  currentPlan[index] = updated;
+  return updated;
 }
 
 export function addPlanEntry(entry: PlanEntry): PlanEntry[] {
@@ -323,7 +338,7 @@ export async function loadMcpServers(): Promise<Record<string, McpServerConfig>>
       mcpServers = saved;
     }
   } catch (err) {
-    console.error("Failed to load MCP servers config:", err);
+    logStream.error("[config] Failed to load MCP servers config", { error: err instanceof Error ? err.message : String(err) });
     mcpServers = {};
   }
   return getMcpServers();
@@ -334,7 +349,7 @@ export async function saveMcpServers(): Promise<void> {
     await ensureConfigDir();
     await Bun.write(MCP_CONFIG_FILE, JSON.stringify(mcpServers, null, 2));
   } catch (err) {
-    console.error("Failed to save MCP servers config:", err);
+    logStream.error("[config] Failed to save MCP servers config", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

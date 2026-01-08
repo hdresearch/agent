@@ -1,0 +1,26 @@
+{
+  "identity": "goose.ai",
+  "name": "Goose",
+  "shortName": "goose",
+  "url": "https://block.github.io/goose/",
+  "protocol": "acp",
+  "type": "coding",
+  "authorName": "Block",
+  "authorUrl": "https://block.xyz/",
+  "publisherName": "vers-agent",
+  "publisherUrl": "",
+  "description": "Open source AI agent that goes beyond code suggestions",
+  "tags": ["open-source"],
+  "runCommand": {
+    "*": "goose acp"
+  },
+  "actions": {
+    "*": {
+      "install": {
+        "command": "curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | bash",
+        "description": "Install Goose"
+      }
+    }
+  },
+  "active": true
+}

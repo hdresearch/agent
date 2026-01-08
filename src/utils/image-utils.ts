@@ -514,12 +514,13 @@ export async function readImageAsBase64(
 
       // Extract the NSIRD portion from the path (works for both patterns)
       const nsirdMatch = imagePath.match(/((?:NSIRD_)?screencaptureui[^\/]*\/[^\/]+\.png)/i);
-      if (nsirdMatch) {
+      const matchedPath = nsirdMatch?.[1];
+      if (matchedPath) {
         // Try multiple possible locations
         const pathsToTry = [
-          join(tmpDir, nsirdMatch[1]),
-          join(temporaryItemsDir, nsirdMatch[1]),
-          join(temporaryItemsDir, "NSIRD_" + nsirdMatch[1]),
+          join(tmpDir, matchedPath),
+          join(temporaryItemsDir, matchedPath),
+          join(temporaryItemsDir, "NSIRD_" + matchedPath),
         ];
 
         for (const tryPath of pathsToTry) {

@@ -42,9 +42,30 @@ import {
   type GetSessionOutputsParams,
   type GetSessionOutputsResult,
   type SessionSyncInfo,
+  type AgentInfo,
+  type AgentListResult,
+  type AgentSelectParams,
+  type AgentSelectResult,
+  type AgentStatusResult,
 } from "../protocol/acp-types";
+import {
+  initializeRegistry,
+  listAgents,
+  getAgent,
+  type AgentDefinition,
+} from "../agents";
 import { promptQueue, type QueuedPrompt } from "../core/prompt-queue";
-import { runTask, cancelTask, clearProjectDocsCache, markDocsForReinjection } from "../core/agent";
+import {
+  runTask,
+  cancelTask,
+  initializeAgent,
+  selectAgent,
+  getCurrentAgentId,
+  isAgentRunning,
+  listAgents as getAgentsList,
+  clearProjectDocsCache,
+  markDocsForReinjection,
+} from "../core/agent-manager";
 import { getDocs, setDocs, setDoc, getDocsStore, loadDocsStore, type StoredDoc } from "../utils/docs-store";
 import { taskStore } from "../core/tasks";
 import { getConfig, setConfig, getSession, resetSession, updateSession, loadConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig, setSessionMode, getSessionMode, getPlan, setPlan, clearPlan, type PlanEntry } from "../utils/config";
@@ -156,6 +177,7 @@ let authenticated = false;
 let currentSessionId: string | null = null;
 let runningTaskId: string | null = null;
 let autoProcessQueue = true; // Auto-process queued prompts after task completion
+let currentAgentId: string = "claude.com"; // Default to Claude Code ACP
 
 // Helper to convert QueuedPrompt to QueuedPromptInfo
 function toQueuedPromptInfo(prompt: QueuedPrompt): QueuedPromptInfo {
@@ -177,7 +199,7 @@ async function processNextQueuedPrompt(): Promise<void> {
   const queued = promptQueue.dequeue();
   if (!queued) return;
 
-  console.log(`Processing queued prompt: ${queued.text.slice(0, 50)}...`);
+  debug("Processing queued prompt", { text: queued.text.slice(0, 50) });
 
   // Notify that we're processing a queued command
   sendSessionNotification("queued_command", {
@@ -191,7 +213,7 @@ async function processNextQueuedPrompt(): Promise<void> {
 }
 
 // Execute a prompt (extracted from handleSessionPrompt for reuse)
-async function executePrompt(text: string, attachments?: import("./acp-types").Attachment[]): Promise<void> {
+async function executePrompt(text: string, attachments?: import("../protocol/acp-types").Attachment[]): Promise<void> {
   info("executePrompt called", { textLength: text.length, hasAttachments: !!attachments?.length });
   debug("Prompt text:", text.slice(0, 200));
 
@@ -226,7 +248,7 @@ async function executePrompt(text: string, attachments?: import("./acp-types").A
 
   // Subscribe to task events and broadcast via SSE
   const unsubscribe = taskStore.subscribe(task.id, (event) => {
-    debug("Task event:", event.type, event.data);
+    debug("Task event", { type: event.type, data: event.data });
     sendSessionNotification(event.type, event.data);
 
     if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
@@ -303,9 +325,16 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
         type: "tool_call",
         data: {
           type: "tool_call",
-          toolId: `tool-${Date.now()}`,
+          toolId: d.toolCallId || `tool-${Date.now()}`,
+          toolCallId: d.toolCallId || `tool-${Date.now()}`,
           toolName: d.toolName || "unknown",
           input: (d.toolInput || {}) as Record<string, unknown>,
+          // Rich ACP tool information
+          title: d.toolName || "unknown", // Use toolName as title for now
+          kind: d.kind || "other",
+          status: d.status || "in_progress",
+          locations: d.locations,
+          content: d.content,
         },
       };
 
@@ -314,9 +343,14 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
         type: "tool_result",
         data: {
           type: "tool_result",
-          toolId: d.toolUseId || `tool-${Date.now()}`,
-          success: true,
+          toolId: d.toolCallId || d.toolUseId || `tool-${Date.now()}`,
+          toolCallId: d.toolCallId || d.toolUseId,
+          success: d.status === "completed" || d.status === undefined,
+          status: d.status || "completed",
           output: d.content,
+          content: d.content,
+          locations: d.locations,
+          richContent: d.richContent,
         },
       };
 
@@ -412,17 +446,17 @@ function sendSessionNotification(type: string, data: unknown): void {
 
   // Store certain notification types as outputs for history sync
   const d = data as Record<string, unknown>;
-  console.log(`[OUTPUT_STORE] Event type: ${type}, sessionId: ${currentSessionId}, data keys: ${Object.keys(d).join(", ")}`);
+  debug("[OUTPUT_STORE] Event", { type, sessionId: currentSessionId, dataKeys: Object.keys(d) });
 
   if (currentSessionId) {
     switch (type) {
       case "assistant_message":
         const textContent = (d.text as string) || "";
-        console.log(`[OUTPUT_STORE] Storing assistant_message: "${textContent.slice(0, 50)}..."`);
+        debug("[OUTPUT_STORE] Storing assistant_message", { preview: textContent.slice(0, 50) });
         storeAndBroadcastOutput("text", textContent);
         break;
       case "tool_use":
-        console.log(`[OUTPUT_STORE] Storing tool_use: ${d.toolName}`);
+        debug("[OUTPUT_STORE] Storing tool_use", { toolName: d.toolName });
         storeAndBroadcastOutput(
           "tool",
           JSON.stringify({ name: d.toolName, input: d.toolInput }),
@@ -430,16 +464,16 @@ function sendSessionNotification(type: string, data: unknown): void {
         );
         break;
       case "tool_result":
-        console.log(`[OUTPUT_STORE] Storing tool_result`);
+        debug("[OUTPUT_STORE] Storing tool_result");
         storeAndBroadcastOutput(
           "tool-result",
-          typeof d.content === "string" ? d.content : JSON.stringify(d.content),
+          typeof d.content === "string" ? d.content : (d.content !== undefined ? JSON.stringify(d.content) : ""),
           { toolName: d.toolUseId as string }
         );
         break;
     }
   } else {
-    console.log(`[OUTPUT_STORE] WARNING: No currentSessionId, skipping storage for ${type}`);
+    logStream.warn("[OUTPUT_STORE] No currentSessionId, skipping storage", { type });
   }
 
   broadcastEvent("notification", notification);
@@ -449,6 +483,18 @@ function sendSessionNotification(type: string, data: unknown): void {
 async function handleInitialize(params: InitializeParams): Promise<InitializeResult> {
   info("Server initialized");
   initialized = true;
+
+  // Initialize agent registry and set default agent from config
+  await initializeRegistry();
+  const config = getConfig();
+  if (config.defaultAgent && config.defaultAgent !== currentAgentId) {
+    const agent = getAgent(config.defaultAgent);
+    if (agent) {
+      currentAgentId = agent.identity;
+      info("Default agent loaded from config", { agentId: currentAgentId });
+    }
+  }
+
   return {
     agentInfo: AGENT_INFO,
     capabilities: AGENT_CAPABILITIES,
@@ -456,10 +502,20 @@ async function handleInitialize(params: InitializeParams): Promise<InitializeRes
 }
 
 // Auto-initialize if needed (for resilience after server restart)
-function ensureInitialized(): void {
+async function ensureInitialized(): Promise<void> {
   if (!initialized) {
     info("Auto-initializing server (client reconnected after restart)");
     initialized = true;
+    // Also load the agent registry
+    await initializeRegistry();
+    const config = getConfig();
+    if (config.defaultAgent && config.defaultAgent !== currentAgentId) {
+      const agent = getAgent(config.defaultAgent);
+      if (agent) {
+        currentAgentId = agent.identity;
+        info("Default agent loaded from config", { agentId: currentAgentId });
+      }
+    }
   }
 }
 
@@ -678,6 +734,79 @@ async function handleFsListDirectory(
   }
 }
 
+// ============================================================
+// Agent Management Handlers
+// ============================================================
+
+async function handleAgentList(): Promise<AgentListResult> {
+  await initializeRegistry();
+  const agents = listAgents();
+
+  return {
+    agents: agents.map((agent: AgentDefinition): AgentInfo => ({
+      identity: agent.identity,
+      name: agent.name,
+      shortName: agent.shortName,
+      description: agent.description,
+      protocol: agent.protocol,
+      type: agent.type,
+      active: agent.active !== false,
+    })),
+    currentAgent: currentAgentId,
+  };
+}
+
+async function handleAgentSelect(params: AgentSelectParams): Promise<AgentSelectResult> {
+  const { agentId } = params;
+
+  // Check if there's a running task
+  if (runningTaskId) {
+    return {
+      success: false,
+      agentId: currentAgentId,
+      message: "Cannot switch agents while a task is running",
+    };
+  }
+
+  // Look up agent in registry
+  await initializeRegistry();
+  const agent = getAgent(agentId);
+
+  if (!agent) {
+    return {
+      success: false,
+      agentId: currentAgentId,
+      message: `Unknown agent: ${agentId}`,
+    };
+  }
+
+  if (agent.active === false) {
+    return {
+      success: false,
+      agentId: currentAgentId,
+      message: `Agent is inactive: ${agentId}`,
+    };
+  }
+
+  currentAgentId = agent.identity;
+  info("Agent selected", { agentId: currentAgentId, protocol: agent.protocol });
+
+  return {
+    success: true,
+    agentId: currentAgentId,
+  };
+}
+
+function handleAgentStatus(): AgentStatusResult {
+  const agent = getAgent(currentAgentId);
+
+  return {
+    currentAgent: currentAgentId,
+    isRunning: runningTaskId !== null,
+    protocol: agent?.protocol || "acp",
+  };
+}
+
 // Handle incoming JSON-RPC request
 async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
   const { id, method, params } = request;
@@ -697,22 +826,22 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         break;
 
       case AcpMethod.SessionNew:
-        ensureInitialized();
+        await ensureInitialized();
         result = await handleSessionNew(params as NewSessionParams);
         break;
 
       case AcpMethod.SessionLoad:
-        ensureInitialized();
+        await ensureInitialized();
         result = await handleSessionLoad(params as LoadSessionParams);
         break;
 
       case AcpMethod.SessionList:
-        ensureInitialized();
+        await ensureInitialized();
         result = await handleSessionList();
         break;
 
       case AcpMethod.SessionOutputs:
-        ensureInitialized();
+        await ensureInitialized();
         {
           const outputParams = params as GetSessionOutputsParams;
           const sessionId = outputParams.sessionId || currentSessionId;
@@ -742,7 +871,7 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         break;
 
       case AcpMethod.SessionSync:
-        ensureInitialized();
+        await ensureInitialized();
         {
           const syncParams = params as { sessionId?: string };
           const sessionId = syncParams.sessionId || currentSessionId;
@@ -759,28 +888,28 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         break;
 
       case AcpMethod.SessionPrompt:
-        ensureInitialized();
+        await ensureInitialized();
         result = await handleSessionPrompt(params as PromptParams);
         break;
 
       case AcpMethod.SessionCancel:
-        ensureInitialized();
+        await ensureInitialized();
         result = await handleSessionCancel(params as CancelParams);
         break;
 
       case AcpMethod.SessionSetMode:
-        ensureInitialized();
+        await ensureInitialized();
         result = await handleSessionSetMode(params as SetModeParams);
         break;
 
       case AcpMethod.SessionReloadDocs:
-        ensureInitialized();
+        await ensureInitialized();
         markDocsForReinjection();
         result = { success: true, message: "Project docs will be re-injected on next message" };
         break;
 
       case AcpMethod.SessionGetDocs:
-        ensureInitialized();
+        await ensureInitialized();
         result = {
           docs: getDocs(),
           store: getDocsStore(),
@@ -788,7 +917,7 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         break;
 
       case AcpMethod.SessionSetDocs:
-        ensureInitialized();
+        await ensureInitialized();
         {
           const docsParams = params as { docs: Array<{ name: string; content: string; path?: string }> };
           if (!docsParams.docs || !Array.isArray(docsParams.docs)) {
@@ -899,10 +1028,12 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
           if (!queueParams.text) {
             throw new Error("Missing text parameter");
           }
+          // Filter mode to only valid queue modes (execute is not valid for queue)
+          const queueMode = queueParams.mode === "execute" ? undefined : queueParams.mode;
           const queued = promptQueue.enqueue(
             queueParams.text,
             queueParams.attachments,
-            queueParams.mode
+            queueMode
           );
           result = {
             id: queued.id,
@@ -1016,6 +1147,19 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
 
       case AcpMethod.GetCwd:
         result = { cwd: process.cwd() };
+        break;
+
+      // Agent Management
+      case AcpMethod.AgentList:
+        result = await handleAgentList();
+        break;
+
+      case AcpMethod.AgentSelect:
+        result = await handleAgentSelect(params as AgentSelectParams);
+        break;
+
+      case AcpMethod.AgentStatus:
+        result = handleAgentStatus();
         break;
 
       default:
@@ -1292,7 +1436,7 @@ export function createHttpServer(requestedPort: number, maxAttempts = 10): { clo
       break;
     }
     if (attempt === 0) {
-      console.log(`Port ${tryPort} is in use, trying alternate ports...`);
+      info("Port is in use, trying alternate ports", { port: tryPort });
     }
   }
 
@@ -1300,7 +1444,7 @@ export function createHttpServer(requestedPort: number, maxAttempts = 10): { clo
     throw new Error(`Could not find an available port after ${maxAttempts} attempts (tried ${requestedPort}-${requestedPort + maxAttempts - 1})`);
   }
 
-  console.log(`ACP HTTP server listening on http://localhost:${actualPort}`);
+  info("ACP HTTP server listening", { url: `http://localhost:${actualPort}` });
 
   return {
     close: () => server!.stop(),

@@ -1,11 +1,50 @@
 // CLI type definitions
 
+// ACP tool kinds
+export type ToolKind = "read" | "edit" | "delete" | "move" | "search" | "execute" | "think" | "fetch" | "switch_mode" | "other";
+
+// ACP tool status
+export type ToolStatus = "pending" | "in_progress" | "completed" | "failed";
+
+// ACP tool call location
+export interface ToolLocation {
+  path: string;
+  line?: number;
+}
+
+// ACP tool call content types
+export interface ToolContentDiff {
+  type: "diff";
+  path: string;
+  oldText?: string;
+  newText: string;
+}
+
+export interface ToolContentTerminal {
+  type: "terminal";
+  terminalId: string;
+}
+
+export interface ToolContentText {
+  type: "content";
+  content: { type: "text"; text: string };
+}
+
+export type ToolContent = ToolContentDiff | ToolContentTerminal | ToolContentText;
+
 export type OutputLine = {
   id: string;
   type: "user" | "text" | "tool" | "tool-result" | "system" | "error" | "stats";
   content: string;
   color?: string;
   toolName?: string;
+  // Rich ACP tool information
+  toolTitle?: string;       // Human-readable title like "Read(file.ts) - Read 132 lines"
+  toolKind?: ToolKind;      // Type of tool operation
+  toolStatus?: ToolStatus;  // Current status
+  toolCallId?: string;      // ID to match tool calls with results
+  toolLocations?: ToolLocation[];  // File locations being accessed
+  toolContent?: ToolContent[];     // Rich content (diffs, terminal output, etc.)
 };
 
 export type AppState = {
