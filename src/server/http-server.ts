@@ -321,14 +321,19 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       };
 
     case "tool_use": {
-      // Filter out invalid titles (undefined, empty, or literal "undefined" strings)
-      const isValidTitle = (s: unknown): s is string =>
-        typeof s === "string" && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+      // Clean up title: strip surrounding quotes and filter invalid values
+      const cleanTitle = (s: unknown): string | undefined => {
+        if (typeof s !== "string" || !s || s === "undefined" || s.trim() === "") return undefined;
+        // Strip surrounding quotes if present
+        let cleaned = s.trim();
+        if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+            (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+          cleaned = cleaned.slice(1, -1);
+        }
+        return cleaned || undefined;
+      };
       // Use title, toolName, or toolCallId as fallback - never show "undefined"
-      const toolDisplayName = isValidTitle(d.title) ? d.title
-        : isValidTitle(d.toolName) ? d.toolName
-        : isValidTitle(d.toolCallId) ? d.toolCallId
-        : "Tool";
+      const toolDisplayName = cleanTitle(d.title) || cleanTitle(d.toolName) || cleanTitle(d.toolCallId) || "Tool";
       // Track tool call metrics
       metrics.incCounter(MetricNames.TOOL_CALLS_TOTAL, { tool: toolDisplayName });
       return {

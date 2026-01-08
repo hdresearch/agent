@@ -82,13 +82,19 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       // Emit permission request event
       if (this.currentEventTarget) {
-        // Filter out invalid titles (undefined, empty, or literal "undefined" strings)
-        const isValidTitle = (s: string | undefined): boolean =>
-          !!s && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+        // Clean up title: strip surrounding quotes and filter invalid values
+        const cleanTitle = (s: string | undefined): string | undefined => {
+          if (!s || s === "undefined" || s.trim() === "") return undefined;
+          // Strip surrounding quotes if present
+          let cleaned = s.trim();
+          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+            cleaned = cleaned.slice(1, -1);
+          }
+          return cleaned || undefined;
+        };
         // Use title with fallback to toolCallId or "Tool" - never show "undefined"
-        const permissionTitle = isValidTitle(params.toolCall.title)
-          ? params.toolCall.title!
-          : (params.toolCall.toolCallId || "Tool");
+        const permissionTitle = cleanTitle(params.toolCall.title) || params.toolCall.toolCallId || "Tool";
         const event: PromptEvent = {
           type: "permission_request",
           data: {
@@ -432,11 +438,19 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       case "tool_call": {
         const toolCall = update as AcpToolCall;
-        // Filter out invalid titles (undefined, empty, or literal "undefined" strings)
-        const isValidTitle = (s: string | undefined): boolean =>
-          !!s && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
-        // Use title if valid, fallback to toolCallId or "Tool"
-        const displayTitle = isValidTitle(toolCall.title) ? toolCall.title : (toolCall.toolCallId || "Tool");
+        // Clean up title: strip surrounding quotes and filter invalid values
+        const cleanTitle = (s: string | undefined): string | undefined => {
+          if (!s || s === "undefined" || s.trim() === "") return undefined;
+          // Strip surrounding quotes if present
+          let cleaned = s.trim();
+          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+            cleaned = cleaned.slice(1, -1);
+          }
+          return cleaned || undefined;
+        };
+        // Use cleaned title if valid, fallback to toolCallId or "Tool"
+        const displayTitle = cleanTitle(toolCall.title) || toolCall.toolCallId || "Tool";
         return {
           type: "tool_use",
           data: {
