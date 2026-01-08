@@ -44,6 +44,9 @@ export function handleSlashCommand(
 
   // Agent commands take precedence over local commands
   if (ctx.agentCommands && isAgentCommand(cmd, ctx.agentCommands)) {
+    // Synced commands: perform local side effects AND pass to agent
+    syncAgentCommandSideEffects(cmd, arg, parts, ctx);
+    // Pass through to agent
     return { handled: false };
   }
 
@@ -134,6 +137,72 @@ export function handleSlashCommand(
     default:
       ctx.addOutput({ type: "error", content: `Unknown command: /${cmd}. Type /help for commands.` });
       return { handled: true };
+  }
+}
+
+/**
+ * Sync local CLI state when agent commands are executed.
+ * This ensures the CLI display reflects what the agent is doing.
+ */
+function syncAgentCommandSideEffects(
+  cmd: string,
+  arg: string | undefined,
+  parts: string[],
+  ctx: CommandHandlerContext
+): void {
+  switch (cmd) {
+    case "new":
+    case "n":
+      // Clear local output and reset history when agent starts new conversation
+      ctx.setOutput([]);
+      ctx.setContinueMode(false);
+      ctx.historyRef.current = createHistory("new");
+      saveHistory(ctx.historyRef.current);
+      break;
+
+    case "clear":
+      // Clear local output display when agent clears
+      ctx.setOutput([]);
+      break;
+
+    case "model":
+    case "m": {
+      // Sync model change to status bar
+      const validModels = ["sonnet", "opus", "haiku"];
+      if (arg && validModels.includes(arg.toLowerCase())) {
+        const model = arg.toLowerCase();
+        ctx.setStatusInfo(prev => ({ ...prev, model }));
+        setConfig({ model }); // Persist locally too
+      }
+      break;
+    }
+
+    case "thinking":
+    case "think":
+    case "t": {
+      // Sync thinking mode to status bar
+      if (arg === "off") {
+        ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: false, budget: null } }));
+        setConfig({ thinkingBudget: null });
+      } else if (arg === "on" || !arg) {
+        const budget = parts[2] ? parseInt(parts[2], 10) : 10000;
+        if (!isNaN(budget) && budget >= 1024) {
+          ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: true, budget } }));
+          setConfig({ thinkingBudget: budget });
+        }
+      } else {
+        // arg might be a number directly like "/thinking 5000"
+        const budget = parseInt(arg, 10);
+        if (!isNaN(budget) && budget >= 1024) {
+          ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: true, budget } }));
+          setConfig({ thinkingBudget: budget });
+        }
+      }
+      break;
+    }
+
+    // Other agent commands don't need local side effects
+    // /compact, /cost, /config, /help, etc. - just pass through
   }
 }
 
