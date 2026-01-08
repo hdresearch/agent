@@ -1,12 +1,13 @@
 // Slash command handlers
 
 import type { HttpAcpClient } from "../../client/http-client";
-import type { SessionConfig } from "../../protocol/acp-types";
+import type { SessionConfig, AvailableCommandData } from "../../protocol/acp-types";
 import type { OutputLine, StatusInfo } from "../types";
 import { COMMANDS } from "../constants";
 import { setConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "../../utils/config";
 import { detectKeys, formatKeysDisplay } from "../../utils/keys";
 import { createHistory, saveHistory, type ConversationHistory } from "../../utils/history";
+import { isAgentCommand } from "../utils/command-matching";
 
 export interface CommandHandlerContext {
   client: HttpAcpClient | null;
@@ -22,6 +23,7 @@ export interface CommandHandlerContext {
   exit: () => void;
   reconnect: (url: string) => void;
   currentServerUrl?: string;
+  agentCommands?: AvailableCommandData[];
 }
 
 export type CommandResult = {
@@ -125,6 +127,11 @@ export function handleSlashCommand(
       return { handled: true };
 
     default:
+      // Check if this is an agent command - if so, let it pass through to the agent
+      if (ctx.agentCommands && isAgentCommand(cmd, ctx.agentCommands)) {
+        // Return handled: false so the command gets sent to the agent as a prompt
+        return { handled: false };
+      }
       ctx.addOutput({ type: "error", content: `Unknown command: /${cmd}. Type /help for commands.` });
       return { handled: true };
   }

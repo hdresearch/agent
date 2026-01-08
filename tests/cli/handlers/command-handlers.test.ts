@@ -224,4 +224,55 @@ describe("handleSlashCommand", () => {
       expect(ctx.outputs.some(o => o.content.includes("Next launch will start in local mode"))).toBe(true);
     });
   });
+
+  describe("agent commands", () => {
+    const agentCommands = [
+      { name: "compact", description: "Compact context" },
+      { name: "config", description: "Show configuration" },
+      { name: "cost", description: "Show cost" },
+    ];
+
+    test("unknown command shows error when no agent commands", () => {
+      const ctx = createMockContext();
+      const result = handleSlashCommand("/unknown", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+    });
+
+    test("unknown command shows error when not in agent commands", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/unknown", ctx);
+
+      expect(result.handled).toBe(true);
+      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+    });
+
+    test("agent command returns handled: false to pass through", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/cost", ctx);
+
+      // Agent commands should NOT be handled locally - they pass through to the agent
+      expect(result.handled).toBe(false);
+      // No error message should be shown
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
+    });
+
+    test("agent command with args returns handled: false", () => {
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/config set foo bar", ctx);
+
+      expect(result.handled).toBe(false);
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
+    });
+
+    test("local command still handled when agent has same command", () => {
+      // "compact" is both local and agent - local should still be handled locally
+      const ctx = createMockContext({ agentCommands });
+      const result = handleSlashCommand("/compact", ctx);
+
+      // Local /compact is handled by the local handler
+      expect(result.handled).toBe(true);
+    });
+  });
 });
