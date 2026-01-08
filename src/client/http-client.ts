@@ -505,7 +505,7 @@ export class HttpAcpClient {
     if (!response.ok) {
       throw new Error(`Failed to get commands: ${response.status}`);
     }
-    return response.json();
+    return response.json() as Promise<{ commands: Array<{ name: string; description: string; input?: { hint: string } }> }>;
   }
 
   // Agent management

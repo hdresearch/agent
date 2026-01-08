@@ -2,6 +2,31 @@
 // Based on https://agentclientprotocol.com/
 
 // ============================================================
+// Client/Agent Configuration
+// ============================================================
+
+export interface AcpClientInfo {
+  name: string;
+  version: string;
+}
+
+export interface AcpAgentConfig {
+  clientInfo: AcpClientInfo;
+  capabilities: ClientCapabilities;
+  defaultModel?: string;
+  authMethods?: string[];
+}
+
+// Default config for agents that don't specify their own
+export const DEFAULT_ACP_CONFIG: AcpAgentConfig = {
+  clientInfo: { name: "vers-agent", version: "0.1.0" },
+  capabilities: {
+    fileSystem: { read: true, write: true },
+    terminal: { create: true },
+  },
+};
+
+// ============================================================
 // Capabilities
 // ============================================================
 

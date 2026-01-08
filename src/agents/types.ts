@@ -504,7 +504,8 @@ export type PromptEvent =
   | PromptResultEvent
   | PromptErrorEvent
   | PromptCancelledEvent
-  | PromptPermissionRequestEvent;
+  | PromptPermissionRequestEvent
+  | PromptAvailableCommandsEvent;
 
 export interface PromptInitEvent {
   type: "init";
@@ -591,6 +592,13 @@ export interface PromptPermissionRequestEvent {
       kind: AcpPermissionOptionKind;
       name: string;
     }>;
+  };
+}
+
+export interface PromptAvailableCommandsEvent {
+  type: "available_commands";
+  data: {
+    commands: AcpAvailableCommand[];
   };
 }
 
