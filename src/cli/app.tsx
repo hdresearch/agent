@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Box, useApp, useInput } from "ink";
 
 // Components
@@ -21,7 +21,7 @@ import { executeBashCommand } from "./handlers/bash-handler";
 import type { OutputLine, AppState } from "./types";
 import type { SessionConfig, Attachment } from "../protocol/acp-types";
 import { uniqueId } from "./utils/formatting";
-import { getConfig } from "../utils/config";
+import { getConfig, getCommandHistory, addToCommandHistory, loadCommandHistory } from "../utils/config";
 import { addMessage, saveHistory } from "../utils/history";
 
 interface AppProps {
@@ -41,6 +41,10 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
   const [serverUrl, setServerUrl] = useState(initialServerUrl);
   // In remote mode, default to continuing the most recent session
   const [continueMode, setContinueMode] = useState(initialContinue || !!initialServerUrl);
+  // Command history (most recent first) - loaded from persisted storage, per-session
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [savedInput, setSavedInput] = useState("");
 
   // Submission guards
   const isSubmittingRef = useRef(false);
@@ -76,7 +80,41 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
   const setInput = useCallback((newValue: string) => {
     const modifiedInput = processInput(newValue);
     setInputRaw(modifiedInput);
-  }, [processInput]);
+    // Reset history navigation when user types
+    if (historyIndex !== -1) {
+      setHistoryIndex(-1);
+      setSavedInput("");
+    }
+  }, [processInput, historyIndex]);
+
+  // Handle history navigation (up/down arrows)
+  const handleHistoryNavigate = useCallback((newIndex: number) => {
+    if (newIndex < -1) {
+      // Going past the end (down arrow at newest) - restore saved input
+      setHistoryIndex(-1);
+      setInputRaw(savedInput);
+      setSavedInput("");
+      return;
+    }
+
+    if (newIndex >= commandHistory.length) {
+      // Can't go further back
+      return;
+    }
+
+    // Save current input if just starting to navigate
+    if (historyIndex === -1 && newIndex >= 0) {
+      setSavedInput(input);
+    }
+
+    setHistoryIndex(newIndex);
+    if (newIndex === -1) {
+      setInputRaw(savedInput);
+      setSavedInput("");
+    } else {
+      setInputRaw(commandHistory[newIndex] || "");
+    }
+  }, [commandHistory, historyIndex, input, savedInput]);
 
   // ACP client hook
   const {
@@ -95,6 +133,13 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     sessionConfig,
     onOutput: addOutput,
   });
+
+  // Load command history when session changes
+  useEffect(() => {
+    if (statusInfo.sessionId) {
+      loadCommandHistory(statusInfo.sessionId).then(setCommandHistory);
+    }
+  }, [statusInfo.sessionId]);
 
   // Send message to server
   const sendMessage = useCallback(
@@ -159,6 +204,16 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         return;
       }
       lastSubmitTimeRef.current = now;
+
+      // Add to command history (persisted)
+      const trimmedValue = value.trim();
+      if (trimmedValue) {
+        const updatedHistory = addToCommandHistory(trimmedValue);
+        setCommandHistory(updatedHistory);
+      }
+      // Reset history navigation
+      setHistoryIndex(-1);
+      setSavedInput("");
 
       // Handle bash escape (! prefix)
       if (value.startsWith("!")) {
@@ -270,6 +325,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
       clearProcessedPaths,
       needsToken,
       submitToken,
+      commandHistory,
     ]
   );
 
@@ -371,6 +427,9 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         suggestionIndex={suggestionIndex}
         onSuggestionIndexChange={setSuggestionIndex}
         client={client}
+        history={commandHistory}
+        historyIndex={historyIndex}
+        onHistoryNavigate={handleHistoryNavigate}
       />
     </Box>
   );

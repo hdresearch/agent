@@ -20,6 +20,10 @@ interface InputBarProps {
   suggestionIndex: number;
   onSuggestionIndexChange: (idx: number) => void;
   client?: HttpAcpClient | null;
+  // Command history
+  history?: string[];
+  historyIndex?: number;
+  onHistoryNavigate?: (index: number) => void;
 }
 
 export function InputBar({
@@ -34,6 +38,9 @@ export function InputBar({
   suggestionIndex,
   onSuggestionIndexChange,
   client,
+  history = [],
+  historyIndex = -1,
+  onHistoryNavigate,
 }: InputBarProps) {
   const showCommandSuggestions = shouldShowCommandSuggestions(value);
   const commandMatches = getMatchingCommands(value);
@@ -223,6 +230,15 @@ export function InputBar({
         }
         pos += lineLen + 1;
       }
+      // If at first line and history available, navigate history
+      if (lineIdx === 0 && history.length > 0 && onHistoryNavigate) {
+        const newIndex = historyIndex < history.length - 1 ? historyIndex + 1 : historyIndex;
+        if (newIndex !== historyIndex) {
+          onHistoryNavigate(newIndex);
+        }
+        return;
+      }
+      // Otherwise navigate within multiline
       if (lineIdx > 0) {
         let newPos = 0;
         for (let i = 0; i < lineIdx - 1; i++) {
@@ -249,6 +265,13 @@ export function InputBar({
         }
         pos += lineLen + 1;
       }
+      // If at last line and navigating history, go forward
+      if (lineIdx === lines.length - 1 && historyIndex >= 0 && onHistoryNavigate) {
+        const newIndex = historyIndex - 1;
+        onHistoryNavigate(newIndex);
+        return;
+      }
+      // Otherwise navigate within multiline
       if (lineIdx < lines.length - 1) {
         let newPos = 0;
         for (let i = 0; i <= lineIdx; i++) {

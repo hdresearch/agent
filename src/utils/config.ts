@@ -7,6 +7,7 @@ import { join } from "path";
 const CONFIG_DIR = join(homedir(), ".vers");
 const CONFIG_FILE = join(CONFIG_DIR, "agent_config.json");
 const MCP_CONFIG_FILE = join(CONFIG_DIR, "mcp_servers.json");
+const HISTORY_FILE = join(CONFIG_DIR, "command_history.json");
 
 // MCP Server configuration types (mirrors SDK types)
 export interface McpStdioServerConfig {
@@ -360,4 +361,83 @@ export async function setMcpServers(servers: Record<string, McpServerConfig>): P
   mcpServers = { ...servers };
   await saveMcpServers();
   return getMcpServers();
+}
+
+// ============================================================
+// Command History (persisted, per-session)
+// ============================================================
+
+const MAX_HISTORY_SIZE = 100;
+let allHistory: Record<string, string[]> = {};
+let currentSessionId: string | null = null;
+let historyLoaded = false;
+
+async function ensureHistoryLoaded(): Promise<void> {
+  if (historyLoaded) return;
+  try {
+    const file = Bun.file(HISTORY_FILE);
+    if (await file.exists()) {
+      const text = await file.text();
+      const saved = JSON.parse(text);
+      // Handle migration from old array format to new per-session object format
+      if (Array.isArray(saved)) {
+        // Old format was just an array - migrate to new format under "migrated" key
+        allHistory = { migrated: saved };
+        // Save in new format
+        saveCommandHistory().catch(() => {});
+      } else if (typeof saved === "object" && saved !== null) {
+        allHistory = saved as Record<string, string[]>;
+      }
+    }
+  } catch {
+    allHistory = {};
+  }
+  historyLoaded = true;
+}
+
+export async function loadCommandHistory(sessionId?: string | null): Promise<string[]> {
+  await ensureHistoryLoaded();
+  currentSessionId = sessionId || null;
+  return getCommandHistory();
+}
+
+export async function saveCommandHistory(): Promise<void> {
+  try {
+    await ensureConfigDir();
+    await Bun.write(HISTORY_FILE, JSON.stringify(allHistory, null, 2));
+  } catch {
+    // Ignore save errors
+  }
+}
+
+export function getCommandHistory(): string[] {
+  if (!currentSessionId) return [];
+  const history = allHistory[currentSessionId];
+  return Array.isArray(history) ? [...history] : [];
+}
+
+export function setHistorySession(sessionId: string | null): void {
+  currentSessionId = sessionId;
+}
+
+export function addToCommandHistory(command: string): string[] {
+  if (!currentSessionId) return [];
+
+  const trimmed = command.trim();
+  if (!trimmed) return getCommandHistory();
+
+  const history = allHistory[currentSessionId] || [];
+
+  // Avoid duplicates at the top
+  if (history[0] === trimmed) {
+    return history;
+  }
+
+  // Add to front, keep max size
+  allHistory[currentSessionId] = [trimmed, ...history].slice(0, MAX_HISTORY_SIZE);
+
+  // Fire and forget save
+  saveCommandHistory().catch(() => {});
+
+  return getCommandHistory();
 }
