@@ -146,6 +146,44 @@ flowchart LR
     style G fill:#98c379,color:#000
 ```
 
+### Relational View (GF(3) Conservation)
+
+```mermaid
+flowchart LR
+    subgraph M["-1 MINUS"]
+        install
+        reset-claim
+        clear-tokens
+    end
+    
+    subgraph E["0 ERGODIC"]
+        build
+        dev
+        health
+        tasks
+    end
+    
+    subgraph P["+1 PLUS"]
+        agent
+        server
+        nuke
+    end
+
+    install --> build --> agent --> server --> health
+    nuke --> reset-claim & clear-tokens
+    dev --> build
+    
+    style M fill:#e06c75,color:#fff
+    style E fill:#c778ea,color:#000
+    style P fill:#98c379,color:#000
+```
+
+| Trit | Role | Recipes |
+|------|------|---------|
+| -1 | Setup/Teardown | `install`, `reset-claim`, `clear-tokens`, `clean` |
+| 0 | Process/Query | `build`, `dev`, `typecheck`, `test`, `health`, `tasks` |
+| +1 | Execution | `agent`, `server`, `cli`, `nuke`, `server-fresh` |
+
 ### Quick Reference
 
 | Command | Description |
