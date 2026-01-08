@@ -1,15 +1,44 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 
 const SERVER_URL = "http://localhost:9999";
+let authToken: string | null = null;
+
+// Helper to claim the server or verify existing token
+async function claimOrVerify(): Promise<string | null> {
+  const response = await fetch(`${SERVER_URL}/claim`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Client-Id": "test-client",
+    },
+  });
+
+  const result = await response.json();
+  if (result.token) {
+    return result.token;
+  }
+  if (result.isOwner) {
+    return authToken;
+  }
+  console.warn("Server is claimed by another client. Tests may fail.");
+  return null;
+}
 
 describe("Server Output Storage Integration", () => {
   let sessionId: string | null = null;
 
   // Helper to make RPC calls
   async function rpc(method: string, params: unknown = {}) {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
     const response = await fetch(`${SERVER_URL}/rpc`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: Date.now(),
@@ -25,6 +54,9 @@ describe("Server Output Storage Integration", () => {
   }
 
   beforeAll(async () => {
+    // Claim server or get token
+    authToken = await claimOrVerify();
+
     // Initialize and create a session
     await rpc("initialize", {
       clientInfo: { name: "test-client", version: "1.0.0" },

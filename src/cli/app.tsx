@@ -85,6 +85,8 @@ export function App({ initialContinue, serverUrl }: AppProps) {
     historyRef,
     remoteCwd,
     isRemoteMode,
+    needsToken,
+    submitToken,
   } = useAcpClient({
     serverUrl,
     continueMode,
@@ -134,6 +136,18 @@ export function App({ initialContinue, serverUrl }: AppProps) {
   // Main submit handler
   const handleSubmit = useCallback(
     async (value: string) => {
+      // Handle token entry mode
+      if (needsToken) {
+        const token = value.trim();
+        if (!token) {
+          addOutput({ type: "error", content: "Token cannot be empty" });
+          return;
+        }
+        setInput("");
+        submitToken(token);
+        return;
+      }
+
       // Allow empty text if there are pending attachments
       if (!value.trim() && pendingAttachments.length === 0) return;
 
@@ -247,6 +261,8 @@ export function App({ initialContinue, serverUrl }: AppProps) {
       historyRef,
       clearAttachments,
       clearProcessedPaths,
+      needsToken,
+      submitToken,
     ]
   );
 
@@ -343,6 +359,7 @@ export function App({ initialContinue, serverUrl }: AppProps) {
         onExit={exit}
         disabled={state.status !== "idle"}
         continueMode={continueMode}
+        tokenMode={needsToken}
         suggestionIndex={suggestionIndex}
         onSuggestionIndexChange={setSuggestionIndex}
         client={client}

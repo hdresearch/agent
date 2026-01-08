@@ -51,6 +51,12 @@ export interface ClaimResponse {
   message?: string;
 }
 
+export interface ConnectResult {
+  success: boolean;
+  needsToken?: boolean;  // Server is claimed, token required
+  error?: string;
+}
+
 export class HttpAcpClient {
   private baseUrl: string;
   private eventSource: EventSource | null = null;
@@ -118,16 +124,47 @@ export class HttpAcpClient {
     return result;
   }
 
-  // Connect to SSE stream
-  async connect(): Promise<void> {
-    // First, try to claim or verify ownership
-    const claimResult = await this.claim();
+  // Set token manually (for shared access)
+  setToken(token: string): void {
+    this._authToken = token;
+    tokenStore.setToken(this.baseUrl, token);
+  }
 
-    if (!claimResult.isOwner) {
-      throw new Error(claimResult.error || "Failed to authenticate with server");
+  // Verify current token is valid with server
+  async verifyToken(): Promise<boolean> {
+    if (!this._authToken) return false;
+
+    try {
+      const claimResult = await this.claim();
+      return claimResult.isOwner;
+    } catch {
+      return false;
+    }
+  }
+
+  // Connect to SSE stream (returns result instead of throwing for auth issues)
+  async connect(): Promise<ConnectResult> {
+    // First, try to claim or verify ownership
+    let claimResult: ClaimResponse;
+    try {
+      claimResult = await this.claim();
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Connection failed",
+      };
     }
 
-    return new Promise((resolve, reject) => {
+    if (!claimResult.isOwner) {
+      // Server is claimed by someone else - token required
+      return {
+        success: false,
+        needsToken: true,
+        error: claimResult.error || "Server is claimed. Token required.",
+      };
+    }
+
+    return new Promise((resolve) => {
       // Add token to events URL if we have one
       let eventsUrl = `${this.baseUrl}/events`;
       if (this._authToken) {
@@ -142,15 +179,15 @@ export class HttpAcpClient {
               // Token might be invalid, clear it
               tokenStore.removeToken(this.baseUrl);
               this._authToken = null;
-              reject(new Error("Authentication failed. Token may be invalid."));
+              resolve({ success: false, needsToken: true, error: "Authentication failed. Token may be invalid." });
               return;
             }
-            reject(new Error(`Failed to connect to ${eventsUrl}: ${response.status}`));
+            resolve({ success: false, error: `Failed to connect: ${response.status}` });
             return;
           }
 
           this._connected = true;
-          resolve();
+          resolve({ success: true });
 
           const reader = response.body?.getReader();
           if (!reader) return;
@@ -197,7 +234,7 @@ export class HttpAcpClient {
         })
         .catch((err) => {
           this._connected = false;
-          reject(err);
+          resolve({ success: false, error: err instanceof Error ? err.message : "Connection failed" });
         });
     });
   }

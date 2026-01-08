@@ -1,12 +1,20 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 
 const SERVER_URL = "http://localhost:9999";
+let authToken: string | null = null;
 
 // Helper to make JSON-RPC requests
 async function rpc(method: string, params: Record<string, unknown> = {}) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
   const response = await fetch(`${SERVER_URL}/rpc`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       jsonrpc: "2.0",
       method,
@@ -27,6 +35,31 @@ async function isServerRunning(): Promise<boolean> {
   }
 }
 
+// Helper to claim the server or verify existing token
+async function claimOrVerify(): Promise<string | null> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Client-Id": "test-client",
+  };
+
+  const response = await fetch(`${SERVER_URL}/claim`, {
+    method: "POST",
+    headers,
+  });
+
+  const result = await response.json();
+  if (result.token) {
+    return result.token;
+  }
+  if (result.isOwner) {
+    // Already claimed by us (from previous run with same token)
+    return authToken;
+  }
+  // Server is claimed by someone else - tests can't run
+  console.warn("Server is claimed by another client. Tests may fail.");
+  return null;
+}
+
 // Helper to clear the queue
 async function clearQueue() {
   return rpc("queue/clear");
@@ -45,6 +78,10 @@ describe("Remote Server Submission Tests", () => {
         "Server not running! Start with: docker compose up -d"
       );
     }
+
+    // Claim server or get token
+    authToken = await claimOrVerify();
+
     // Clear any existing queue
     await clearQueue();
   });

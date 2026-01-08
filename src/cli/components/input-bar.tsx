@@ -16,6 +16,7 @@ interface InputBarProps {
   onExit: () => void;
   disabled: boolean;
   continueMode: boolean;
+  tokenMode?: boolean;
   suggestionIndex: number;
   onSuggestionIndexChange: (idx: number) => void;
   client?: HttpAcpClient | null;
@@ -29,6 +30,7 @@ export function InputBar({
   onExit,
   disabled,
   continueMode,
+  tokenMode = false,
   suggestionIndex,
   onSuggestionIndexChange,
   client,
@@ -286,24 +288,34 @@ export function InputBar({
     }
   });
 
+  // Determine colors based on mode
+  const borderColor = tokenMode ? "yellow" : continueMode ? "blue" : "green";
+  const promptColor = tokenMode ? "yellow" : continueMode ? "blue" : "green";
+  const promptSymbol = tokenMode ? "🔐 " : continueMode ? "↩ " : "❯ ";
+  const placeholder = tokenMode
+    ? "Paste your access token..."
+    : disabled
+    ? "Processing..."
+    : "Type a message...";
+
   return (
     <Box flexDirection="column">
-      {showPathSuggestions && <PathSuggestions matches={pathMatches} selectedIndex={pathSuggestionIndex} />}
-      {showCommandSuggestions && <CommandSuggestions input={value} selectedIndex={suggestionIndex} />}
+      {!tokenMode && showPathSuggestions && <PathSuggestions matches={pathMatches} selectedIndex={pathSuggestionIndex} />}
+      {!tokenMode && showCommandSuggestions && <CommandSuggestions input={value} selectedIndex={suggestionIndex} />}
       <Box
         borderStyle="round"
-        borderColor={continueMode ? "blue" : "green"}
+        borderColor={borderColor}
         flexDirection="column"
         paddingX={1}
       >
         <Box flexDirection="row">
-          <Text color={continueMode ? "blue" : "green"} bold>
-            {continueMode ? "↩ " : "❯ "}
+          <Text color={promptColor} bold>
+            {promptSymbol}
           </Text>
           <Box flexGrow={1}>
             {value.length === 0 ? (
               <Text dimColor>
-                {disabled ? "Processing..." : "Type a message..."}
+                {placeholder}
               </Text>
             ) : (
               <ControlledMultilineInput
@@ -319,7 +331,9 @@ export function InputBar({
         </Box>
         <Box justifyContent="flex-end">
           <Text dimColor>
-            Enter: send  Shift+Enter: ⏎  Ctrl+C: clear  ESC: cancel  PgUp/PgDn: scroll
+            {tokenMode
+              ? "Enter: submit token  Ctrl+C: cancel"
+              : "Enter: send  Shift+Enter: ⏎  Ctrl+C: clear  ESC: cancel  PgUp/PgDn: scroll"}
           </Text>
         </Box>
       </Box>
