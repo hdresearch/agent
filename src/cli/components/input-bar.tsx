@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import { ControlledMultilineInput } from "ink-multiline-input";
 import { CommandSuggestions, shouldShowCommandSuggestions } from "./command-suggestions";
@@ -46,6 +46,19 @@ export function InputBar({
   const commandMatches = getMatchingCommands(value);
   const lineCount = value.split("\n").length;
   const [cursorIndex, setCursorIndex] = useState(value.length);
+
+  // Refs to track current values for useInput closure (prevents stale closure issues)
+  const valueRef = useRef(value);
+  const cursorRef = useRef(cursorIndex);
+
+  // Keep refs in sync with state/props
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    cursorRef.current = cursorIndex;
+  }, [cursorIndex]);
 
   // Path completion state
   const [pathMatches, setPathMatches] = useState<PathMatch[]>([]);
@@ -284,30 +297,46 @@ export function InputBar({
     }
 
     if (key.leftArrow) {
-      setCursorIndex(Math.max(0, cursorIndex - 1));
+      const newCursor = Math.max(0, cursorRef.current - 1);
+      cursorRef.current = newCursor;
+      setCursorIndex(newCursor);
       return;
     }
 
     if (key.rightArrow) {
-      setCursorIndex(Math.min(value.length, cursorIndex + 1));
+      const newCursor = Math.min(valueRef.current.length, cursorRef.current + 1);
+      cursorRef.current = newCursor;
+      setCursorIndex(newCursor);
       return;
     }
 
-    // Backspace
+    // Backspace - use refs to get latest values
     if (key.backspace || key.delete) {
-      if (cursorIndex > 0) {
-        const newValue = value.slice(0, cursorIndex - 1) + value.slice(cursorIndex);
+      const currentValue = valueRef.current;
+      const currentCursor = cursorRef.current;
+      if (currentCursor > 0) {
+        const newValue = currentValue.slice(0, currentCursor - 1) + currentValue.slice(currentCursor);
+        const newCursor = currentCursor - 1;
+        // Update refs immediately for next keystroke
+        valueRef.current = newValue;
+        cursorRef.current = newCursor;
         onChange(newValue);
-        setCursorIndex(cursorIndex - 1);
+        setCursorIndex(newCursor);
       }
       return;
     }
 
-    // Regular character input
+    // Regular character input - use refs to get latest values
     if (input && !key.ctrl && !key.meta && !key.tab) {
-      const newValue = value.slice(0, cursorIndex) + input + value.slice(cursorIndex);
+      const currentValue = valueRef.current;
+      const currentCursor = cursorRef.current;
+      const newValue = currentValue.slice(0, currentCursor) + input + currentValue.slice(currentCursor);
+      const newCursor = currentCursor + input.length;
+      // Update refs immediately for next keystroke
+      valueRef.current = newValue;
+      cursorRef.current = newCursor;
       onChange(newValue);
-      setCursorIndex(cursorIndex + input.length);
+      setCursorIndex(newCursor);
     }
   });
 

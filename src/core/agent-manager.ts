@@ -284,6 +284,31 @@ async function processPromptEvent(
       taskStore.updateStatus(taskId, "cancelled");
       taskStore.addEvent(taskId, "cancelled");
       break;
+
+    case "permission_request": {
+      const data = event.data as {
+        requestId: string;
+        toolCall: {
+          toolCallId: string;
+          title?: string;
+          kind?: string;
+          status?: string;
+          locations?: Array<{ path: string; line?: number }>;
+          content?: unknown[];
+        };
+        options: Array<{
+          optionId: string;
+          kind: string;
+          name: string;
+        }>;
+      };
+      taskStore.addEvent(taskId, "permission_request", {
+        requestId: data.requestId,
+        toolCall: data.toolCall,
+        options: data.options,
+      });
+      break;
+    }
   }
 }
 
@@ -351,4 +376,24 @@ export function clearProjectDocsCache(): void {
 export function markDocsForReinjection(): void {
   // No-op - ACP subprocess handles its own context
   debug("markDocsForReinjection called (no-op in ACP mode)");
+}
+
+/**
+ * Respond to a pending permission request
+ */
+export function respondToPermission(requestId: string, optionId: string): boolean {
+  if (currentRunner?.respondToPermission) {
+    return currentRunner.respondToPermission(requestId, optionId);
+  }
+  return false;
+}
+
+/**
+ * Cancel a pending permission request
+ */
+export function cancelPermission(requestId: string): boolean {
+  if (currentRunner?.cancelPermission) {
+    return currentRunner.cancelPermission(requestId);
+  }
+  return false;
 }

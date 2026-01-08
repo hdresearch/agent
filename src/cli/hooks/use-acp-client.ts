@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { HttpAcpClient, type ConnectResult } from "../../client/http-client";
 import type { SessionNotificationParams, SessionConfig } from "../../protocol/acp-types";
 import { detectKeys } from "../../utils/keys";
-import type { OutputLine, StatusInfo } from "../types";
+import type { OutputLine, StatusInfo, PermissionRequest } from "../types";
 import { formatTokens, uniqueId } from "../utils/formatting";
 import { formatToolArgs } from "../utils/formatting";
 import {
@@ -32,6 +32,10 @@ export interface UseAcpClientResult {
   // Token prompt handling
   needsToken: boolean;
   submitToken: (token: string) => void;
+  // Permission request handling
+  permissionRequest: PermissionRequest | null;
+  respondToPermission: (optionId: string) => void;
+  cancelPermission: () => void;
 }
 
 // Reconnect configuration
@@ -46,6 +50,7 @@ export function useAcpClient({
   const [connected, setConnected] = useState(false);
   const [remoteCwd, setRemoteCwd] = useState<string | null>(null);
   const [needsToken, setNeedsToken] = useState(false);
+  const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
   const clientRef = useRef<HttpAcpClient | null>(null);
   const historyRef = useRef<ConversationHistory | null>(null);
   const sessionConfigRef = useRef(sessionConfig);
@@ -55,6 +60,7 @@ export function useAcpClient({
   const isReconnectingRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
   const seenToolCallsRef = useRef<Set<string>>(new Set());
+  const seenToolResultsRef = useRef<Set<string>>(new Set());
 
   // Remote mode: only when connecting to a non-localhost server
   const isRemoteMode = (() => {
@@ -76,6 +82,32 @@ export function useAcpClient({
     }
     setNeedsToken(false);
   }, []);
+
+  // Callback to respond to a permission request
+  const respondToPermission = useCallback((optionId: string) => {
+    if (!permissionRequest || !clientRef.current) return;
+
+    const requestId = permissionRequest.requestId;
+    setPermissionRequest(null);
+
+    // Send response to server
+    clientRef.current.permissionRespond(requestId, optionId).catch((err) => {
+      onOutput({ type: "error", content: `Failed to respond to permission: ${err.message}` });
+    });
+  }, [permissionRequest, onOutput]);
+
+  // Callback to cancel a permission request
+  const cancelPermission = useCallback(() => {
+    if (!permissionRequest || !clientRef.current) return;
+
+    const requestId = permissionRequest.requestId;
+    setPermissionRequest(null);
+
+    // Send cancel to server
+    clientRef.current.permissionCancel(requestId).catch((err) => {
+      onOutput({ type: "error", content: `Failed to cancel permission: ${err.message}` });
+    });
+  }, [permissionRequest, onOutput]);
 
   // Load persisted config
   const persistedConfig = getConfig();
@@ -289,44 +321,53 @@ export function useAcpClient({
             }
             break;
 
-          case "tool_call":
-            if ("toolName" in data) {
-              const toolCallId = (data.toolCallId as string) || undefined;
+          case "tool_call": {
+            // Type assertion for tool call data
+            const toolData = data as import("../../protocol/acp-types").ToolCallData;
+            const toolCallId = toolData.toolCallId || toolData.toolId || undefined;
 
-              // Deduplicate tool calls by toolCallId
-              if (toolCallId && seenToolCallsRef.current.has(toolCallId)) {
-                break;
-              }
-              if (toolCallId) {
-                seenToolCallsRef.current.add(toolCallId);
-              }
+            // Deduplicate tool calls by toolCallId
+            if (toolCallId && seenToolCallsRef.current.has(toolCallId)) {
+              break;
+            }
+            if (toolCallId) {
+              seenToolCallsRef.current.add(toolCallId);
+            }
 
-              const toolName = data.toolName as string;
-              const toolArgs = formatToolArgs(toolName, (data.input || {}) as Record<string, unknown>);
-              // Extract rich ACP tool information
-              const toolTitle = (data.title as string) || undefined;
-              const toolKind = (data.kind as string) || undefined;
-              const toolStatus = (data.status as string) || "in_progress";
-              const toolLocations = data.locations as import("../types").ToolLocation[] | undefined;
-              const toolContent = data.content as import("../types").ToolContent[] | undefined;
+            // Get tool name with fallbacks - never show "undefined"
+            // Also filter out literal "undefined" strings that may come from JSON.stringify(undefined)
+            const isValidTitle = (s: string | undefined): s is string =>
+              !!s && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+            const rawToolName = toolData.toolName as string | undefined;
+            const rawTitle = toolData.title as string | undefined;
+            const validToolName = isValidTitle(rawToolName) ? rawToolName : undefined;
+            const validTitle = isValidTitle(rawTitle) ? rawTitle : undefined;
+            const toolName = validToolName || validTitle || toolCallId || "Tool";
+            const toolArgs = formatToolArgs(toolName, (toolData.input || {}) as Record<string, unknown>);
+            // Extract rich ACP tool information
+            const toolTitle = validTitle || validToolName || toolCallId || "Tool";
+            const toolKind = (toolData.kind as string) || undefined;
+            const toolStatus = (toolData.status as string) || "in_progress";
+            const toolLocations = toolData.locations as import("../types").ToolLocation[] | undefined;
+            const toolContent = toolData.content as import("../types").ToolContent[] | undefined;
 
-              onOutput({
-                type: "tool",
-                content: toolArgs,
-                toolName,
-                toolTitle,
-                toolKind: toolKind as import("../types").ToolKind | undefined,
-                toolStatus: toolStatus as import("../types").ToolStatus,
-                toolCallId,
-                toolLocations,
-                toolContent,
-              });
-              if (historyRef.current) {
-                addMessage(historyRef.current, "tool", toolTitle || toolArgs, toolName);
-                saveHistory(historyRef.current);
-              }
+            onOutput({
+              type: "tool",
+              content: toolArgs,
+              toolName,
+              toolTitle,
+              toolKind: toolKind as import("../types").ToolKind | undefined,
+              toolStatus: toolStatus as import("../types").ToolStatus,
+              toolCallId,
+              toolLocations,
+              toolContent,
+            });
+            if (historyRef.current) {
+              addMessage(historyRef.current, "tool", toolTitle || toolArgs, toolName);
+              saveHistory(historyRef.current);
             }
             break;
+          }
 
           case "tool_result": {
             // Type assertion since we know this is ToolResultData from the switch
@@ -335,8 +376,24 @@ export function useAcpClient({
               richContent?: import("../types").ToolContent[];
             };
             const toolCallId = resultData.toolCallId || resultData.toolId;
+
+            // Deduplicate tool results by toolCallId
+            if (toolCallId && seenToolResultsRef.current.has(toolCallId)) {
+              break;
+            }
+            if (toolCallId) {
+              seenToolResultsRef.current.add(toolCallId);
+            }
+
             const status = resultData.status || (resultData.success ? "completed" : "failed");
             const content = resultData.content ? String(resultData.content).slice(0, 100) : "";
+
+            // Skip showing simple "Done" results - they clutter the tool window
+            // Only show results with meaningful content or errors
+            const isSimpleDone = status === "completed" && (!content || content === "Done" || content.trim() === "");
+            if (isSimpleDone) {
+              break;
+            }
 
             onOutput({
               type: "tool-result",
@@ -392,6 +449,43 @@ export function useAcpClient({
               }
             }
             break;
+
+          case "permission_request":
+            if ("requestId" in data && "options" in data && "toolCall" in data) {
+              const permData = data as {
+                requestId: string;
+                toolCall: {
+                  toolCallId: string;
+                  title?: string;
+                  kind?: string;
+                  status?: string;
+                  locations?: Array<{ path: string; line?: number }>;
+                  content?: unknown[];
+                };
+                options: Array<{
+                  optionId: string;
+                  kind: string;
+                  name: string;
+                }>;
+              };
+              setPermissionRequest({
+                requestId: permData.requestId,
+                toolCall: {
+                  toolCallId: permData.toolCall.toolCallId,
+                  title: permData.toolCall.title,
+                  kind: permData.toolCall.kind as import("../types").ToolKind | undefined,
+                  status: permData.toolCall.status as import("../types").ToolStatus | undefined,
+                  locations: permData.toolCall.locations,
+                  content: permData.toolCall.content as import("../types").ToolContent[] | undefined,
+                },
+                options: permData.options.map(opt => ({
+                  optionId: opt.optionId,
+                  kind: opt.kind as import("../types").PermissionOptionKind,
+                  name: opt.name,
+                })),
+              });
+            }
+            break;
         }
       });
     };
@@ -426,7 +520,8 @@ export function useAcpClient({
       }
 
       if (!sessionLoaded) {
-        seenToolCallsRef.current.clear(); // Clear dedup set for new session
+        seenToolCallsRef.current.clear(); // Clear dedup sets for new session
+        seenToolResultsRef.current.clear();
         const newResult = await client.newSession(sessionConfigRef.current);
         currentSessionId = newResult.sessionId;
       }
@@ -515,5 +610,8 @@ export function useAcpClient({
     isRemoteMode,
     needsToken,
     submitToken,
+    permissionRequest,
+    respondToPermission,
+    cancelPermission,
   };
 }

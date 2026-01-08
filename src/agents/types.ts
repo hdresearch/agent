@@ -503,7 +503,8 @@ export type PromptEvent =
   | PromptThinkingEvent
   | PromptResultEvent
   | PromptErrorEvent
-  | PromptCancelledEvent;
+  | PromptCancelledEvent
+  | PromptPermissionRequestEvent;
 
 export interface PromptInitEvent {
   type: "init";
@@ -573,6 +574,26 @@ export interface PromptCancelledEvent {
   data: Record<string, never>;
 }
 
+export interface PromptPermissionRequestEvent {
+  type: "permission_request";
+  data: {
+    requestId: string;
+    toolCall: {
+      toolCallId: string;
+      title?: string;
+      kind?: AcpToolKind;
+      status?: AcpToolCallStatus;
+      locations?: AcpToolCallLocation[];
+      content?: AcpToolCallContent[];
+    };
+    options: Array<{
+      optionId: string;
+      kind: AcpPermissionOptionKind;
+      name: string;
+    }>;
+  };
+}
+
 // ============================================================
 // Agent Runner Interface
 // ============================================================
@@ -583,6 +604,9 @@ export interface AgentRunner {
   stop(): Promise<void>;
   runPrompt(options: RunPromptOptions): PromptHandle;
   isRunning(): boolean;
+  // Permission handling (optional - for ACP agents with interactive permissions)
+  respondToPermission?(requestId: string, optionId: string): boolean;
+  cancelPermission?(requestId: string): boolean;
 }
 
 // ============================================================
