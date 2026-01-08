@@ -17,13 +17,11 @@ RUN bun run build:bundle
 FROM base AS production
 WORKDIR /app
 
-# Install Node.js (required for Claude Code) and Claude Code CLI
-# Pin to 2.0.77 to avoid the 2.1.0 version parsing bug
-# See: https://github.com/anthropics/claude-code/issues/16673
+# Install Node.js, Claude Code, and the Zed ACP adapter
 RUN apt-get update && apt-get install -y curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g @anthropic-ai/claude-code@2.0.77 \
+    && npm install -g @anthropic-ai/claude-code @zed-industries/claude-code-acp \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user (Claude Code refuses --dangerously-skip-permissions as root)

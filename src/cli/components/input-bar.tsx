@@ -20,6 +20,8 @@ interface InputBarProps {
   suggestionIndex: number;
   onSuggestionIndexChange: (idx: number) => void;
   client?: HttpAcpClient | null;
+  // Remote mode support
+  remoteCwd?: string | null;
   // Command history
   history?: string[];
   historyIndex?: number;
@@ -38,6 +40,7 @@ export function InputBar({
   suggestionIndex,
   onSuggestionIndexChange,
   client,
+  remoteCwd,
   history = [],
   historyIndex = -1,
   onHistoryNavigate,
@@ -72,7 +75,9 @@ export function InputBar({
 
     if (pathInfo) {
       // Load path matches asynchronously (remote if client provided, local otherwise)
-      getMatchingPaths(pathInfo.path, process.cwd(), client).then((matches) => {
+      // Use remoteCwd when in remote mode, otherwise use local cwd
+      const cwd = remoteCwd || process.cwd();
+      getMatchingPaths(pathInfo.path, cwd, client).then((matches) => {
         setPathMatches(matches);
         if (pathSuggestionIndex >= matches.length) {
           setPathSuggestionIndex(0);
@@ -82,7 +87,7 @@ export function InputBar({
       setPathMatches([]);
       setPathSuggestionIndex(0);
     }
-  }, [value, cursorIndex, client]);
+  }, [value, cursorIndex, client, remoteCwd]);
 
   const showPathSuggestions = currentPathInfo !== null && pathMatches.length > 0;
 

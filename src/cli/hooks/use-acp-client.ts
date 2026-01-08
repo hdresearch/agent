@@ -62,17 +62,9 @@ export function useAcpClient({
   const seenToolCallsRef = useRef<Set<string>>(new Set());
   const seenToolResultsRef = useRef<Set<string>>(new Set());
 
-  // Remote mode: only when connecting to a non-localhost server
-  const isRemoteMode = (() => {
-    if (!serverUrl) return false;
-    try {
-      const url = new URL(serverUrl);
-      const host = url.hostname.toLowerCase();
-      return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
-    } catch {
-      return false;
-    }
-  })();
+  // Remote mode: when connecting to any external server (including localhost containers)
+  // If serverUrl is specified, we're connecting to a server and should execute commands there
+  const isRemoteMode = !!serverUrl;
 
   // Callback to submit token when prompted
   const submitToken = useCallback((token: string) => {
@@ -334,14 +326,21 @@ export function useAcpClient({
               seenToolCallsRef.current.add(toolCallId);
             }
 
-            // Get tool name with fallbacks - never show "undefined"
-            // Also filter out literal "undefined" strings that may come from JSON.stringify(undefined)
-            const isValidTitle = (s: string | undefined): s is string =>
-              !!s && s !== "undefined" && s !== '"undefined"' && s.trim() !== "";
+            // Clean up title: strip surrounding quotes and filter invalid values
+            const cleanTitle = (s: string | undefined): string | undefined => {
+              if (!s || s === "undefined" || s.trim() === "") return undefined;
+              // Strip surrounding quotes if present
+              let cleaned = s.trim();
+              if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+                  (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+                cleaned = cleaned.slice(1, -1);
+              }
+              return cleaned || undefined;
+            };
             const rawToolName = toolData.toolName as string | undefined;
             const rawTitle = toolData.title as string | undefined;
-            const validToolName = isValidTitle(rawToolName) ? rawToolName : undefined;
-            const validTitle = isValidTitle(rawTitle) ? rawTitle : undefined;
+            const validToolName = cleanTitle(rawToolName);
+            const validTitle = cleanTitle(rawTitle);
             const toolName = validToolName || validTitle || toolCallId || "Tool";
             const toolArgs = formatToolArgs(toolName, (toolData.input || {}) as Record<string, unknown>);
             // Extract rich ACP tool information
