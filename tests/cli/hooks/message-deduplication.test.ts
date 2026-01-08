@@ -168,8 +168,8 @@ describe("SSE Message Flow", () => {
 
     // Each chunk should produce exactly one output
     expect(outputs.length).toBe(2);
-    expect(outputs[0].content).toBe("Hello ");
-    expect(outputs[1].content).toBe("world!");
+    expect(outputs[0]!.content).toBe("Hello ");
+    expect(outputs[1]!.content).toBe("world!");
   });
 
   test("tool_call notifications should produce single output", () => {
@@ -194,6 +194,6 @@ describe("SSE Message Flow", () => {
     });
 
     expect(outputs.length).toBe(1);
-    expect(outputs[0].toolName).toBe("Read");
+    expect(outputs[0]!.toolName).toBe("Read");
   });
 });

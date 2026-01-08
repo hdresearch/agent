@@ -268,7 +268,7 @@ describe("PromptQueue", () => {
       queue.setSessionId("test-session");
       queue.enqueue("Test");
 
-      expect(events[0].sessionId).toBe("test-session");
+      expect(events[0]!.sessionId).toBe("test-session");
     });
   });
 
@@ -280,8 +280,8 @@ describe("PromptQueue", () => {
       queue.enqueue("Test prompt");
 
       expect(events.length).toBe(1);
-      expect(events[0].operation).toBe("enqueue");
-      expect(events[0].content).toBe("Test prompt");
+      expect(events[0]!.operation).toBe("enqueue");
+      expect(events[0]!.content).toBe("Test prompt");
     });
 
     test("emits dequeue events", () => {
@@ -292,8 +292,8 @@ describe("PromptQueue", () => {
       queue.dequeue();
 
       expect(events.length).toBe(1);
-      expect(events[0].operation).toBe("dequeue");
-      expect(events[0].promptId).toBe(prompt.id);
+      expect(events[0]!.operation).toBe("dequeue");
+      expect(events[0]!.promptId).toBe(prompt.id);
     });
 
     test("emits remove events", () => {
@@ -304,8 +304,8 @@ describe("PromptQueue", () => {
       queue.remove([prompt.id]);
 
       expect(events.length).toBe(1);
-      expect(events[0].operation).toBe("remove");
-      expect(events[0].promptId).toBe(prompt.id);
+      expect(events[0]!.operation).toBe("remove");
+      expect(events[0]!.promptId).toBe(prompt.id);
     });
 
     test("emits flush event on clear", () => {
@@ -316,7 +316,7 @@ describe("PromptQueue", () => {
       queue.clear();
 
       expect(events.length).toBe(1);
-      expect(events[0].operation).toBe("flush");
+      expect(events[0]!.operation).toBe("flush");
     });
 
     test("returns unsubscribe function", () => {
@@ -351,9 +351,9 @@ describe("PromptQueue", () => {
       queue.enqueue("Test");
       const after = new Date().toISOString();
 
-      expect(events[0].timestamp).toBeDefined();
-      expect(events[0].timestamp >= before).toBe(true);
-      expect(events[0].timestamp <= after).toBe(true);
+      expect(events[0]!.timestamp).toBeDefined();
+      expect(events[0]!.timestamp >= before).toBe(true);
+      expect(events[0]!.timestamp <= after).toBe(true);
     });
   });
 
@@ -366,7 +366,7 @@ describe("PromptQueue", () => {
       const serialized = queue.serialize();
       expect(serialized.sessionId).toBe("test-session");
       expect(serialized.prompts.length).toBe(2);
-      expect(serialized.prompts[0].text).toBe("First");
+      expect(serialized.prompts[0]!.text).toBe("First");
     });
 
     test("restores queue state", () => {
@@ -389,7 +389,7 @@ describe("PromptQueue", () => {
       const events: QueueOperation[] = [];
       queue.onEvent((e) => events.push(e));
       queue.enqueue("New");
-      expect(events[0].sessionId).toBe("restored-session");
+      expect(events[0]!.sessionId).toBe("restored-session");
     });
 
     test("round-trip serialization", () => {
