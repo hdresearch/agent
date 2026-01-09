@@ -10,9 +10,11 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 describe("Spinner", () => {
   let cleanup: (() => void) | undefined;
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup?.();
     cleanup = undefined;
+    // Allow time for Ink cleanup (timers, etc.)
+    await new Promise((r) => setTimeout(r, 20));
   });
 
   test("renders spinner with text", () => {
