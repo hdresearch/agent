@@ -1,0 +1,18 @@
+#!/bin/sh
+# Pre-commit hook: Run typecheck before committing
+
+echo "Running typecheck..."
+
+# Run typecheck
+bun run typecheck
+TYPECHECK_EXIT=$?
+
+if [ $TYPECHECK_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ Typecheck failed. Please fix type errors before committing."
+    echo "   Run 'just typecheck' to see errors."
+    exit 1
+fi
+
+echo "✓ Typecheck passed"
+exit 0
