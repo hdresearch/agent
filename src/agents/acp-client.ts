@@ -33,6 +33,7 @@ export class AcpClient {
   private agentId: string;
   private config: AcpAgentConfig;
   private sessionId: string | null = null;
+  private claudeSessionId: string | null = null; // Claude CLI's actual session ID (8-char format)
   private capabilities: AcpAgentCapabilities = {};
 
   constructor(
@@ -57,6 +58,31 @@ export class AcpClient {
    */
   getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  /**
+   * Update the session ID (e.g., from session/update notifications)
+   * This is needed because some agents send the real session ID in notifications
+   * rather than in the session/new response.
+   */
+  setSessionId(sessionId: string): void {
+    this.sessionId = sessionId;
+  }
+
+  /**
+   * Get Claude CLI's actual session ID (8-char format)
+   * This is the ID that Claude Code uses internally and needs for resume
+   */
+  getClaudeSessionId(): string | null {
+    return this.claudeSessionId;
+  }
+
+  /**
+   * Set Claude CLI's actual session ID (from session/update notifications)
+   * This should be called when we receive the first sessionId from notifications
+   */
+  setClaudeSessionId(sessionId: string): void {
+    this.claudeSessionId = sessionId;
   }
 
   /**
@@ -108,15 +134,36 @@ export class AcpClient {
   /**
    * Create a new session
    * https://agentclientprotocol.com/protocol/session-setup
+   * @param cwd - Working directory for the session
+   * @param mcpServers - Optional MCP servers to connect
+   * @param resumeSessionId - Optional session ID to resume (for Claude Code)
    */
   async sessionNew(
     cwd: string,
-    mcpServers?: AcpMcpServer[]
+    mcpServers?: AcpMcpServer[],
+    resumeSessionId?: string
   ): Promise<AcpSessionNewResult> {
-    const params: AcpSessionNewParams = {
+    const params: AcpSessionNewParams & { _meta?: unknown } = {
       cwd,
       mcpServers: mcpServers ?? [],
     };
+
+    // Pass resume session ID to Claude Code via _meta
+    // - `resume`: Tells claude-code-acp to use this session ID (and not set --session-id)
+    // - `extraArgs.resume`: Passes --resume <sessionId> to Claude CLI for actual resume
+    // Both are needed: `resume` sets the ACP session ID, `extraArgs.resume` tells Claude CLI to resume
+    if (resumeSessionId) {
+      params._meta = {
+        claudeCode: {
+          options: {
+            resume: resumeSessionId,
+            extraArgs: {
+              resume: resumeSessionId,
+            },
+          },
+        },
+      };
+    }
 
     const result = await this.subprocess.request<AcpSessionNewResult>(
       this.agentId,
@@ -124,8 +171,11 @@ export class AcpClient {
       params
     );
 
-    // Store session ID
-    this.sessionId = result.sessionId;
+    // Store session ID - but don't overwrite if already set from notification
+    // (notification may arrive before response and have the authoritative session ID)
+    if (!this.sessionId && result.sessionId) {
+      this.sessionId = result.sessionId;
+    }
 
     return result;
   }

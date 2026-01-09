@@ -113,3 +113,17 @@ Use the npm scripts defined in package.json:
 - `bun run build:bundle` - Bundle to `dist/index.js`
 - `bun run start` - Run from source
 - `bun run dev` - Run with hot reload
+
+## Logging
+
+vers-agent uses a rotating file logger that writes to `~/.vers-agent/logs/vers-agent.log`.
+
+- **Log files**: Rotates at 5MB with up to 5 backup files
+- **Debug output**: Set `VERS_DEBUG=true` or `VERS_DEBUG=1` to print debug messages to the console
+- Debug logs are always written to the log file, regardless of `VERS_DEBUG` setting
+- Use `logStream.debug()` for debug messages instead of `console.log()`
+
+Example:
+```bash
+VERS_DEBUG=true ./vers-agent --local
+```

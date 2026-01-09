@@ -116,3 +116,4 @@ export {
   SubprocessAgentRunner,
   createAgentRunner,
 } from "./agent-runner";
+export type { AgentRunnerOptions } from "./agent-runner";

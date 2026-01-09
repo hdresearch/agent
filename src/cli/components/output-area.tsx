@@ -316,11 +316,11 @@ export function OutputArea({ lines, maxLines = 20, scrollOffset = 0, maxToolsVis
           <Box key={line.id} flexDirection="column" marginTop={1}>
             <Box flexDirection="row">
               <Text color="magenta" bold>⏺ </Text>
-              <Text>{truncateLine(textLines[0] || "", 90)}</Text>
+              <Text wrap="wrap">{textLines[0] || ""}</Text>
             </Box>
             {textLines.slice(1).map((textLine, idx) => (
               <Box key={idx}>
-                <Text>{"  "}{truncateLine(textLine, 90)}</Text>
+                <Text wrap="wrap">{"   "}{textLine}</Text>
               </Box>
             ))}
           </Box>

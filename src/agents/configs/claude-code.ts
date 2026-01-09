@@ -13,4 +13,17 @@ export const CLAUDE_CODE_CONFIG: AcpAgentConfig = {
   },
   defaultModel: "claude-sonnet-4-20250514",
   authMethods: ["api_key"],
+  // Filter out known Claude Code internal errors
+  // See: https://github.com/hdresearch/agent/issues/7
+  stderrFilter: (text: string) => {
+    // TodoWrite hook errors - benign internal Claude Code issue
+    if (text.includes("No onPostToolUseHook found")) {
+      return true; // Suppress
+    }
+    // Suppress spawn command output - not useful to users
+    if (text.includes("Spawning Claude Code:")) {
+      return true; // Suppress
+    }
+    return false;
+  },
 };

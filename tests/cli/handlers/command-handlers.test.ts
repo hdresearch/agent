@@ -94,41 +94,6 @@ describe("handleSlashCommand", () => {
     });
   });
 
-  describe("/thinking", () => {
-    test("shows current state when no arg", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking", ctx);
-
-      expect(result.handled).toBe(true);
-      // Should enable with default budget
-      expect(ctx.outputs.some(o => o.content.includes("Thinking mode: ON"))).toBe(true);
-    });
-
-    test("turns thinking off", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking off", ctx);
-
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.content.includes("Thinking mode: OFF"))).toBe(true);
-    });
-
-    test("turns thinking on with custom budget", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking on 5000", ctx);
-
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.content.includes("5,000 tokens"))).toBe(true);
-    });
-
-    test("rejects budget below 1024", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking on 500", ctx);
-
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.type === "error")).toBe(true);
-    });
-  });
-
   describe("/clear", () => {
     test("clears output", () => {
       const ctx = createMockContext();
@@ -162,12 +127,14 @@ describe("handleSlashCommand", () => {
   });
 
   describe("unknown command", () => {
-    test("shows error for unknown command", () => {
+    test("passes unknown command through to agent", () => {
       const ctx = createMockContext();
       const result = handleSlashCommand("/unknown", ctx);
 
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+      // Unknown commands pass through to agent - it may handle them
+      // (e.g., /usage, /review, /compact are agent commands in Claude Code)
+      expect(result.handled).toBe(false);
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
     });
   });
 
@@ -232,20 +199,24 @@ describe("handleSlashCommand", () => {
       { name: "cost", description: "Show cost" },
     ];
 
-    test("unknown command shows error when no agent commands", () => {
+    test("unknown command passes through to agent when no agent commands", () => {
       const ctx = createMockContext();
       const result = handleSlashCommand("/unknown", ctx);
 
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+      // Unknown commands pass through to agent - it may handle them
+      expect(result.handled).toBe(false);
+      // No error message should be shown locally
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
     });
 
-    test("unknown command shows error when not in agent commands", () => {
+    test("unknown command passes through to agent when not in agent commands", () => {
       const ctx = createMockContext({ agentCommands });
       const result = handleSlashCommand("/unknown", ctx);
 
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.type === "error" && o.content.includes("Unknown command"))).toBe(true);
+      // Unknown commands pass through to agent - it may handle them
+      expect(result.handled).toBe(false);
+      // No error message should be shown locally
+      expect(ctx.outputs.filter(o => o.type === "error").length).toBe(0);
     });
 
     test("agent command returns handled: false to pass through", () => {
@@ -337,28 +308,6 @@ describe("handleSlashCommand", () => {
       expect(result.handled).toBe(false);
       // setStatusInfo should not be called for model display
       expect(ctx.setStatusInfo).not.toHaveBeenCalled();
-    });
-
-    test("/thinking off syncs to status bar", () => {
-      const agentCommandsWithThinking = [
-        { name: "thinking", description: "Toggle thinking" },
-      ];
-      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
-      const result = handleSlashCommand("/thinking off", ctx);
-
-      expect(result.handled).toBe(false);
-      expect(ctx.setStatusInfo).toHaveBeenCalled();
-    });
-
-    test("/thinking on 5000 syncs budget to status bar", () => {
-      const agentCommandsWithThinking = [
-        { name: "thinking", description: "Toggle thinking" },
-      ];
-      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
-      const result = handleSlashCommand("/thinking on 5000", ctx);
-
-      expect(result.handled).toBe(false);
-      expect(ctx.setStatusInfo).toHaveBeenCalled();
     });
   });
 });

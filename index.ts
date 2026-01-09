@@ -2,6 +2,8 @@ import { runCli } from "./src/cli/cli.js";
 import { createHttpServer } from "./src/server/http-server";
 import { loadConfig, loadMcpServers, getConfig, setConfig } from "./src/utils/config";
 import { loadDocsStore } from "./src/utils/docs-store";
+import { authStore } from "./src/utils/auth-store";
+import { initializeAgent } from "./src/core/agent-manager";
 
 // CRITICAL: Emergency exit handler - must be first!
 // Track rapid SIGINT presses for force exit (works even when Ink blocks SIGINT)
@@ -114,7 +116,8 @@ const args = process.argv.slice(2);
 const showHelp = args.includes("--help") || args.includes("-h");
 const cliOnly = args.includes("--cli");
 const serverOnly = args.includes("--server");
-const continueSession = args.includes("--continue") || args.includes("-c");
+const forceNewSession = args.includes("--new") || args.includes("-n");
+const continueSession = !forceNewSession; // Continue is now the default
 const forceLocal = args.includes("--local");
 
 // Parse --url option
@@ -132,8 +135,8 @@ Options:
   --server          Run ACP server only (HTTP, no CLI)
   --url <url>       Connect CLI to remote server (e.g., --url http://192.168.1.100:9999)
   --local           Force local mode (clears saved remote server)
-  --continue, -c    Continue the last conversation
-  (default)         Run both HTTP server and CLI simultaneously (or reconnect to last remote server)
+  --new, -n         Start a fresh session (default: continue last session)
+  (default)         Run both HTTP server and CLI, continuing the last session if one exists
 
 Environment:
   PORT              HTTP server port (default: 9999)
@@ -146,10 +149,10 @@ Protocol:
   - GET /events     SSE stream for notifications
 
 Examples:
-  vers-agent                        # Both server and CLI
+  vers-agent                        # Continue last session (or start new if none)
+  vers-agent --new                  # Force a fresh session
   vers-agent --server               # HTTP ACP server only
   vers-agent --cli                  # Interactive terminal only
-  vers-agent --cli -c               # CLI, continue last conversation
   vers-agent --url http://vm:9999   # Connect to remote ACP server
 `);
   process.exit(0);
@@ -225,8 +228,13 @@ Example:
       // CLI only (connects to local HTTP server)
       await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
     } else if (serverOnly) {
-      // HTTP server only (daemon mode)
+      // HTTP server only (daemon mode) - reset claim for local access
+      authStore.resetClaim();
       const server = createHttpServer(PORT);
+
+      // Initialize agent eagerly so commands are available immediately
+      await initializeAgent();
+
       console.log("ACP server running. Press Ctrl+C to stop.");
 
       // Handle shutdown
@@ -243,8 +251,13 @@ Example:
       await new Promise(() => {});
     } else {
       // Both: start HTTP server, then CLI
+      // Reset claim for local mode - local client should have automatic access
+      authStore.resetClaim();
       const server = createHttpServer(PORT);
       const actualPort = server.port;
+
+      // Initialize agent eagerly so commands are available immediately
+      await initializeAgent();
 
       // Handle shutdown
       process.on("SIGINT", () => {

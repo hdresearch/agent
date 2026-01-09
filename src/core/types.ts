@@ -43,6 +43,7 @@ export interface TaskResult {
 
 export type TaskEventType =
   | "started"
+  | "text_delta"
   | "assistant_message"
   | "system_message"
   | "tool_use"
@@ -51,7 +52,9 @@ export type TaskEventType =
   | "completed"
   | "failed"
   | "cancelled"
-  | "permission_request";
+  | "permission_request"
+  | "available_commands"
+  | "agent_output";
 
 export interface TaskEvent {
   id: string;
