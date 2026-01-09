@@ -89,6 +89,7 @@ export function createMockOutputLine(
 }
 
 // Helper to wait for async effects
-export function waitForEffects(ms = 10): Promise<void> {
+// CI environments can be slower, so use a longer default
+export function waitForEffects(ms = 50): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
