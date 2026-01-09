@@ -30,8 +30,9 @@ typecheck:
     bun run typecheck
 
 # Run all local tests (no Docker needed)
+# Note: Excludes server-output-storage.test.ts and remote-submission.test.ts which need a running server
 test:
-    bun test tests/agents tests/cli tests/client tests/core tests/integration tests/protocol tests/server tests/utils tests/*.test.ts
+    bun test tests/agents tests/cli/components tests/cli/handlers tests/cli/hooks tests/cli/utils tests/cli/input-handler.test.ts tests/client tests/core tests/integration tests/protocol tests/server tests/utils tests/session-sync.test.ts
 
 # Run complete test suite (local + Docker)
 test-all: test docker-test
