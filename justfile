@@ -29,13 +29,21 @@ start:
 typecheck:
     bun run typecheck
 
-# Run all tests (integration tests skip if no server)
+# Run all local tests (no Docker needed)
+# Note: Excludes server-output-storage.test.ts and remote-submission.test.ts which need a running server
 test:
-    bun test
+    bun test tests/agents tests/cli/components tests/cli/handlers tests/cli/hooks tests/cli/utils tests/cli/input-handler.test.ts tests/client tests/core tests/integration tests/protocol tests/server tests/utils tests/session-sync.test.ts
+
+# Run complete test suite (local + Docker)
+test-all: test docker-test
 
 # Run only unit tests (no server needed)
 test-unit:
     bun test tests/cli/utils tests/cli/handlers tests/core tests/utils tests/session-sync.test.ts
+
+# Run Ink component tests (fast, no server needed)
+test-components:
+    bun test tests/cli/components/
 
 # Run integration tests (requires: just server in another terminal)
 test-integration:
@@ -85,6 +93,61 @@ docker-up:
 
 docker-down:
     docker compose down
+
+# ── Docker Testing ────────────────────────────────────────────────────────────
+# Start test container, run docker tests, and clean up
+docker-test:
+    #!/usr/bin/env bash
+    set -e
+    # Clear any cached test token from previous runs
+    rm -f /tmp/.vers-agent-test-token
+    # Ensure fresh container state
+    docker compose -f docker-compose.test.yml down -v 2>/dev/null || true
+    echo "🐳 Building and starting test container..."
+    docker compose -f docker-compose.test.yml up -d --build
+    echo "⏳ Waiting for server to be healthy..."
+    for i in {1..30}; do
+        if docker compose -f docker-compose.test.yml ps | grep -q healthy; then
+            echo "✅ Server is healthy"
+            break
+        fi
+        sleep 2
+        if [ $i -eq 30 ]; then
+            echo "❌ Server failed to become healthy"
+            docker compose -f docker-compose.test.yml logs
+            exit 1
+        fi
+    done
+    echo "📦 Building CLI for testing..."
+    bun run build || (docker compose -f docker-compose.test.yml down -v && exit 1)
+    echo "🧪 Running Docker server tests..."
+    # Run server tests first - they claim the server and save the token
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/server-remote.test.ts tests/docker/server-persistence.test.ts || (docker compose -f docker-compose.test.yml down -v && exit 1)
+    echo "🧪 Running VT integration tests..."
+    # VT tests work reliably as they just parse output
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/vt-integration.test.ts || (docker compose -f docker-compose.test.yml down -v && exit 1)
+    echo "🧹 Cleaning up..."
+    docker compose -f docker-compose.test.yml down -v
+    rm -f /tmp/.vers-agent-test-token
+    echo "✓ Docker tests complete!"
+
+# Start test container (for manual testing)
+docker-test-up:
+    docker compose -f docker-compose.test.yml up -d --build
+    @echo "Test server starting on http://localhost:19999"
+    @echo "Wait for healthy: docker compose -f docker-compose.test.yml ps"
+
+# Stop and remove test container
+docker-test-down:
+    docker compose -f docker-compose.test.yml down -v
+
+# View test container logs
+docker-test-logs:
+    docker compose -f docker-compose.test.yml logs -f
+
+# Run docker tests (assumes container already running)
+docker-test-run:
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/
 
 # ── API (port default 9999) ───────────────────────────────────────────────────
 health port="9999":

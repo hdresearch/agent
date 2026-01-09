@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import {
   JSONRPC_VERSION,
   ErrorCode,
@@ -375,6 +375,11 @@ describe("RequestTracker", () => {
     tracker = new RequestTracker(1000); // 1 second timeout for tests
   });
 
+  afterEach(() => {
+    // Cancel all pending requests to prevent timeout errors after test completes
+    tracker.cancelAll();
+  });
+
   describe("generateId", () => {
     test("generates sequential ids", () => {
       expect(tracker.generateId()).toBe(1);
@@ -417,6 +422,8 @@ describe("RequestTracker", () => {
       tracker.track(1);
       const resolved = tracker.resolve(createResponse(999, "test"));
       expect(resolved).toBe(false);
+      // Resolve the tracked request to prevent unhandled rejection
+      tracker.resolve(createResponse(1, null));
     });
 
     test("returns false for null id", () => {
@@ -425,6 +432,8 @@ describe("RequestTracker", () => {
         createErrorResponse(null, ErrorCode.ParseError, "Parse error")
       );
       expect(resolved).toBe(false);
+      // Resolve the tracked request to prevent unhandled rejection
+      tracker.resolve(createResponse(1, null));
     });
 
     test("handles string ids", async () => {
@@ -520,6 +529,10 @@ describe("RequestTracker", () => {
 
       tracker.track(2);
       expect(tracker.pendingCount).toBe(2);
+
+      // Clean up to prevent unhandled rejections
+      tracker.resolve(createResponse(1, null));
+      tracker.resolve(createResponse(2, null));
     });
 
     test("decrements when resolved", () => {
@@ -529,6 +542,9 @@ describe("RequestTracker", () => {
 
       tracker.resolve(createResponse(1, "test"));
       expect(tracker.pendingCount).toBe(1);
+
+      // Clean up to prevent unhandled rejections
+      tracker.resolve(createResponse(2, null));
     });
   });
 });
