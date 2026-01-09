@@ -96,21 +96,20 @@ describe("Config Persistence", () => {
   });
 
   describe("other config fields preserved", () => {
-    test("setting lastServerUrl preserves model and thinkingBudget", async () => {
+    test("setting lastServerUrl preserves model", async () => {
       const { setConfig, loadConfig, getConfig } = await import("../../src/utils/config");
 
       await loadConfig();
 
       // Set model first
-      await setConfig({ model: "haiku", thinkingBudget: 5000 });
+      await setConfig({ model: "haiku" });
 
       // Now set lastServerUrl
       await setConfig({ lastServerUrl: "http://server:9999" });
 
-      // Verify all fields
+      // Verify all fields are preserved
       const config = getConfig();
       expect(config.model).toBe("haiku");
-      expect(config.thinkingBudget).toBe(5000);
       expect(config.lastServerUrl).toBe("http://server:9999");
     });
   });
