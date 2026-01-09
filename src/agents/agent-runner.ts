@@ -18,12 +18,14 @@ import type {
   AcpRequestPermissionParams,
   AcpRequestPermissionResult,
 } from "./types";
+import type { AvailableCommandData } from "../protocol/acp-types";
 import { getAgent, getRunCommand, getAgentEnv, ensureAgentInstalled } from "./registry";
 import { SubprocessManager, getSubprocessManager } from "./subprocess-manager";
 import { AcpClient, createContentBlocks } from "./acp-client";
 import { AcpServer } from "./acp-server";
 import { getAgentConfig } from "./configs";
 import { logStream } from "../utils/log-stream";
+import { cleanTitle } from "../utils/string-utils";
 // Note: Claude Agent SDK has been removed. All agents use ACP subprocess mode.
 
 // ============================================================
@@ -55,8 +57,8 @@ export class SubprocessAgentRunner implements AgentRunner {
   private currentAbortController: AbortController | null = null;
   private pendingPermissions: Map<string, PendingPermissionRequest> = new Map();
   private permissionRequestCounter = 0;
-  private availableCommands: Array<{ name: string; description: string; input?: { hint: string } }> = [];
-  private commandsCallback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null = null;
+  private availableCommands: AvailableCommandData[] = [];
+  private commandsCallback: ((commands: AvailableCommandData[]) => void) | null = null;
   private stderrCallback: ((text: string) => void) | null = null;
   private sessionIdCallback: ((sessionId: string) => void) | null = null;
   private options: AgentRunnerOptions;
@@ -129,17 +131,6 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       // Emit permission request event
       if (this.currentEventTarget) {
-        // Clean up title: strip surrounding quotes and filter invalid values
-        const cleanTitle = (s: string | undefined): string | undefined => {
-          if (!s || s === "undefined" || s.trim() === "") return undefined;
-          // Strip surrounding quotes if present
-          let cleaned = s.trim();
-          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-            cleaned = cleaned.slice(1, -1);
-          }
-          return cleaned || undefined;
-        };
         // Use title with fallback to toolCallId or "Tool" - never show "undefined"
         const permissionTitle = cleanTitle(params.toolCall.title) || params.toolCall.toolCallId || "Tool";
         const event: PromptEvent = {
@@ -303,14 +294,14 @@ export class SubprocessAgentRunner implements AgentRunner {
   /**
    * Get the available commands from the agent
    */
-  getAvailableCommands(): Array<{ name: string; description: string; input?: { hint: string } }> {
+  getAvailableCommands(): AvailableCommandData[] {
     return this.availableCommands;
   }
 
   /**
    * Set a callback to be notified when commands are updated
    */
-  onCommandsUpdated(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void {
+  onCommandsUpdated(callback: ((commands: AvailableCommandData[]) => void) | null): void {
     this.commandsCallback = callback;
   }
 
@@ -528,17 +519,6 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       case "tool_call": {
         const toolCall = update as AcpToolCall;
-        // Clean up title: strip surrounding quotes and filter invalid values
-        const cleanTitle = (s: string | undefined): string | undefined => {
-          if (!s || s === "undefined" || s.trim() === "") return undefined;
-          // Strip surrounding quotes if present
-          let cleaned = s.trim();
-          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-            cleaned = cleaned.slice(1, -1);
-          }
-          return cleaned || undefined;
-        };
         // Use cleaned title if valid, fallback to toolCallId or "Tool"
         const displayTitle = cleanTitle(toolCall.title) || toolCall.toolCallId || "Tool";
         return {

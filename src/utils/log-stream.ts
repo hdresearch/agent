@@ -248,6 +248,19 @@ class LogStream {
 // Singleton log stream
 export const logStream = new LogStream();
 
+/**
+ * Create a prefixed logger for a specific module
+ * Reduces boilerplate by wrapping logStream methods with a prefix
+ */
+export function createLogger(prefix: string) {
+  return {
+    debug: (message: string, data?: unknown) => logStream.debug(`[${prefix}] ${message}`, data),
+    info: (message: string, data?: unknown) => logStream.info(`[${prefix}] ${message}`, data),
+    warn: (message: string, data?: unknown) => logStream.warn(`[${prefix}] ${message}`, data),
+    error: (message: string, data?: unknown) => logStream.error(`[${prefix}] ${message}`, data),
+  };
+}
+
 // Helper to check if level should be included
 export function shouldIncludeLevel(entryLevel: LogLevel, minLevel: LogLevel): boolean {
   const levels: LogLevel[] = ["debug", "info", "warn", "error"];

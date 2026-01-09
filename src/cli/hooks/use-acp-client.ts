@@ -14,6 +14,7 @@ import {
 } from "../../utils/history";
 import { getConfig, setConfig } from "../../utils/config";
 import { logStream } from "../../utils/log-stream";
+import { cleanTitle } from "../../utils/string-utils";
 
 export interface UseAcpClientOptions {
   serverUrl?: string;
@@ -341,17 +342,6 @@ export function useAcpClient({
               seenToolCallsRef.current.add(toolCallId);
             }
 
-            // Clean up title: strip surrounding quotes and filter invalid values
-            const cleanTitle = (s: string | undefined): string | undefined => {
-              if (!s || s === "undefined" || s.trim() === "") return undefined;
-              // Strip surrounding quotes if present
-              let cleaned = s.trim();
-              if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-                  (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-                cleaned = cleaned.slice(1, -1);
-              }
-              return cleaned || undefined;
-            };
             const rawToolName = toolData.toolName as string | undefined;
             const rawTitle = toolData.title as string | undefined;
             const validToolName = cleanTitle(rawToolName);

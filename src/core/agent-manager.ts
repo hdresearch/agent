@@ -4,6 +4,7 @@
 import { createAgentRunner, type SubprocessAgentRunner, type AgentRunnerOptions } from "../agents/agent-runner";
 import { initializeRegistry } from "../agents/registry";
 import type { AgentRunner, PromptEvent, RunPromptOptions } from "../agents/types";
+import type { AvailableCommandData } from "../protocol/acp-types";
 import { getConfig } from "../utils/config";
 import { taskStore } from "./tasks";
 import { logStream } from "../utils/log-stream";
@@ -29,7 +30,7 @@ let currentAgentId: string = "claude.com"; // Default to Claude Code ACP
 const runningPrompts: Map<string, { cancel: () => Promise<void> }> = new Map();
 
 // Callback for when agent commands are updated
-let commandsCallback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null = null;
+let commandsCallback: ((commands: AvailableCommandData[]) => void) | null = null;
 
 // Callback for agent stderr output
 let stderrCallback: ((text: string) => void) | null = null;
@@ -379,7 +380,7 @@ async function processPromptEvent(
 
     case "available_commands": {
       const data = event.data as {
-        commands: Array<{ name: string; description: string; input?: { hint: string } }>;
+        commands: AvailableCommandData[];
       };
       taskStore.addEvent(taskId, "available_commands", {
         commands: data.commands,
@@ -478,7 +479,7 @@ export function cancelPermission(requestId: string): boolean {
 /**
  * Get available commands from the current agent
  */
-export function getAgentCommands(): Array<{ name: string; description: string; input?: { hint: string } }> {
+export function getAgentCommands(): AvailableCommandData[] {
   if (currentRunner?.getAvailableCommands) {
     return currentRunner.getAvailableCommands();
   }
@@ -488,7 +489,7 @@ export function getAgentCommands(): Array<{ name: string; description: string; i
 /**
  * Set a callback to be notified when agent commands are updated
  */
-export function onAgentCommandsUpdated(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void {
+export function onAgentCommandsUpdated(callback: ((commands: AvailableCommandData[]) => void) | null): void {
   // Store the callback for future runners
   commandsCallback = callback;
 
