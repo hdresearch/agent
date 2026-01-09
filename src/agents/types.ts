@@ -2,6 +2,7 @@
 // Based on Toad's agent architecture
 
 import type { JsonRpcRequest, JsonRpcResponse, JsonRpcNotification } from "../protocol/jsonrpc";
+import type { AvailableCommandData } from "../protocol/acp-types";
 
 // ============================================================
 // OS and Platform Types
@@ -621,8 +622,8 @@ export interface AgentRunner {
   respondToPermission?(requestId: string, optionId: string): boolean;
   cancelPermission?(requestId: string): boolean;
   // Command handling (optional - for agents that expose slash commands)
-  getAvailableCommands?(): Array<{ name: string; description: string; input?: { hint: string } }>;
-  onCommandsUpdated?(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void;
+  getAvailableCommands?(): AvailableCommandData[];
+  onCommandsUpdated?(callback: ((commands: AvailableCommandData[]) => void) | null): void;
   // Stderr output handling (optional - for capturing agent command output)
   onStderr?(callback: ((text: string) => void) | null): void;
   // Session ID update handling (optional - for agents that send session ID in notifications)

@@ -83,6 +83,7 @@ import { expandPrompt, hasPathReferences } from "../utils/path-expansion";
 import { metrics, MetricNames } from "../utils/metrics";
 import { logStream, shouldIncludeLevel, type LogLevel } from "../utils/log-stream";
 import { authStore } from "../utils/auth-store";
+import { cleanTitle } from "../utils/string-utils";
 import { randomUUID } from "crypto";
 
 const AGENT_INFO = {
@@ -353,17 +354,6 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       };
 
     case "tool_use": {
-      // Clean up title: strip surrounding quotes and filter invalid values
-      const cleanTitle = (s: unknown): string | undefined => {
-        if (typeof s !== "string" || !s || s === "undefined" || s.trim() === "") return undefined;
-        // Strip surrounding quotes if present
-        let cleaned = s.trim();
-        if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-            (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-          cleaned = cleaned.slice(1, -1);
-        }
-        return cleaned || undefined;
-      };
       // Use title, toolName, or toolCallId as fallback - never show "undefined"
       const toolDisplayName = cleanTitle(d.title) || cleanTitle(d.toolName) || cleanTitle(d.toolCallId) || "Tool";
       // Track tool call metrics
