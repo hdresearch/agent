@@ -19,6 +19,7 @@ export const COMMANDS = [
   { name: "token", alias: null, description: "Show connection token for this server" },
   { name: "connect", alias: null, description: "Connect to server (or: /connect <url>)" },
   { name: "local", alias: null, description: "Clear saved remote server for next launch" },
+  { name: "fleet", alias: "f", description: "Manage fleet VMs (list/connect/health)" },
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];

@@ -2,3 +2,4 @@
 
 export { useAcpClient, type UseAcpClientOptions, type UseAcpClientResult } from "./use-acp-client";
 export { useImageAttachments, type UseImageAttachmentsResult } from "./use-image-attachments";
+export { useFleetStatus, type FleetStatusInfo } from "./use-fleet-status";

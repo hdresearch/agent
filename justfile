@@ -26,7 +26,7 @@ typecheck:
     bun run typecheck
 
 test:
-    bun test tests/agents tests/cli tests/client tests/core tests/integration tests/protocol tests/server tests/utils tests/session-sync.test.ts
+    bun test tests/agents tests/cli tests/client tests/core tests/fleet tests/integration tests/protocol tests/server tests/utils tests/session-sync.test.ts
 
 check: typecheck test
 

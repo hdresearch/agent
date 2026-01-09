@@ -9,6 +9,7 @@ import { detectKeys, formatKeysDisplay } from "../../utils/keys";
 import { createHistory, saveHistory, type ConversationHistory } from "../../utils/history";
 import { isAgentCommand } from "../utils/command-matching";
 import { getSessionUsage, formatTokens as formatTokensUsage } from "../../utils/claude-usage";
+import { fleetManager } from "../../fleet";
 
 export interface CommandHandlerContext {
   client: HttpAcpClient | null;
@@ -133,6 +134,11 @@ export function handleSlashCommand(
 
     case "local":
       handleLocal(ctx);
+      return { handled: true };
+
+    case "fleet":
+    case "f":
+      handleFleet(parts, ctx);
       return { handled: true };
 
     default:
@@ -908,4 +914,112 @@ function handleAgent(parts: string[], ctx: CommandHandlerContext): void {
   ctx.addOutput({ type: "system", content: "  list              - Show available agents" });
   ctx.addOutput({ type: "system", content: "  select <id>       - Switch to a different agent" });
   ctx.addOutput({ type: "system", content: "  status            - Show current agent status" });
+}
+
+async function handleFleet(parts: string[], ctx: CommandHandlerContext): Promise<void> {
+  const subCmd = parts[1]?.toLowerCase();
+
+  // Helper to format VM status with color indicator
+  const formatVmStatus = (vm: { id: string; domain: string; port: number; status: string; health?: { responseTime?: number; error?: string } }) => {
+    const statusIcon = vm.status === "online" ? "●" :
+                       vm.status === "offline" ? "○" :
+                       vm.status === "starting" ? "◐" :
+                       vm.status === "stopping" ? "◑" : "✗";
+    const statusColor = vm.status === "online" ? "green" :
+                        vm.status === "offline" ? "gray" :
+                        vm.status === "error" ? "red" : "yellow";
+    const latency = vm.health?.responseTime ? ` (${vm.health.responseTime}ms)` : "";
+    const error = vm.health?.error ? ` - ${vm.health.error}` : "";
+    return `  ${statusIcon} ${vm.id}: ${vm.domain}:${vm.port} [${vm.status}]${latency}${error}`;
+  };
+
+  if (!subCmd || subCmd === "list" || subCmd === "status") {
+    // Discover and show fleet status
+    await fleetManager.discoverFleet();
+    await fleetManager.checkAllHealth();
+    
+    const vms = fleetManager.getVms();
+    const counts = fleetManager.getCounts();
+
+    if (vms.length === 0) {
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "No fleet VMs detected." });
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Start a fleet with:" });
+      ctx.addOutput({ type: "system", content: "  docker compose -f docker-compose.fleet.yml up -d" });
+      ctx.addOutput({ type: "system", content: "" });
+      return;
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: `⚡ Fleet Status: ${counts.online}/${counts.total} online` });
+    ctx.addOutput({ type: "system", content: "" });
+    
+    for (const vm of vms) {
+      ctx.addOutput({ type: "system", content: formatVmStatus(vm) });
+    }
+    
+    ctx.addOutput({ type: "system", content: "" });
+    return;
+  }
+
+  if (subCmd === "refresh" || subCmd === "r") {
+    ctx.addOutput({ type: "system", content: "Refreshing fleet status..." });
+    await fleetManager.discoverFleet();
+    await fleetManager.checkAllHealth();
+    
+    const counts = fleetManager.getCounts();
+    ctx.addOutput({ type: "system", content: `✓ Fleet: ${counts.online}/${counts.total} VMs online` });
+    return;
+  }
+
+  if (subCmd === "connect" || subCmd === "c") {
+    const vmId = parts[2];
+    if (!vmId) {
+      ctx.addOutput({ type: "error", content: "Usage: /fleet connect <vm-id>" });
+      ctx.addOutput({ type: "system", content: "Use /fleet list to see available VMs." });
+      return;
+    }
+
+    const vm = fleetManager.getVm(vmId);
+    if (!vm) {
+      ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+      return;
+    }
+
+    const url = fleetManager.getVmUrl(vm);
+    ctx.addOutput({ type: "system", content: `Connecting to ${vmId} at ${url}...` });
+    ctx.reconnect(url);
+    return;
+  }
+
+  if (subCmd === "health" || subCmd === "h") {
+    const vmId = parts[2];
+    if (vmId) {
+      const vm = await fleetManager.checkVmHealth(vmId);
+      if (!vm) {
+        ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+        return;
+      }
+      ctx.addOutput({ type: "system", content: formatVmStatus(vm) });
+    } else {
+      ctx.addOutput({ type: "system", content: "Checking all VMs..." });
+      await fleetManager.checkAllHealth();
+      const vms = fleetManager.getVms();
+      for (const vm of vms) {
+        ctx.addOutput({ type: "system", content: formatVmStatus(vm) });
+      }
+    }
+    return;
+  }
+
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "Usage: /fleet <command>" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "Commands:" });
+  ctx.addOutput({ type: "system", content: "  list, status     - Show fleet status (default)" });
+  ctx.addOutput({ type: "system", content: "  refresh, r       - Refresh VM discovery and health" });
+  ctx.addOutput({ type: "system", content: "  connect, c <id>  - Connect to a specific VM" });
+  ctx.addOutput({ type: "system", content: "  health, h [id]   - Check health of VMs" });
+  ctx.addOutput({ type: "system", content: "" });
 }

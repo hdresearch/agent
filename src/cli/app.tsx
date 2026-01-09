@@ -14,6 +14,7 @@ import { PopupWindow } from "./components/popup-window";
 // Hooks
 import { useAcpClient } from "./hooks/use-acp-client";
 import { useImageAttachments } from "./hooks/use-image-attachments";
+import { useFleetStatus } from "./hooks/use-fleet-status";
 
 // Handlers
 import { handleSlashCommand, type CommandHandlerContext } from "./handlers/command-handlers";
@@ -93,6 +94,12 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     clearAttachments,
     clearProcessedPaths,
   } = useImageAttachments();
+
+  // Fleet status hook - auto-discovers VMs from Docker
+  const { counts: fleetCounts, refreshStatus: refreshFleet } = useFleetStatus({
+    autoDiscover: true,
+    enableMonitoring: false, // Only check on-demand, not continuously
+  });
 
   // Wrapper around setInput that processes images
   const setInput = useCallback((newValue: string) => {
@@ -426,6 +433,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         sessionId={statusInfo.sessionId}
         serverUrl={serverUrl}
         agentName={agentName}
+        fleetCounts={fleetCounts.total > 0 ? fleetCounts : null}
       />
       <OutputArea lines={output} maxLines={outputMaxLines} scrollOffset={scrollOffset} />
       <StatusBar state={state} />

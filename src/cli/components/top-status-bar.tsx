@@ -1,6 +1,13 @@
 import React from "react";
 import { Box, Text } from "ink";
 
+interface FleetCounts {
+  total: number;
+  online: number;
+  offline: number;
+  error: number;
+}
+
 interface TopStatusBarProps {
   model: string;
   connected: boolean;
@@ -8,6 +15,7 @@ interface TopStatusBarProps {
   sessionId: string | null;
   serverUrl?: string;
   agentName?: string | null;
+  fleetCounts?: FleetCounts | null;
 }
 
 export function TopStatusBar({
@@ -17,6 +25,7 @@ export function TopStatusBar({
   sessionId,
   serverUrl,
   agentName,
+  fleetCounts,
 }: TopStatusBarProps) {
   // Extract host:port from serverUrl for display
   const serverDisplay = (() => {
@@ -69,6 +78,15 @@ export function TopStatusBar({
           <>
             <Text dimColor>│</Text>
             <Text color="red">disconnected</Text>
+          </>
+        )}
+        {fleetCounts && fleetCounts.total > 0 && (
+          <>
+            <Text dimColor>│</Text>
+            <Text color="magenta" bold>⚡ Fleet</Text>
+            <Text color={fleetCounts.online === fleetCounts.total ? "green" : fleetCounts.online > 0 ? "yellow" : "red"}>
+              {fleetCounts.online}/{fleetCounts.total}
+            </Text>
           </>
         )}
       </Box>
