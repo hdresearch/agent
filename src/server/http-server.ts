@@ -62,11 +62,17 @@ import {
   selectAgent,
   getCurrentAgentId,
   isAgentRunning,
+  getAgentSessionId,
+  getClaudeSessionId,
   listAgents as getAgentsList,
   clearProjectDocsCache,
   markDocsForReinjection,
   respondToPermission,
   cancelPermission,
+  getAgentCommands,
+  onAgentCommandsUpdated,
+  onAgentStderr,
+  onAgentSessionIdUpdated,
 } from "../core/agent-manager";
 import { getDocs, setDocs, setDoc, getDocsStore, loadDocsStore, type StoredDoc } from "../utils/docs-store";
 import { taskStore } from "../core/tasks";
@@ -91,6 +97,10 @@ function debug(message: string, data?: unknown): void {
 
 function info(message: string, data?: unknown): void {
   logStream.info(message, data);
+}
+
+function warn(message: string, data?: unknown): void {
+  logStream.warn(message, data);
 }
 
 function error(message: string, data?: unknown): void {
@@ -180,6 +190,7 @@ let currentSessionId: string | null = null;
 let runningTaskId: string | null = null;
 let autoProcessQueue = true; // Auto-process queued prompts after task completion
 let currentAgentId: string = "claude.com"; // Default to Claude Code ACP
+let accumulatedAssistantText: string = ""; // Buffer for streaming text chunks
 
 // Helper to convert QueuedPrompt to QueuedPromptInfo
 function toQueuedPromptInfo(prompt: QueuedPrompt): QueuedPromptInfo {
@@ -287,16 +298,19 @@ async function executePrompt(text: string, attachments?: import("../protocol/acp
 // SSE clients waiting for events
 const sseClients: Set<(event: string, data: unknown) => void> = new Set();
 
-// Agent commands storage - commands available from the agent subprocess
+// Agent commands - delegate to agent-manager which gets them from the runner
 import type { AvailableCommandData } from "../protocol/acp-types";
-let agentCommands: AvailableCommandData[] = [];
 
-function setAgentCommands(commands: AvailableCommandData[]): void {
-  agentCommands = commands;
+function getAvailableAgentCommands(): AvailableCommandData[] {
+  return getAgentCommands() as AvailableCommandData[];
 }
 
-function getAgentCommands(): AvailableCommandData[] {
-  return agentCommands;
+// Broadcast commands to all SSE clients when they update
+function broadcastAgentCommands(commands: AvailableCommandData[]): void {
+  broadcastEvent("notification", {
+    type: "available_commands",
+    data: { type: "available_commands", commands },
+  });
 }
 
 function addSseClient(send: (event: string, data: unknown) => void): void {
@@ -324,6 +338,12 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       return {
         type: "mode_update",
         data: { type: "mode_update", mode: "default" },
+      };
+
+    case "text_delta":
+      return {
+        type: "content_chunk",
+        data: { type: "content_chunk", text: d.text || "", final: d.final === true },
       };
 
     case "assistant_message":
@@ -452,10 +472,8 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       };
 
     case "available_commands":
-      // Available commands from agent - store and forward
-      if (d.commands && Array.isArray(d.commands)) {
-        setAgentCommands(d.commands as AvailableCommandData[]);
-      }
+      // Available commands from agent - forward to clients
+      // (commands are stored in the runner, accessed via getAgentCommands)
       return {
         type: "available_commands",
         data: { type: "available_commands", commands: d.commands || [] },
@@ -499,10 +517,25 @@ function sendSessionNotification(type: string, data: unknown): void {
 
   if (currentSessionId) {
     switch (type) {
+      case "text_delta":
+        // Accumulate streaming text
+        const deltaText = (d.text as string) || "";
+        accumulatedAssistantText += deltaText;
+        // If this is the final chunk, store the accumulated text
+        if (d.final === true && accumulatedAssistantText) {
+          debug("[OUTPUT_STORE] Storing accumulated text", { preview: accumulatedAssistantText.slice(0, 50), length: accumulatedAssistantText.length });
+          storeAndBroadcastOutput("text", accumulatedAssistantText);
+          accumulatedAssistantText = ""; // Reset buffer
+        }
+        break;
       case "assistant_message":
         const textContent = (d.text as string) || "";
         debug("[OUTPUT_STORE] Storing assistant_message", { preview: textContent.slice(0, 50) });
         storeAndBroadcastOutput("text", textContent);
+        break;
+      case "started":
+        // Reset accumulator when a new task starts
+        accumulatedAssistantText = "";
         break;
       case "tool_use":
         debug("[OUTPUT_STORE] Storing tool_use", { toolName: d.toolName });
@@ -597,15 +630,41 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
     if (params.config.model) {
       await setConfig({ model: params.config.model });
     }
-    if (params.config.thinkingBudget !== undefined) {
-      await setConfig({ thinkingBudget: params.config.thinkingBudget });
+  }
+
+  // Ensure agent is initialized (may already be from eager loading)
+  await initializeAgent();
+
+  // Wait for Claude's session ID with timeout (up to 3 seconds)
+  // Claude's session ID is the 8-char format that Claude CLI uses internally
+  // This is the ID we need to store for session resume to work
+  let claudeSessionId = getClaudeSessionId();
+  if (!claudeSessionId) {
+    for (let i = 0; i < 30 && !claudeSessionId; i++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      claudeSessionId = getClaudeSessionId();
     }
   }
 
-  currentSessionId = randomUUID();
+  if (!claudeSessionId) {
+    warn("Claude did not provide session ID within timeout, falling back to agent session ID");
+  }
+
+  // Use Claude's session ID (preferred) or fall back to agent's or random UUID
+  const previousSessionId = currentSessionId;
+  currentSessionId = claudeSessionId || getAgentSessionId() || randomUUID();
+
+  info("handleSessionNew - Session ID details:", {
+    previousSessionId,
+    claudeSessionId,
+    agentSessionId: getAgentSessionId(),
+    newCurrentSessionId: currentSessionId,
+    usingClaude: !!claudeSessionId,
+  });
   updateSession({ sessionId: currentSessionId });
 
-  // Register this session in SQLite storage
+  // Register this session in SQLite storage with Claude's session ID
+  // This is critical for resume - we need to store the ID Claude recognizes
   sessionStore.create(currentSessionId);
 
   // Get the current mode (should be "default" after reset)
@@ -619,9 +678,6 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
 }
 
 async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSessionResult> {
-  currentSessionId = params.sessionId;
-  updateSession({ sessionId: params.sessionId });
-
   // Touch session in SQLite to update lastUsedAt
   sessionStore.touch(params.sessionId);
 
@@ -632,14 +688,67 @@ async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSession
     sendSessionNotification("mode_update", { type: "mode_update", mode: storedSession.mode });
   }
 
+  // Check if agent is already running
+  const agentAlreadyRunning = isAgentRunning();
+
+  if (agentAlreadyRunning) {
+    // Agent already running - just use its current session
+    // Don't restart as that would lose any in-progress context
+    info("handleSessionLoad - agent already running, using current session");
+  } else {
+    // Agent not running - start it with resume option
+    // The session ID in SQLite should be Claude's actual session ID (8-char format)
+    // This was stored during handleSessionNew when we captured Claude's session ID
+    info("handleSessionLoad - starting agent with resume", { sessionId: params.sessionId });
+    await initializeAgent(undefined, undefined, { resumeSessionId: params.sessionId });
+  }
+
+  // Wait for Claude's session ID (up to 3 seconds)
+  let claudeSessionId = getClaudeSessionId();
+  if (!claudeSessionId) {
+    for (let i = 0; i < 30 && !claudeSessionId; i++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      claudeSessionId = getClaudeSessionId();
+    }
+  }
+
+  // Check if resume actually succeeded by comparing session IDs
+  const resumeSucceeded = claudeSessionId === params.sessionId;
+
+  if (!resumeSucceeded && claudeSessionId) {
+    // Resume failed - Claude created a new session instead of resuming
+    warn("Session resume failed - Claude created new session", {
+      requested: params.sessionId,
+      received: claudeSessionId
+    });
+    // Store the new session ID so future restarts don't keep trying to resume the old one
+    sessionStore.create(claudeSessionId);
+  }
+
+  // Use Claude's session ID (either resumed or new)
+  const displaySessionId = claudeSessionId || params.sessionId;
+
+  currentSessionId = displaySessionId;
+  updateSession({ sessionId: displaySessionId });
+
+  info("handleSessionLoad - session loaded", {
+    requestedSessionId: params.sessionId,
+    claudeSessionId,
+    displaySessionId,
+    resumeSucceeded,
+    agentWasRunning: agentAlreadyRunning
+  });
+
   return {
-    sessionId: params.sessionId,
-    resumed: true,
+    sessionId: displaySessionId,
+    resumed: resumeSucceeded,
   };
 }
 
 async function handleSessionList(): Promise<ListSessionsResult> {
   const sessions = sessionStore.list(50);
+
+  info("handleSessionList - returning currentSessionId:", { currentSessionId, sessionCount: sessions.length });
 
   return {
     sessions: sessions.map((s) => ({
@@ -1442,7 +1551,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // Agent commands endpoint - returns available commands from agent subprocess
   if (url.pathname === "/commands" && req.method === "GET") {
-    return Response.json({ commands: getAgentCommands() }, { headers: corsHeaders });
+    return Response.json({ commands: getAvailableAgentCommands() }, { headers: corsHeaders });
   }
 
   // Log streaming endpoint (SSE)
@@ -1503,6 +1612,33 @@ async function handleRequest(req: Request): Promise<Response> {
 export function createHttpServer(requestedPort: number, maxAttempts = 10): { close: () => void; port: number } {
   let server: ReturnType<typeof Bun.serve> | null = null;
   let actualPort = requestedPort;
+
+  // Set up callback for agent commands - broadcast to all SSE clients
+  onAgentCommandsUpdated((commands) => {
+    broadcastAgentCommands(commands as AvailableCommandData[]);
+  });
+
+  // Set up callback for agent stderr output - broadcast to all SSE clients
+  onAgentStderr((text) => {
+    broadcastEvent("notification", {
+      type: "agent_output",
+      data: { type: "agent_output", text },
+    });
+  });
+
+  // Set up callback for session ID updates - update currentSessionId when agent sends real session ID
+  onAgentSessionIdUpdated((sessionId) => {
+    if (currentSessionId !== sessionId) {
+      info("Session ID updated from agent notification", { old: currentSessionId, new: sessionId });
+      currentSessionId = sessionId;
+      updateSession({ sessionId });
+      // Broadcast session ID update to SSE clients
+      broadcastEvent("notification", {
+        type: "session_id_updated",
+        data: { type: "session_id_updated", sessionId },
+      });
+    }
+  });
 
   // Try the requested port first, then increment
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

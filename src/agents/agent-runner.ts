@@ -23,6 +23,7 @@ import { SubprocessManager, getSubprocessManager } from "./subprocess-manager";
 import { AcpClient, createContentBlocks } from "./acp-client";
 import { AcpServer } from "./acp-server";
 import { getAgentConfig } from "./configs";
+import { logStream } from "../utils/log-stream";
 // Note: Claude Agent SDK has been removed. All agents use ACP subprocess mode.
 
 // ============================================================
@@ -35,6 +36,11 @@ interface PendingPermissionRequest {
   params: AcpRequestPermissionParams;
 }
 
+export interface AgentRunnerOptions {
+  /** Session ID to resume (for Claude Code's --resume flag) */
+  resumeSessionId?: string;
+}
+
 export class SubprocessAgentRunner implements AgentRunner {
   readonly agentId: string;
   private agent: AgentDefinition;
@@ -42,17 +48,24 @@ export class SubprocessAgentRunner implements AgentRunner {
   private subprocess: SubprocessManager;
   private client: AcpClient | null = null;
   private server: AcpServer;
+  private config: import("../protocol/acp-types").AcpAgentConfig | null = null;
   private started = false;
   private running = false;
   private currentEventTarget: EventTarget | null = null;
   private currentAbortController: AbortController | null = null;
   private pendingPermissions: Map<string, PendingPermissionRequest> = new Map();
   private permissionRequestCounter = 0;
+  private availableCommands: Array<{ name: string; description: string; input?: { hint: string } }> = [];
+  private commandsCallback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null = null;
+  private stderrCallback: ((text: string) => void) | null = null;
+  private sessionIdCallback: ((sessionId: string) => void) | null = null;
+  private options: AgentRunnerOptions;
 
-  constructor(agent: AgentDefinition, cwd: string) {
+  constructor(agent: AgentDefinition, cwd: string, options?: AgentRunnerOptions) {
     this.agentId = agent.identity;
     this.agent = agent;
     this.cwd = cwd;
+    this.options = options || {};
     this.subprocess = getSubprocessManager();
     this.server = new AcpServer(cwd);
 
@@ -62,8 +75,40 @@ export class SubprocessAgentRunner implements AgentRunner {
     // Set up notification handler for subprocess (for session/update notifications)
     this.subprocess.onNotification(this.handleAgentNotification.bind(this));
 
+    // Set up stderr handler for agent output (like /usage command output)
+    this.subprocess.onStderr(this.handleAgentStderr.bind(this));
+
     // Set up permission handler to emit events and wait for user response
     this.server.onPermissionRequest(this.handlePermissionRequest.bind(this));
+  }
+
+  /**
+   * Handle stderr output from the agent subprocess.
+   * This captures command output like /usage that goes to stderr.
+   */
+  private handleAgentStderr(agentId: string, text: string): void {
+    if (agentId !== this.agentId) return;
+
+    // Check if this stderr message should be filtered (agent-specific)
+    if (this.config?.stderrFilter?.(text)) {
+      // Log to file but don't show to user
+      logStream.debug(`Filtered agent stderr: ${text.trim()}`);
+      return;
+    }
+
+    // Emit as event if we have an active event target
+    if (this.currentEventTarget) {
+      const event: PromptEvent = {
+        type: "error", // Use error type to carry stderr
+        data: { message: text, isAgentOutput: true }
+      };
+      this.currentEventTarget.dispatchEvent(new CustomEvent("prompt-event", { detail: event }));
+    }
+
+    // Also notify via callback if registered (for when no prompt is running)
+    if (this.stderrCallback) {
+      this.stderrCallback(text);
+    }
   }
 
   /**
@@ -201,16 +246,19 @@ export class SubprocessAgentRunner implements AgentRunner {
     await this.subprocess.spawn(this.agentId, command, env, this.cwd);
 
     // Get agent-specific config
-    const config = getAgentConfig(this.agentId);
+    this.config = getAgentConfig(this.agentId);
 
     // Create client with config
-    this.client = new AcpClient(this.subprocess, this.agentId, config);
+    this.client = new AcpClient(this.subprocess, this.agentId, this.config);
 
     // Initialize ACP connection
     await this.client.initialize();
 
-    // Create session
-    await this.client.sessionNew(this.cwd);
+    // Create session (with optional resume)
+    if (this.options.resumeSessionId) {
+      logStream.info(`Resuming session with ID: ${this.options.resumeSessionId}`);
+    }
+    await this.client.sessionNew(this.cwd, undefined, this.options.resumeSessionId);
 
     this.started = true;
   }
@@ -235,6 +283,43 @@ export class SubprocessAgentRunner implements AgentRunner {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * Get the agent's internal session ID (from ACP session/new)
+   */
+  getSessionId(): string | null {
+    return this.client?.getSessionId() ?? null;
+  }
+
+  /**
+   * Get Claude CLI's actual session ID (8-char format from notifications)
+   * This is the ID needed for session resume
+   */
+  getClaudeSessionId(): string | null {
+    return this.client?.getClaudeSessionId() ?? null;
+  }
+
+  /**
+   * Get the available commands from the agent
+   */
+  getAvailableCommands(): Array<{ name: string; description: string; input?: { hint: string } }> {
+    return this.availableCommands;
+  }
+
+  /**
+   * Set a callback to be notified when commands are updated
+   */
+  onCommandsUpdated(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void {
+    this.commandsCallback = callback;
+  }
+
+  onStderr(callback: ((text: string) => void) | null): void {
+    this.stderrCallback = callback;
+  }
+
+  onSessionIdUpdated(callback: ((sessionId: string) => void) | null): void {
+    this.sessionIdCallback = callback;
   }
 
   runPrompt(options: RunPromptOptions): PromptHandle {
@@ -517,12 +602,53 @@ export class SubprocessAgentRunner implements AgentRunner {
     agentId: string,
     notification: import("../protocol/jsonrpc").JsonRpcNotification
   ): void {
+    // Debug: log all notifications
+    logStream.debug(`Notification: ${notification.method}`, JSON.stringify(notification.params).slice(0, 200));
+
     // Handle session/update notifications
     if (notification.method === "session/update" && notification.params) {
       const params = notification.params as {
         sessionId: string;
         update: AcpSessionUpdate;
       };
+
+      // Update session ID if it differs from what we have stored
+      // Some agents (like Claude Code) send the real session ID in notifications
+      // rather than in the session/new response
+      if (params.sessionId && this.client) {
+        // Capture Claude's actual session ID (the first one from notifications)
+        // This is Claude CLI's 8-char session ID, which we need for resume
+        if (!this.client.getClaudeSessionId()) {
+          logStream.info(`Captured Claude session ID: ${params.sessionId}`);
+          this.client.setClaudeSessionId(params.sessionId);
+        }
+
+        const currentSessionId = this.client.getSessionId();
+        logStream.debug(`Session ID check: notification=${params.sessionId}, client=${currentSessionId}, callback=${!!this.sessionIdCallback}`);
+        if (currentSessionId !== params.sessionId) {
+          logStream.debug(`Updating session ID from notification: ${params.sessionId} (was: ${currentSessionId})`);
+          this.client.setSessionId(params.sessionId);
+          // Notify via callback so http-server can update its session ID
+          if (this.sessionIdCallback) {
+            logStream.debug(`Calling sessionIdCallback with: ${params.sessionId}`);
+            this.sessionIdCallback(params.sessionId);
+          }
+        } else {
+          logStream.debug(`Session ID already matches, no update needed`);
+        }
+      }
+
+      logStream.debug(`Session update type: ${params.update.sessionUpdate}`);
+
+      // Handle available_commands_update specially - store even without running prompt
+      if (params.update.sessionUpdate === "available_commands_update") {
+        const commandsUpdate = params.update as AcpAvailableCommandsUpdate;
+        this.availableCommands = commandsUpdate.availableCommands || [];
+        logStream.debug(`Got ${this.availableCommands.length} commands, callback: ${!!this.commandsCallback}`);
+        if (this.commandsCallback) {
+          this.commandsCallback(this.availableCommands);
+        }
+      }
 
       // Forward to the current event target if we're running a prompt
       if (this.currentEventTarget) {
@@ -545,8 +671,9 @@ export class SubprocessAgentRunner implements AgentRunner {
  * Create an agent runner for the specified agent
  * @param agentId - Agent identity (must be an ACP agent)
  * @param cwd - Working directory for the agent
+ * @param options - Optional configuration including resumeSessionId
  */
-export function createAgentRunner(agentId: string, cwd: string): AgentRunner {
+export function createAgentRunner(agentId: string, cwd: string, options?: AgentRunnerOptions): AgentRunner {
   // Look up agent in registry
   const agent = getAgent(agentId);
   if (!agent) {
@@ -558,5 +685,5 @@ export function createAgentRunner(agentId: string, cwd: string): AgentRunner {
     throw new Error(`Agent ${agentId} uses unsupported protocol: ${agent.protocol}. Only ACP agents are supported.`);
   }
 
-  return new SubprocessAgentRunner(agent, cwd);
+  return new SubprocessAgentRunner(agent, cwd, options);
 }

@@ -8,6 +8,7 @@ import { setConfig, getMcpServers, addMcpServer, removeMcpServer, type McpServer
 import { detectKeys, formatKeysDisplay } from "../../utils/keys";
 import { createHistory, saveHistory, type ConversationHistory } from "../../utils/history";
 import { isAgentCommand } from "../utils/command-matching";
+import { getSessionUsage, formatTokens as formatTokensUsage } from "../../utils/claude-usage";
 
 export interface CommandHandlerContext {
   client: HttpAcpClient | null;
@@ -84,11 +85,6 @@ export function handleSlashCommand(
       handleModel(arg, ctx);
       return { handled: true };
 
-    case "thinking":
-    case "t":
-      handleThinking(parts, ctx);
-      return { handled: true };
-
     case "compact":
       ctx.addOutput({ type: "system", content: "Compaction happens automatically when context fills up." });
       return { handled: true };
@@ -122,6 +118,11 @@ export function handleSlashCommand(
       handleAgent(parts, ctx);
       return { handled: true };
 
+    case "usage":
+    case "u":
+      handleUsage(ctx);
+      return { handled: true };
+
     case "token":
       handleToken(ctx);
       return { handled: true };
@@ -135,8 +136,9 @@ export function handleSlashCommand(
       return { handled: true };
 
     default:
-      ctx.addOutput({ type: "error", content: `Unknown command: /${cmd}. Type /help for commands.` });
-      return { handled: true };
+      // Pass unknown commands through to the agent - it may handle them
+      // (e.g., /usage, /review, /compact are agent commands in Claude Code)
+      return { handled: false };
   }
 }
 
@@ -173,30 +175,6 @@ function syncAgentCommandSideEffects(
         const model = arg.toLowerCase();
         ctx.setStatusInfo(prev => ({ ...prev, model }));
         setConfig({ model }); // Persist locally too
-      }
-      break;
-    }
-
-    case "thinking":
-    case "think":
-    case "t": {
-      // Sync thinking mode to status bar
-      if (arg === "off") {
-        ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: false, budget: null } }));
-        setConfig({ thinkingBudget: null });
-      } else if (arg === "on" || !arg) {
-        const budget = parts[2] ? parseInt(parts[2], 10) : 10000;
-        if (!isNaN(budget) && budget >= 1024) {
-          ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: true, budget } }));
-          setConfig({ thinkingBudget: budget });
-        }
-      } else {
-        // arg might be a number directly like "/thinking 5000"
-        const budget = parseInt(arg, 10);
-        if (!isNaN(budget) && budget >= 1024) {
-          ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: true, budget } }));
-          setConfig({ thinkingBudget: budget });
-        }
       }
       break;
     }
@@ -379,37 +357,6 @@ function handleModel(arg: string | undefined, ctx: CommandHandlerContext): void 
   } else {
     ctx.addOutput({ type: "system", content: `Current model: ${ctx.sessionConfig.model || "opus"}` });
     ctx.addOutput({ type: "system", content: `Usage: /model <sonnet|opus|haiku>` });
-  }
-}
-
-function handleThinking(parts: string[], ctx: CommandHandlerContext): void {
-  const arg = parts[1];
-  if (arg === "off") {
-    ctx.setSessionConfig({ thinkingBudget: null });
-    ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: false, budget: null } }));
-    setConfig({ thinkingBudget: null }); // Persist to config file
-    ctx.addOutput({ type: "system", content: "🧠 Thinking mode: OFF" });
-  } else if (arg === "on" || !arg) {
-    const budget = parts[2] ? parseInt(parts[2], 10) : 10000;
-    if (isNaN(budget) || budget < 1024) {
-      ctx.addOutput({ type: "error", content: "Thinking budget must be at least 1024 tokens" });
-    } else {
-      ctx.setSessionConfig({ thinkingBudget: budget });
-      ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: true, budget } }));
-      setConfig({ thinkingBudget: budget }); // Persist to config file
-      ctx.addOutput({ type: "system", content: `🧠 Thinking mode: ON (budget: ${budget.toLocaleString()} tokens)` });
-    }
-  } else {
-    const budget = parseInt(arg, 10);
-    if (!isNaN(budget) && budget >= 1024) {
-      ctx.setSessionConfig({ thinkingBudget: budget });
-      ctx.setStatusInfo(prev => ({ ...prev, thinking: { enabled: true, budget } }));
-      setConfig({ thinkingBudget: budget }); // Persist to config file
-      ctx.addOutput({ type: "system", content: `🧠 Thinking mode: ON (budget: ${budget.toLocaleString()} tokens)` });
-    } else {
-      ctx.addOutput({ type: "system", content: `🧠 Thinking mode: ${ctx.sessionConfig.thinkingBudget ? `ON (${ctx.sessionConfig.thinkingBudget.toLocaleString()} tokens)` : "OFF"}` });
-      ctx.addOutput({ type: "system", content: "Usage: /thinking <on|off> [budget]" });
-    }
   }
 }
 
@@ -724,6 +671,84 @@ function handlePlan(arg: string | undefined, ctx: CommandHandlerContext): void {
   ctx.addOutput({ type: "system", content: "  off    - Disable plan mode (normal execution)" });
   ctx.addOutput({ type: "system", content: "  show   - Show current plan and mode" });
   ctx.addOutput({ type: "system", content: "  clear  - Clear the current plan" });
+}
+
+async function handleUsage(ctx: CommandHandlerContext): Promise<void> {
+  if (!ctx.client) {
+    ctx.addOutput({ type: "error", content: "Not connected to server" });
+    return;
+  }
+
+  try {
+    // Get session info
+    const result = await ctx.client.listSessions();
+    const currentSession = result.sessions.find(s => s.id === result.currentSessionId);
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "Usage Statistics" });
+    ctx.addOutput({ type: "system", content: "─".repeat(40) });
+
+    // Get Claude Code usage data
+    const usage = await getSessionUsage(result.currentSessionId || null);
+
+    if (currentSession) {
+      // Current session stats
+      const createdAt = new Date(currentSession.createdAt);
+      const duration = Date.now() - createdAt.getTime();
+      const durationMins = Math.floor(duration / 60000);
+      const durationHours = Math.floor(durationMins / 60);
+      const durationStr = durationHours > 0
+        ? `${durationHours}h ${durationMins % 60}m`
+        : `${durationMins}m`;
+
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Current Session:" });
+      ctx.addOutput({ type: "system", content: `  ID: ${currentSession.id.slice(0, 8)}` });
+      ctx.addOutput({ type: "system", content: `  Turns: ${currentSession.turns}` });
+      ctx.addOutput({ type: "system", content: `  Duration: ${durationStr}` });
+      ctx.addOutput({ type: "system", content: `  Mode: ${currentSession.mode}` });
+    }
+
+    // Show Claude Code token usage if available
+    if (usage && (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0)) {
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Token Usage (this session):" });
+      ctx.addOutput({ type: "system", content: `  Input: ${formatTokensUsage(usage.totalInputTokens)} tokens` });
+      ctx.addOutput({ type: "system", content: `  Output: ${formatTokensUsage(usage.totalOutputTokens)} tokens` });
+      if (usage.totalCacheReadTokens > 0) {
+        ctx.addOutput({ type: "system", content: `  Cache Read: ${formatTokensUsage(usage.totalCacheReadTokens)} tokens` });
+      }
+      if (usage.totalCacheWriteTokens > 0) {
+        ctx.addOutput({ type: "system", content: `  Cache Write: ${formatTokensUsage(usage.totalCacheWriteTokens)} tokens` });
+      }
+      ctx.addOutput({ type: "system", content: `  Cost: $${usage.totalCostUsd.toFixed(4)}` });
+
+      // Show per-model breakdown if multiple models used
+      if (usage.deltas.length > 1) {
+        ctx.addOutput({ type: "system", content: "" });
+        ctx.addOutput({ type: "system", content: "  By Model:" });
+        for (const delta of usage.deltas) {
+          const modelShort = delta.model.includes("opus") ? "opus" : delta.model.includes("sonnet") ? "sonnet" : delta.model;
+          ctx.addOutput({
+            type: "system",
+            content: `    ${modelShort}: ${formatTokensUsage(delta.inputTokens)} in, ${formatTokensUsage(delta.outputTokens)} out ($${delta.costUsd.toFixed(4)})`
+          });
+        }
+      }
+    } else if (usage === null) {
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "  Token data: Not available (no baseline snapshot)" });
+    }
+
+    // Show model info
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "Configuration:" });
+    ctx.addOutput({ type: "system", content: `  Model: ${ctx.statusInfo.model}` });
+
+    ctx.addOutput({ type: "system", content: "" });
+  } catch (err) {
+    ctx.addOutput({ type: "error", content: `Failed to get usage: ${err instanceof Error ? err.message : String(err)}` });
+  }
 }
 
 function handleToken(ctx: CommandHandlerContext): void {

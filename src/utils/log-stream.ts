@@ -207,13 +207,13 @@ class LogStream {
     if (this.consoleEnabled) {
       switch (level) {
         case "debug":
-          if (process.env.DEBUG === "1" || process.env.DEBUG === "true") {
+          if (process.env.VERS_DEBUG === "1" || process.env.VERS_DEBUG === "true") {
             console.log(logLine);
           }
           break;
         case "info":
-          // Skip info in production unless LOG_TO_CONSOLE is set
-          if (process.env.NODE_ENV !== "production" || process.env.LOG_TO_CONSOLE === "1") {
+          // Only show info logs if VERS_DEBUG is enabled
+          if (process.env.VERS_DEBUG === "1" || process.env.VERS_DEBUG === "true") {
             console.log(logLine);
           }
           break;
