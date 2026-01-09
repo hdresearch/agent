@@ -4,12 +4,17 @@ Expose vers-agent server via secure ngrok tunnel with IP whitelisting.
 
 ## Quick Start
 
+The tunnel module automatically reads `NGROK_AUTHTOKEN` from:
+1. Function parameter (if provided)
+2. Environment variable `NGROK_AUTHTOKEN`
+3. `~/.topos/.env` file (recommended)
+
 ```bash
 # Install ngrok
 brew install ngrok
 
-# Authenticate (one-time)
-ngrok config add-authtoken YOUR_TOKEN
+# Add token to ~/.topos/.env (one-time)
+echo "NGROK_AUTHTOKEN=your_token_here" >> ~/.topos/.env
 
 # Start tunnel on default port
 bun src/tunnel/index.ts
@@ -18,7 +23,7 @@ bun src/tunnel/index.ts
 bun src/tunnel/index.ts 8080
 
 # With custom domain (requires ngrok paid plan)
-bun src/tunnel/index.ts 8080 mcp.yourdomain.com
+bun src/tunnel/index.ts 8080 vers.ngrok.io
 ```
 
 ## IP Whitelisting
@@ -62,3 +67,106 @@ console.log(`Remote URL: ${tunnel.url}`);
 Register `tunnel.url` in Claude:
 - Settings → Profile → Integrations → Add more
 - Paste the ngrok HTTPS URL
+
+## Lean VM Deployment
+
+Deploy a minimal vers-agent VM with automatic ngrok tunnel:
+
+```bash
+# Build lean image (~165MB vs ~800MB standard)
+just docker-build-lean
+
+# Provision VM (reads ~/.topos/.env for NGROK_AUTHTOKEN)
+just provision-vm vers-production
+
+# Quick deploy (build + provision)
+just deploy-lean vers-production
+
+# View tunnel URL
+just vm-url vers-production
+
+# Check logs
+just vm-logs vers-production
+```
+
+### VM Management
+
+```bash
+# List all vers VMs
+just vm-list
+
+# Get tunnel URL for specific VM
+just vm-url vers-production
+
+# Stop a VM
+just vm-stop vers-production
+
+# Remove VM and data
+just vm-remove vers-production
+
+# Shell access
+just vm-shell vers-production
+```
+
+### Custom Domain Setup
+
+Reserve a domain in [ngrok dashboard](https://dashboard.ngrok.com/domains), then:
+
+```bash
+just provision-vm my-vm vers.ngrok.io
+```
+
+The VM will automatically use the custom domain.
+
+## MCP Integration
+
+vers-agent integrates with [Pipedream's ngrok MCP server](https://mcp.pipedream.com/app/ngrok) for programmatic tunnel management.
+
+### Setup
+
+Add your ngrok API key to `~/.topos/.env`:
+
+```bash
+echo "NGROK_API_KEY=your_api_key_here" >> ~/.topos/.env
+```
+
+### Usage
+
+```bash
+# Create an HTTPS edge for vers-agent
+bun src/tunnel/mcp-integration.ts create vers.ngrok.io
+
+# Get edge details
+bun src/tunnel/mcp-integration.ts get edghts_2abc123
+
+# Delete an edge
+bun src/tunnel/mcp-integration.ts delete edghts_2abc123
+```
+
+### MCP Tools Available
+
+- `create_https_edge` - Create a new HTTPS edge
+- `get_https_edge` - Get edge details
+- `update_https_edge` - Update edge configuration
+- `delete_https_edge` - Delete an edge
+
+### Programmatic API
+
+```typescript
+import {
+  createVersAgentEdge,
+  getHttpsEdge,
+  updateHttpsEdge,
+  deleteHttpsEdge,
+} from "./tunnel/mcp-integration";
+
+// Create edge with vers-agent metadata
+const edge = await createVersAgentEdge("vers.ngrok.io");
+console.log("Edge ID:", edge.id);
+
+// Get details
+const details = await getHttpsEdge(edge.id);
+
+// Clean up
+await deleteHttpsEdge(edge.id);
+```

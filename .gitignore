@@ -38,3 +38,6 @@ vers-agent
 
 # CLI bin folder
 bin
+
+# Local notes and scratch docs
+.topos/

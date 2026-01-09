@@ -47,8 +47,24 @@ export async function startTunnel(config: TunnelConfig): Promise<TunnelInfo> {
     logStream.debug(`[tunnel] Using policy: ${POLICY_PATH}`);
   }
   
-  if (authtoken) {
-    args.push("--authtoken", authtoken);
+  // Try authtoken from config, then env (NGROK_AUTHTOKEN), then ~/.topos/.env
+  let token = authtoken || process.env.NGROK_AUTHTOKEN;
+  
+  if (!token) {
+    // Try loading from ~/.topos/.env
+    const toposEnvPath = join(process.env.HOME || "~", ".topos", ".env");
+    if (existsSync(toposEnvPath)) {
+      const envContent = await Bun.file(toposEnvPath).text();
+      const match = envContent.match(/^NGROK_AUTHTOKEN=(.+)$/m);
+      if (match?.[1]) {
+        token = match[1].trim().replace(/^["']|["']$/g, ""); // Remove quotes if present
+        logStream.debug(`[tunnel] Loaded NGROK_AUTHTOKEN from ${toposEnvPath}`);
+      }
+    }
+  }
+  
+  if (token) {
+    args.push("--authtoken", token);
   }
   
   // Check if ngrok is installed

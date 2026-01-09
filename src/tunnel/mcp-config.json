@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "ngrok": {
+      "url": "https://mcp.pipedream.net/v2",
+      "description": "ngrok MCP server for programmatic tunnel management",
+      "tools": [
+        "create_https_edge",
+        "get_https_edge",
+        "update_https_edge",
+        "delete_https_edge"
+      ],
+      "env": {
+        "NGROK_API_KEY": "${NGROK_API_KEY}"
+      }
+    }
+  }
+}

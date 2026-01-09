@@ -1,0 +1,43 @@
+# Docker Compose for ngrok tunnel testing
+# Exposes vers-agent via ngrok with IP whitelisting
+
+services:
+  vers-agent-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PORT=9999
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - NODE_ENV=production
+    volumes:
+      - vers-ngrok-data:/home/agent/.vers-agent
+      - claude-ngrok-data:/home/agent/.claude
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: "no"
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "vers-agent-server:9999"
+      - "--url=vers.ngrok.io"
+      - "--traffic-policy-file=/etc/ngrok/policy.yml"
+    volumes:
+      - ./src/tunnel/policy.yml:/etc/ngrok/policy.yml:ro
+    ports:
+      - "4040:4040"  # ngrok inspector UI
+    depends_on:
+      vers-agent-server:
+        condition: service_healthy
+
+volumes:
+  vers-ngrok-data:
+  claude-ngrok-data:
