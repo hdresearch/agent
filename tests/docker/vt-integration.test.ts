@@ -10,6 +10,7 @@ import {
   type DockerTestContext,
   waitUntil,
   TEST_TIMEOUT,
+  getTestTimeout,
 } from "../shared";
 import {
   VT,
@@ -17,6 +18,10 @@ import {
   parseVtSequences,
   extractSgrSequences,
 } from "./vt-utils";
+
+// Bun test's per-test timeout (must be > waitUntil timeout)
+// This is separate from waitUntil's condition timeout
+const BUN_TEST_TIMEOUT = getTestTimeout(15000);
 
 /**
  * Spawn CLI and capture output for VT analysis
@@ -149,7 +154,7 @@ describe("VT Sequence Integration Tests", () => {
         expect(seq.type).toBe("csi");
         expect(typeof seq.raw).toBe("string");
       }
-    });
+    }, BUN_TEST_TIMEOUT);
 
     test("CLI uses SGR reset sequences", async () => {
       if (skipIfNoServer()) return;
@@ -162,7 +167,7 @@ describe("VT Sequence Integration Tests", () => {
       // Should have reset sequences for clean styling
       const hasReset = sgrSeqs.some((s) => s.params.reset);
       expect(hasReset || sgrSeqs.length === 0).toBe(true);
-    });
+    }, BUN_TEST_TIMEOUT);
 
     test("error messages use red color", async () => {
       if (skipIfNoServer()) return;
@@ -184,7 +189,7 @@ describe("VT Sequence Integration Tests", () => {
       // This test passes if there's any output, since we may not
       // be able to trigger an error easily
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 
   describe("Cursor Sequences", () => {
@@ -212,7 +217,7 @@ describe("VT Sequence Integration Tests", () => {
       // CLI typically uses cursor positioning for TUI layout
       // This is informational - CLI may or may not use these
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 
   describe("Screen Control", () => {
@@ -244,7 +249,7 @@ describe("VT Sequence Integration Tests", () => {
       // /clear should have triggered erase sequences
       // If not, at least verify we got a response
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 
   describe("Text Rendering", () => {
@@ -270,7 +275,7 @@ describe("VT Sequence Integration Tests", () => {
 
       // Plain text should not contain escape sequences
       expect(plainText.includes("\x1b")).toBe(false);
-    });
+    }, BUN_TEST_TIMEOUT);
 
     test("text content is readable after stripping VT sequences", async () => {
       if (skipIfNoServer()) return;
@@ -293,7 +298,7 @@ describe("VT Sequence Integration Tests", () => {
         /help|command|session|model|clear/i.test(plainText) || plainText.length > 10;
 
       expect(hasRecognizableContent).toBe(true);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 
   describe("UI Components", () => {
@@ -306,7 +311,7 @@ describe("VT Sequence Integration Tests", () => {
 
       // Check if output has reasonable length indicating UI rendered
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
 
     test("status indicators use appropriate colors", async () => {
       if (skipIfNoServer()) return;
@@ -319,7 +324,7 @@ describe("VT Sequence Integration Tests", () => {
       // Should have color sequences if status indicators are shown
       // This is informational - depends on connection status
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 
   describe("Sequence Parsing Robustness", () => {
@@ -342,7 +347,7 @@ describe("VT Sequence Integration Tests", () => {
       expect(text.length).toBeGreaterThan(0);
       // Output should have been parseable without errors
       expect(true).toBe(true); // If we got here, parsing succeeded
-    });
+    }, BUN_TEST_TIMEOUT);
 
     test("parser handles rapid output correctly", async () => {
       if (skipIfNoServer()) return;
@@ -366,7 +371,7 @@ describe("VT Sequence Integration Tests", () => {
       // Output should be parseable
       const { text, sequences } = parseVtSequences(output);
       expect(text.length + sequences.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 
   describe("Ink Component Rendering", () => {
@@ -389,6 +394,6 @@ describe("VT Sequence Integration Tests", () => {
       // Ink-based CLIs typically have many CSI sequences
       // This is informational
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, BUN_TEST_TIMEOUT);
   });
 });
