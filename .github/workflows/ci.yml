@@ -27,8 +27,8 @@ jobs:
       - name: Typecheck
         run: just typecheck
 
-      - name: Unit tests
-        run: just test-unit
+      - name: Run tests (unit + component)
+        run: just test
 
       - name: Build
         run: just build
@@ -75,11 +75,10 @@ jobs:
         env:
           DOCKER_SERVER_URL: http://localhost:19999
 
-      - name: Run CLI integration tests
-        run: bun test tests/docker/cli-integration.test.ts tests/docker/vt-integration.test.ts
+      - name: Run VT integration tests
+        run: bun test tests/docker/vt-integration.test.ts
         env:
           DOCKER_SERVER_URL: http://localhost:19999
-        continue-on-error: true  # CLI tests may be flaky in CI
 
       - name: Show container logs on failure
         if: failure()

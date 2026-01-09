@@ -29,13 +29,20 @@ start:
 typecheck:
     bun run typecheck
 
-# Run all tests (integration tests skip if no server)
+# Run all local tests (no Docker needed)
 test:
-    bun test
+    bun test tests/agents tests/cli tests/client tests/core tests/integration tests/protocol tests/server tests/utils tests/*.test.ts
+
+# Run complete test suite (local + Docker)
+test-all: test docker-test
 
 # Run only unit tests (no server needed)
 test-unit:
     bun test tests/cli/utils tests/cli/handlers tests/core tests/utils tests/session-sync.test.ts
+
+# Run Ink component tests (fast, no server needed)
+test-components:
+    bun test tests/cli/components/
 
 # Run integration tests (requires: just server in another terminal)
 test-integration:
@@ -115,10 +122,9 @@ docker-test:
     echo "🧪 Running Docker server tests..."
     # Run server tests first - they claim the server and save the token
     DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/server-remote.test.ts tests/docker/server-persistence.test.ts || (docker compose -f docker-compose.test.yml down -v && exit 1)
-    echo "🧪 Running Docker CLI tests (optional - may be flaky)..."
-    # Run CLI/VT tests - these are flaky due to terminal output timing
-    # We continue even if they fail (like in CI)
-    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/cli-integration.test.ts tests/docker/vt-integration.test.ts tests/docker/permission-dialog.test.ts || echo "⚠️  Some CLI tests failed (this is expected - they can be flaky)"
+    echo "🧪 Running VT integration tests..."
+    # VT tests work reliably as they just parse output
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/vt-integration.test.ts || (docker compose -f docker-compose.test.yml down -v && exit 1)
     echo "🧹 Cleaning up..."
     docker compose -f docker-compose.test.yml down -v
     rm -f /tmp/.vers-agent-test-token
