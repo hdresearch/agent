@@ -4,7 +4,7 @@ import React from "react";
 import { describe, test, expect, afterEach } from "bun:test";
 import { render } from "ink-testing-library";
 import { PermissionDialog } from "../../../src/cli/components/permission-dialog";
-import { createMockPermissionRequest, waitForEffects } from "./test-utils";
+import { createMockPermissionRequest, waitForEffects, waitUntil } from "./test-utils";
 import type { PermissionRequest } from "../../../src/cli/types";
 
 describe("PermissionDialog", () => {
@@ -211,7 +211,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("1");
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("allow");
     });
@@ -249,7 +249,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("\u001B"); // Escape key
-      await waitForEffects();
+      await waitUntil(() => cancelled);
 
       expect(cancelled).toBe(true);
     });
@@ -288,9 +288,9 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("\u001B[B"); // Arrow down
-      await waitForEffects();
+      await waitForEffects(100); // Give time for arrow key to be processed
       stdin.write("\r"); // Enter
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("deny");
     });
