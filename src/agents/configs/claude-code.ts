@@ -20,6 +20,10 @@ export const CLAUDE_CODE_CONFIG: AcpAgentConfig = {
     if (text.includes("No onPostToolUseHook found")) {
       return true; // Suppress
     }
+    // Suppress spawn command output - not useful to users
+    if (text.includes("Spawning Claude Code:")) {
+      return true; // Suppress
+    }
     return false;
   },
 };
