@@ -93,3 +93,24 @@ export function createMockOutputLine(
 export function waitForEffects(ms = 50): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// Helper to wait until a condition is true or timeout
+export function waitUntil(
+  condition: () => boolean,
+  timeout = 500,
+  interval = 10
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      if (condition()) {
+        resolve();
+      } else if (Date.now() - start > timeout) {
+        reject(new Error(`Condition not met within ${timeout}ms`));
+      } else {
+        setTimeout(check, interval);
+      }
+    };
+    check();
+  });
+}
