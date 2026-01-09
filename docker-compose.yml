@@ -9,7 +9,7 @@ services:
       - DEBUG=1
     volumes:
       # Persist conversation history (using non-root user home)
-      - vers-data:/home/agent/.vers
+      - vers-data:/home/agent/.vers-agent
       - claude-data:/home/agent/.claude
     restart: unless-stopped
 
