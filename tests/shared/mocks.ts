@@ -1,4 +1,5 @@
-// Test utilities for Ink component tests
+// Mock factories for test utilities
+// Consolidated from tests/cli/components/test-utils.ts
 
 import type {
   AppState,
@@ -7,9 +8,13 @@ import type {
   PermissionToolCall,
   StatusInfo,
   OutputLine,
-} from "../../../src/cli/types";
+  ToolKind,
+  ToolStatus,
+} from "../../src/cli/types";
 
-// Mock factory for AppState
+/**
+ * Mock factory for AppState
+ */
 export function createMockAppState(
   overrides: Partial<AppState> = {}
 ): AppState {
@@ -19,7 +24,9 @@ export function createMockAppState(
   };
 }
 
-// Mock factory for PermissionOption
+/**
+ * Mock factory for PermissionOption
+ */
 export function createMockPermissionOption(
   overrides: Partial<PermissionOption> = {}
 ): PermissionOption {
@@ -31,21 +38,25 @@ export function createMockPermissionOption(
   };
 }
 
-// Mock factory for PermissionToolCall
+/**
+ * Mock factory for PermissionToolCall
+ */
 export function createMockPermissionToolCall(
   overrides: Partial<PermissionToolCall> = {}
 ): PermissionToolCall {
   return {
     toolCallId: "test-tool-call-1",
     title: "Test Tool",
-    kind: "read",
-    status: "pending",
+    kind: "read" as ToolKind,
+    status: "pending" as ToolStatus,
     locations: [],
     ...overrides,
   };
 }
 
-// Mock factory for PermissionRequest
+/**
+ * Mock factory for PermissionRequest
+ */
 export function createMockPermissionRequest(
   overrides: Partial<PermissionRequest> = {}
 ): PermissionRequest {
@@ -59,7 +70,9 @@ export function createMockPermissionRequest(
   };
 }
 
-// Mock factory for StatusInfo
+/**
+ * Mock factory for StatusInfo
+ */
 export function createMockStatusInfo(
   overrides: Partial<StatusInfo> = {}
 ): StatusInfo {
@@ -76,41 +89,32 @@ export function createMockStatusInfo(
   };
 }
 
-// Mock factory for OutputLine
+/**
+ * Mock factory for OutputLine
+ */
 export function createMockOutputLine(
   overrides: Partial<OutputLine> = {}
 ): OutputLine {
   return {
-    id: `line-${Date.now()}`,
+    id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     type: "text",
     content: "Test output",
     ...overrides,
   };
 }
 
-// Helper to wait for async effects
-// CI environments can be slower, so use a longer default
-export function waitForEffects(ms = 50): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Helper to wait until a condition is true or timeout
-export function waitUntil(
-  condition: () => boolean,
-  timeout = 500,
-  interval = 10
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      if (condition()) {
-        resolve();
-      } else if (Date.now() - start > timeout) {
-        reject(new Error(`Condition not met within ${timeout}ms`));
-      } else {
-        setTimeout(check, interval);
-      }
-    };
-    check();
-  });
+/**
+ * Create multiple output lines for testing
+ */
+export function createMockOutputLines(
+  count: number,
+  overrides: Partial<OutputLine> = {}
+): OutputLine[] {
+  return Array.from({ length: count }, (_, i) =>
+    createMockOutputLine({
+      id: `line-${Date.now()}-${i}`,
+      content: `Test output line ${i + 1}`,
+      ...overrides,
+    })
+  );
 }

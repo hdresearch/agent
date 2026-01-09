@@ -2,19 +2,20 @@
 
 import React from "react";
 import { describe, test, expect, afterEach } from "bun:test";
-import { render } from "ink-testing-library";
 import { PermissionDialog } from "../../../src/cli/components/permission-dialog";
-import { createMockPermissionRequest, waitForEffects, waitUntil } from "./test-utils";
+import {
+  createInkTestHarness,
+  createMockPermissionRequest,
+  waitUntil,
+  flushAsync,
+} from "../../shared";
 import type { PermissionRequest } from "../../../src/cli/types";
 
 describe("PermissionDialog", () => {
-  let cleanup: (() => void) | undefined;
+  const harness = createInkTestHarness();
 
   afterEach(async () => {
-    cleanup?.();
-    cleanup = undefined;
-    // Allow time for Ink's stdin listeners to fully detach
-    await new Promise((r) => setTimeout(r, 20));
+    await harness.cleanupAll();
   });
 
   const defaultRequest: PermissionRequest = createMockPermissionRequest({
@@ -31,42 +32,39 @@ describe("PermissionDialog", () => {
 
   describe("Rendering", () => {
     test("renders permission dialog with header", () => {
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("Permission Required");
     });
 
     test("renders tool title", () => {
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("Write to file.txt");
     });
 
     test("renders all options with numbers", () => {
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("[1]");
@@ -76,14 +74,13 @@ describe("PermissionDialog", () => {
     });
 
     test("renders help text", () => {
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("select");
@@ -99,14 +96,13 @@ describe("PermissionDialog", () => {
         },
       });
 
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={longTitleRequest}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("...");
@@ -126,14 +122,13 @@ describe("PermissionDialog", () => {
         },
       });
 
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={requestWithLocations}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("/path/to/file.ts:42");
@@ -144,7 +139,7 @@ describe("PermissionDialog", () => {
   describe("Keyboard Input", () => {
     test("y key triggers allow option", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -153,7 +148,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("y");
       await waitUntil(() => responded !== "");
@@ -163,7 +157,7 @@ describe("PermissionDialog", () => {
 
     test("Y key (uppercase) also triggers allow option", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -172,7 +166,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("Y");
       await waitUntil(() => responded !== "");
@@ -182,7 +175,7 @@ describe("PermissionDialog", () => {
 
     test("n key triggers deny option", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -191,7 +184,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("n");
       await waitUntil(() => responded !== "");
@@ -201,7 +193,7 @@ describe("PermissionDialog", () => {
 
     test("number key 1 selects first option", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -210,7 +202,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("1");
       await waitUntil(() => responded !== "");
@@ -220,7 +211,7 @@ describe("PermissionDialog", () => {
 
     test("number key 2 selects second option", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -229,7 +220,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("2");
       await waitUntil(() => responded !== "");
@@ -239,7 +229,7 @@ describe("PermissionDialog", () => {
 
     test("escape key triggers cancel", async () => {
       let cancelled = false;
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={() => {}}
@@ -248,7 +238,6 @@ describe("PermissionDialog", () => {
           }}
         />
       );
-      cleanup = unmount;
 
       stdin.write("\u001B"); // Escape key
       await waitUntil(() => cancelled);
@@ -258,7 +247,7 @@ describe("PermissionDialog", () => {
 
     test("enter key confirms current selection", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -267,7 +256,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       // Default selection is first item
       stdin.write("\r"); // Enter key
@@ -278,7 +266,7 @@ describe("PermissionDialog", () => {
 
     test("arrow down then enter selects second option", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -287,10 +275,10 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("\u001B[B"); // Arrow down
-      await waitForEffects(100); // Give time for arrow key to be processed
+      // Use flushAsync instead of arbitrary delay for state update
+      await flushAsync(5);
       stdin.write("\r"); // Enter
       await waitUntil(() => responded !== "");
 
@@ -299,7 +287,7 @@ describe("PermissionDialog", () => {
 
     test("invalid number key does nothing", async () => {
       let responded = "";
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={defaultRequest}
           onRespond={(id) => {
@@ -308,10 +296,9 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("9"); // Only 2 options, so 9 is invalid
-      await waitForEffects();
+      await flushAsync(3);
 
       expect(responded).toBe(""); // No response
     });
@@ -333,14 +320,13 @@ describe("PermissionDialog", () => {
         ],
       });
 
-      const { lastFrame, unmount } = render(
+      const { lastFrame } = harness.render(
         <PermissionDialog
           request={fourOptionRequest}
           onRespond={() => {}}
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       const frame = lastFrame();
       expect(frame).toContain("[1]");
@@ -365,7 +351,7 @@ describe("PermissionDialog", () => {
         ],
       });
 
-      const { stdin, unmount } = render(
+      const { stdin } = harness.render(
         <PermissionDialog
           request={fourOptionRequest}
           onRespond={(id) => {
@@ -374,7 +360,6 @@ describe("PermissionDialog", () => {
           onCancel={() => {}}
         />
       );
-      cleanup = unmount;
 
       stdin.write("4");
       await waitUntil(() => responded !== "");

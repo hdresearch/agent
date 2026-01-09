@@ -3,7 +3,7 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import {
-  DockerTestContext,
+  type DockerTestContext,
   TEST_SERVER_URL,
   isDockerServerRunning,
   createTestContext,
@@ -11,7 +11,7 @@ import {
   initializeConnection,
   createSession,
   listSessions,
-} from "./docker-test-utils";
+} from "../shared";
 
 describe("Docker Server Persistence Tests", () => {
   let ctx: DockerTestContext;
