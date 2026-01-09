@@ -52,10 +52,14 @@ import { logStream } from "../utils/log-stream";
 // Subprocess Manager
 // ============================================================
 
+// Handler for stderr output from agents
+export type StderrHandler = (agentId: string, text: string) => void;
+
 export class SubprocessManager {
   private processes: Map<string, SubprocessState> = new Map();
   private requestHandler: RequestHandler | null = null;
   private notificationHandler: NotificationHandler | null = null;
+  private stderrHandler: StderrHandler | null = null;
   private defaultTimeout: number;
 
   constructor(defaultTimeout = 60000) {
@@ -74,6 +78,13 @@ export class SubprocessManager {
    */
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
+  }
+
+  /**
+   * Register a handler for stderr output from agents
+   */
+  onStderr(handler: StderrHandler): void {
+    this.stderrHandler = handler;
   }
 
   /**
@@ -317,7 +328,11 @@ export class SubprocessManager {
 
         const text = decoder.decode(value, { stream: true });
         if (text.trim()) {
-          logStream.error(`[subprocess] stderr`, { agentId: state.agentId, text: text.trim() });
+          logStream.debug(`[subprocess] stderr`, { agentId: state.agentId, text: text.trim() });
+          // Forward to stderr handler if registered
+          if (this.stderrHandler) {
+            this.stderrHandler(state.agentId, text);
+          }
         }
       }
     } catch {

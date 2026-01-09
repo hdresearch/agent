@@ -45,6 +45,8 @@ export type OutputLine = {
   toolCallId?: string;      // ID to match tool calls with results
   toolLocations?: ToolLocation[];  // File locations being accessed
   toolContent?: ToolContent[];     // Rich content (diffs, terminal output, etc.)
+  // Streaming text support
+  streaming?: boolean;      // True if this is a streaming chunk (not final)
 };
 
 export type AppState = {
@@ -59,10 +61,6 @@ export interface CliOptions {
 
 export interface StatusInfo {
   model: string;
-  thinking: {
-    enabled: boolean;
-    budget?: number | null;
-  };
   cost: {
     totalCost: number;
     inputTokens: number;

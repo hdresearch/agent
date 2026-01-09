@@ -372,7 +372,7 @@ export function InputBar({
   const displayLineCount = displayValue.split("\n").length;
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" minHeight={4}>
       {!tokenMode && showPathSuggestions && <PathSuggestions matches={pathMatches} selectedIndex={pathSuggestionIndex} />}
       {!tokenMode && showCommandSuggestions && <CommandSuggestions matches={commandMatches} selectedIndex={suggestionIndex} />}
       <Box
@@ -380,6 +380,7 @@ export function InputBar({
         borderColor={borderColor}
         flexDirection="column"
         paddingX={1}
+        minHeight={3}
       >
         <Box flexDirection="row">
           <Text color={promptColor} bold>
