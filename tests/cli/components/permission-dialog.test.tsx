@@ -10,9 +10,11 @@ import type { PermissionRequest } from "../../../src/cli/types";
 describe("PermissionDialog", () => {
   let cleanup: (() => void) | undefined;
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup?.();
     cleanup = undefined;
+    // Allow time for Ink's stdin listeners to fully detach
+    await new Promise((r) => setTimeout(r, 20));
   });
 
   const defaultRequest: PermissionRequest = createMockPermissionRequest({
@@ -274,9 +276,26 @@ describe("PermissionDialog", () => {
       expect(responded).toBe("allow");
     });
 
-    // Note: Arrow key navigation test removed - ANSI escape sequences
-    // are parsed differently across environments. Number key selection
-    // (tested above) provides equivalent coverage.
+    test("arrow down then enter selects second option", async () => {
+      let responded = "";
+      const { stdin, unmount } = render(
+        <PermissionDialog
+          request={defaultRequest}
+          onRespond={(id) => {
+            responded = id;
+          }}
+          onCancel={() => {}}
+        />
+      );
+      cleanup = unmount;
+
+      stdin.write("\u001B[B"); // Arrow down
+      await waitForEffects(100); // Give time for arrow key to be processed
+      stdin.write("\r"); // Enter
+      await waitUntil(() => responded !== "");
+
+      expect(responded).toBe("deny");
+    });
 
     test("invalid number key does nothing", async () => {
       let responded = "";
