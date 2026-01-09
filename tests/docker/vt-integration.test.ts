@@ -7,18 +7,14 @@ import {
   TEST_SERVER_URL,
   isDockerServerRunning,
   createTestContext,
-  DockerTestContext,
-} from "./docker-test-utils";
+  type DockerTestContext,
+  waitUntil,
+} from "../shared";
 import {
   VT,
   extractText,
   parseVtSequences,
   extractSgrSequences,
-  hasColor,
-  hasAttribute,
-  hasBoxDrawing,
-  hasStatusBar,
-  SgrParams,
 } from "./vt-utils";
 
 /**
@@ -76,8 +72,11 @@ async function spawnCliForVtTest(
     },
   };
 
-  // Wait for CLI to start
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Wait for CLI to start - use waitUntil for output instead of fixed delay
+  await waitUntil(() => output.length > 0, {
+    timeout: 5000,
+    message: "CLI did not produce output within timeout",
+  });
 
   return ctx;
 }
@@ -124,7 +123,12 @@ describe("VT Sequence Integration Tests", () => {
 
       // Trigger some output that should contain colors (help command)
       cliCtx.write("/help" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Wait for output to contain help content instead of fixed delay
+      await waitUntil(
+        () => /help|command/i.test(extractText(cliCtx!.getOutput())),
+        { timeout: 2000, message: "Help output not received" }
+      );
 
       const output = cliCtx.getOutput();
       const { sequences, text } = parseVtSequences(output);
@@ -166,7 +170,12 @@ describe("VT Sequence Integration Tests", () => {
 
       // Try to trigger an error by using invalid command
       cliCtx.write("/invalid_command_that_does_not_exist" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Wait for response instead of fixed delay
+      await waitUntil(
+        () => cliCtx!.getOutput().length > 100,
+        { timeout: 2000 }
+      );
 
       const output = cliCtx.getOutput();
 
@@ -213,7 +222,12 @@ describe("VT Sequence Integration Tests", () => {
 
       // Send clear command
       cliCtx.write("/clear" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Wait for clear response
+      await waitUntil(
+        () => cliCtx!.getOutput().length > 50,
+        { timeout: 2000 }
+      );
 
       const output = cliCtx.getOutput();
       const { sequences } = parseVtSequences(output);
@@ -240,7 +254,12 @@ describe("VT Sequence Integration Tests", () => {
 
       // Send help command to generate text output
       cliCtx.write("/help" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Wait for help output
+      await waitUntil(
+        () => extractText(cliCtx!.getOutput()).length > 50,
+        { timeout: 2000 }
+      );
 
       const output = cliCtx.getOutput();
       const plainText = extractText(output);
@@ -258,7 +277,12 @@ describe("VT Sequence Integration Tests", () => {
       cliCtx = await spawnCliForVtTest(TEST_SERVER_URL);
 
       cliCtx.write("/help" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Wait for meaningful content
+      await waitUntil(
+        () => /help|command|session/i.test(extractText(cliCtx!.getOutput())),
+        { timeout: 2000 }
+      );
 
       const output = cliCtx.getOutput();
       const plainText = extractText(output);
@@ -305,9 +329,10 @@ describe("VT Sequence Integration Tests", () => {
 
       // Generate mixed content
       cliCtx.write("/help" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await waitUntil(() => extractText(cliCtx!.getOutput()).length > 20, { timeout: 1000 });
+
       cliCtx.write("/sessions" + VT.enter);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await waitUntil(() => extractText(cliCtx!.getOutput()).length > 50, { timeout: 1000 });
 
       const output = cliCtx.getOutput();
       const { text, sequences } = parseVtSequences(output);
@@ -329,7 +354,11 @@ describe("VT Sequence Integration Tests", () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Wait for all responses
+      await waitUntil(
+        () => cliCtx!.getOutput().length > 500,
+        { timeout: 3000 }
+      );
 
       const output = cliCtx.getOutput();
 

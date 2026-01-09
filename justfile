@@ -45,6 +45,14 @@ test-unit:
 test-components:
     bun test tests/cli/components/
 
+# Run component tests with process isolation (more reliable)
+test-components-isolated:
+    bun scripts/test-isolated.ts tests/cli/components/
+
+# Run all tests with process isolation (slowest but most reliable)
+test-isolated:
+    bun scripts/test-isolated.ts tests/
+
 # Run integration tests (requires: just server in another terminal)
 test-integration:
     @curl -s http://localhost:9999/health >/dev/null 2>&1 || (echo "Start server first: just server" && exit 1)
