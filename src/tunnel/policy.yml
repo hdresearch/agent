@@ -1,0 +1,17 @@
+# ngrok Traffic Policy for vers-agent
+# Restricts access to whitelisted IPs only
+
+on_http_request:
+  - actions:
+      - type: restrict-ips
+        config:
+          enforce: true
+          allow:
+            # HDR team IPs
+            - 32.132.92.198/32
+            
+            # Anthropic IP range (for Claude Remote MCP)
+            - 160.79.104.0/23
+            
+            # Add more IPs as needed:
+            # - YOUR_IP/32
