@@ -154,7 +154,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("y");
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("allow");
     });
@@ -173,7 +173,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("Y");
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("allow");
     });
@@ -192,7 +192,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("n");
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("deny");
     });
@@ -230,7 +230,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("2");
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("deny");
     });
@@ -269,7 +269,7 @@ describe("PermissionDialog", () => {
 
       // Default selection is first item
       stdin.write("\r"); // Enter key
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("allow");
     });
@@ -375,7 +375,7 @@ describe("PermissionDialog", () => {
       cleanup = unmount;
 
       stdin.write("4");
-      await waitForEffects();
+      await waitUntil(() => responded !== "");
 
       expect(responded).toBe("deny-always");
     });
