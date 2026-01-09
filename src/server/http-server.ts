@@ -99,6 +99,10 @@ function info(message: string, data?: unknown): void {
   logStream.info(message, data);
 }
 
+function warn(message: string, data?: unknown): void {
+  logStream.warn(message, data);
+}
+
 function error(message: string, data?: unknown): void {
   logStream.error(message, data);
   metrics.incCounter(MetricNames.ERRORS_TOTAL);

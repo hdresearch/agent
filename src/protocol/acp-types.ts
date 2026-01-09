@@ -334,7 +334,9 @@ export type SessionNotificationType =
   | "failed"
   | "cancelled"
   | "permission_request"
-  | "available_commands";
+  | "available_commands"
+  | "agent_output"
+  | "session_id_updated";
 
 export interface SessionNotificationParams {
   sessionId: string;
@@ -354,7 +356,9 @@ export type SessionNotificationData =
   | FailedData
   | CancelledData
   | PermissionRequestData
-  | AvailableCommandsData;
+  | AvailableCommandsData
+  | AgentOutputData
+  | SessionIdUpdatedData;
 
 export interface ContentChunkData {
   type: "content_chunk";
@@ -462,6 +466,16 @@ export interface AvailableCommandData {
 export interface AvailableCommandsData {
   type: "available_commands";
   commands: AvailableCommandData[];
+}
+
+export interface AgentOutputData {
+  type: "agent_output";
+  text: string;
+}
+
+export interface SessionIdUpdatedData {
+  type: "session_id_updated";
+  sessionId: string;
 }
 
 // ============================================================
