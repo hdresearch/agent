@@ -2,7 +2,7 @@
 // Enhanced from tests/docker/docker-test-utils.ts
 // Uses in-memory token management instead of file-based sharing
 
-import { retry, waitUntil, type WaitUntilOptions } from "./sync";
+import { retry, waitUntil, getTestTimeout, type WaitUntilOptions } from "./sync";
 
 // ============================================================================
 // Types
@@ -530,7 +530,7 @@ export async function waitForSessionState(
       return response.result?.state === expectedState;
     },
     {
-      timeout: 10000,
+      timeout: getTestTimeout(10000),
       interval: 100,
       message: `Session ${sessionId} did not reach state "${expectedState}"`,
       ...options,
@@ -559,7 +559,7 @@ export async function waitForSessionOutput(
       return output !== null && regex.test(output);
     },
     {
-      timeout: 10000,
+      timeout: getTestTimeout(10000),
       interval: 100,
       message: `Session output did not match ${pattern}`,
       ...options,
