@@ -291,14 +291,9 @@ const clearOutputsStmt = db.prepare(`
   DELETE FROM session_outputs WHERE session_id = $sessionId
 `);
 
-export const sessionOutputStore = {
-  /**
-   * Append an output to a session's history
-   */
-  append(
-    sessionId: string,
-    output: { type: string; content: string; color?: string; toolName?: string }
-  ): number {
+// Transaction wrapper for atomic append operations
+const appendTransaction = db.transaction(
+  (sessionId: string, output: { type: string; content: string; color?: string; toolName?: string }) => {
     const now = new Date().toISOString();
     const { nextSeq } = getNextSeqStmt.get({ $sessionId: sessionId }) as { nextSeq: number };
 
@@ -313,6 +308,19 @@ export const sessionOutputStore = {
     });
 
     return nextSeq;
+  }
+);
+
+export const sessionOutputStore = {
+  /**
+   * Append an output to a session's history
+   * Uses a transaction to prevent race conditions with sequential numbering
+   */
+  append(
+    sessionId: string,
+    output: { type: string; content: string; color?: string; toolName?: string }
+  ): number {
+    return appendTransaction(sessionId, output);
   },
 
   /**

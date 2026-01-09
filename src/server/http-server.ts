@@ -83,7 +83,31 @@ import { expandPrompt, hasPathReferences } from "../utils/path-expansion";
 import { metrics, MetricNames } from "../utils/metrics";
 import { logStream, shouldIncludeLevel, type LogLevel } from "../utils/log-stream";
 import { authStore } from "../utils/auth-store";
+import { cleanTitle } from "../utils/string-utils";
 import { randomUUID } from "crypto";
+
+// Extracted handlers
+import {
+  handleQueueEnqueue,
+  handleQueueDequeue,
+  handleQueuePeek,
+  handleQueueList,
+  handleQueueRemove,
+  handleQueueClear,
+  handleFsReadTextFile,
+  handleFsListDirectory,
+  handlePermissionRespond,
+  handlePermissionCancel,
+  handleBashExecute,
+  handleGetCwd,
+  handleAgentList,
+  handleAgentSelect,
+  handleAgentStatus,
+  type AgentHandlerContext,
+} from "./handlers";
+
+// SSE management
+import { addSseClient, removeSseClient, broadcastEvent, sseManager } from "./sse-manager";
 
 const AGENT_INFO = {
   name: "vers-agent",
@@ -295,8 +319,7 @@ async function executePrompt(text: string, attachments?: import("../protocol/acp
   });
 }
 
-// SSE clients waiting for events
-const sseClients: Set<(event: string, data: unknown) => void> = new Set();
+// SSE management has been extracted to ./sse-manager.ts
 
 // Agent commands - delegate to agent-manager which gets them from the runner
 import type { AvailableCommandData } from "../protocol/acp-types";
@@ -311,22 +334,6 @@ function broadcastAgentCommands(commands: AvailableCommandData[]): void {
     type: "available_commands",
     data: { type: "available_commands", commands },
   });
-}
-
-function addSseClient(send: (event: string, data: unknown) => void): void {
-  sseClients.add(send);
-  metrics.setGauge(MetricNames.SSE_CLIENTS, sseClients.size);
-}
-
-function removeSseClient(send: (event: string, data: unknown) => void): void {
-  sseClients.delete(send);
-  metrics.setGauge(MetricNames.SSE_CLIENTS, sseClients.size);
-}
-
-function broadcastEvent(type: string, data: unknown): void {
-  for (const send of sseClients) {
-    send(type, data);
-  }
 }
 
 // Map internal task events to ACP notification types
@@ -353,17 +360,6 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       };
 
     case "tool_use": {
-      // Clean up title: strip surrounding quotes and filter invalid values
-      const cleanTitle = (s: unknown): string | undefined => {
-        if (typeof s !== "string" || !s || s === "undefined" || s.trim() === "") return undefined;
-        // Strip surrounding quotes if present
-        let cleaned = s.trim();
-        if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-            (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-          cleaned = cleaned.slice(1, -1);
-        }
-        return cleaned || undefined;
-      };
       // Use title, toolName, or toolCallId as fallback - never show "undefined"
       const toolDisplayName = cleanTitle(d.title) || cleanTitle(d.toolName) || cleanTitle(d.toolCallId) || "Tool";
       // Track tool call metrics
@@ -831,145 +827,21 @@ async function handleSessionSetMode(params: SetModeParams): Promise<SetModeResul
   return { mode: params.mode };
 }
 
-// File system handlers for remote @path expansion
-async function handleFsReadTextFile(
-  filePath: string,
-  cwd?: string
-): Promise<{ content: string | null; error?: string; path: string }> {
-  const { resolve, isAbsolute } = await import("path");
-  const absolutePath = isAbsolute(filePath) ? filePath : resolve(cwd || process.cwd(), filePath);
-
-  try {
-    const file = Bun.file(absolutePath);
-    if (!(await file.exists())) {
-      return { content: null, error: `File not found: ${absolutePath}`, path: absolutePath };
-    }
-
-    const content = await file.text();
-
-    // Limit file size to prevent massive responses (1MB limit)
-    if (content.length > 1024 * 1024) {
-      return {
-        content: content.slice(0, 1024 * 1024),
-        error: `File truncated (>1MB)`,
-        path: absolutePath,
-      };
-    }
-
-    return { content, path: absolutePath };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { content: null, error: `Failed to read: ${msg}`, path: absolutePath };
-  }
-}
-
-async function handleFsListDirectory(
-  dirPath: string,
-  cwd?: string
-): Promise<{ entries: Array<{ name: string; type: "file" | "directory" }>; error?: string; path: string }> {
-  const { resolve, isAbsolute, join } = await import("path");
-  const { readdirSync, statSync } = await import("fs");
-  const absolutePath = isAbsolute(dirPath) ? dirPath : resolve(cwd || process.cwd(), dirPath);
-
-  try {
-    const entries = readdirSync(absolutePath);
-    const result = entries
-      .filter((name) => !name.startsWith(".")) // Skip hidden files
-      .slice(0, 100) // Limit to 100 entries
-      .map((name) => {
-        try {
-          const stat = statSync(join(absolutePath, name));
-          return { name, type: stat.isDirectory() ? "directory" as const : "file" as const };
-        } catch {
-          return { name, type: "file" as const };
-        }
-      });
-
-    return { entries: result, path: absolutePath };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { entries: [], error: `Failed to list: ${msg}`, path: absolutePath };
-  }
-}
-
-// ============================================================
-// Agent Management Handlers
-// ============================================================
-
-async function handleAgentList(): Promise<AgentListResult> {
-  await initializeRegistry();
-  const agents = listAgents();
-
-  return {
-    agents: agents.map((agent: AgentDefinition): AgentInfo => ({
-      identity: agent.identity,
-      name: agent.name,
-      shortName: agent.shortName,
-      description: agent.description,
-      protocol: agent.protocol,
-      type: agent.type,
-      active: agent.active !== false,
-    })),
-    currentAgent: currentAgentId,
-  };
-}
-
-async function handleAgentSelect(params: AgentSelectParams): Promise<AgentSelectResult> {
-  const { agentId } = params;
-
-  // Check if there's a running task
-  if (runningTaskId) {
-    return {
-      success: false,
-      agentId: currentAgentId,
-      message: "Cannot switch agents while a task is running",
-    };
-  }
-
-  // Look up agent in registry
-  await initializeRegistry();
-  const agent = getAgent(agentId);
-
-  if (!agent) {
-    return {
-      success: false,
-      agentId: currentAgentId,
-      message: `Unknown agent: ${agentId}`,
-    };
-  }
-
-  if (agent.active === false) {
-    return {
-      success: false,
-      agentId: currentAgentId,
-      message: `Agent is inactive: ${agentId}`,
-    };
-  }
-
-  currentAgentId = agent.identity;
-  info("Agent selected", { agentId: currentAgentId, protocol: agent.protocol });
-
-  return {
-    success: true,
-    agentId: currentAgentId,
-  };
-}
-
-function handleAgentStatus(): AgentStatusResult {
-  const agent = getAgent(currentAgentId);
-
-  return {
-    currentAgent: currentAgentId,
-    isRunning: runningTaskId !== null,
-    protocol: agent?.protocol || "acp",
-  };
-}
+// File system and agent handlers have been extracted to ./handlers/
+// See: handlers/filesystem.ts, handlers/agent.ts
 
 // Handle incoming JSON-RPC request
 async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
   const { id, method, params } = request;
 
   debug("RPC request:", { id, method, paramsKeys: params ? Object.keys(params as object) : [] });
+
+  // Context for agent handlers (provides access to module-level state)
+  const agentHandlerContext: AgentHandlerContext = {
+    getCurrentAgentId: () => currentAgentId,
+    setCurrentAgentId: (id: string) => { currentAgentId = id; },
+    getRunningTaskId: () => runningTaskId,
+  };
 
   try {
     let result: unknown;
@@ -1179,168 +1051,60 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         result = { success: true };
         break;
 
-      // Queue Management
+      // Queue Management (handlers extracted to ./handlers/queue.ts)
       case AcpMethod.QueueEnqueue:
-        {
-          const queueParams = params as QueueEnqueueParams;
-          if (!queueParams.text) {
-            throw new Error("Missing text parameter");
-          }
-          // Filter mode to only valid queue modes (execute is not valid for queue)
-          const queueMode = queueParams.mode === "execute" ? undefined : queueParams.mode;
-          const queued = promptQueue.enqueue(
-            queueParams.text,
-            queueParams.attachments,
-            queueMode
-          );
-          result = {
-            id: queued.id,
-            position: promptQueue.length,
-          } as QueueEnqueueResult;
-        }
+        result = handleQueueEnqueue(params as QueueEnqueueParams);
         break;
 
       case AcpMethod.QueueDequeue:
-        {
-          const dequeued = promptQueue.dequeue();
-          result = {
-            prompt: dequeued ? toQueuedPromptInfo(dequeued) : null,
-            remaining: promptQueue.length,
-          } as QueueDequeueResult;
-        }
+        result = handleQueueDequeue();
         break;
 
       case AcpMethod.QueuePeek:
-        {
-          const peeked = promptQueue.peek();
-          result = {
-            prompt: peeked ? toQueuedPromptInfo(peeked) : null,
-            queueLength: promptQueue.length,
-          } as QueuePeekResult;
-        }
+        result = handleQueuePeek();
         break;
 
       case AcpMethod.QueueList:
-        {
-          const all = promptQueue.getAll();
-          result = {
-            prompts: all.map(toQueuedPromptInfo),
-            processing: promptQueue.isProcessing,
-          } as QueueListResult;
-        }
+        result = handleQueueList();
         break;
 
       case AcpMethod.QueueRemove:
-        {
-          const removeParams = params as QueueRemoveParams;
-          if (!removeParams.ids || !Array.isArray(removeParams.ids)) {
-            throw new Error("Missing or invalid ids parameter");
-          }
-          const removed = promptQueue.remove(removeParams.ids);
-          result = {
-            removed: removed.length,
-            remaining: promptQueue.length,
-          } as QueueRemoveResult;
-        }
+        result = handleQueueRemove(params as QueueRemoveParams);
         break;
 
       case AcpMethod.QueueClear:
-        {
-          const count = promptQueue.length;
-          promptQueue.clear();
-          result = {
-            cleared: count,
-          } as QueueClearResult;
-        }
+        result = handleQueueClear();
         break;
 
-      // Bash Execution (for remote CLI)
+      // Bash Execution (handlers extracted to ./handlers/bash.ts)
       case AcpMethod.BashExecute:
-        {
-          const bashParams = params as { command: string; cwd?: string; timeout?: number };
-          if (!bashParams.command) {
-            throw new Error("Missing command parameter");
-          }
-          const cwd = bashParams.cwd || process.cwd();
-          const timeout = bashParams.timeout || 30000;
-
-          try {
-            const proc = Bun.spawn(["bash", "-c", bashParams.command], {
-              stdout: "pipe",
-              stderr: "pipe",
-              cwd,
-            });
-
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              setTimeout(() => {
-                proc.kill();
-                reject(new Error(`Command timed out after ${timeout}ms`));
-              }, timeout);
-            });
-
-            const [stdout, stderr] = await Promise.race([
-              Promise.all([
-                new Response(proc.stdout).text(),
-                new Response(proc.stderr).text(),
-              ]),
-              timeoutPromise,
-            ]);
-
-            const exitCode = await proc.exited;
-
-            result = {
-              stdout,
-              stderr,
-              exitCode,
-            };
-          } catch (err) {
-            result = {
-              stdout: "",
-              stderr: err instanceof Error ? err.message : String(err),
-              exitCode: 1,
-            };
-          }
-        }
+        result = await handleBashExecute(params as { command: string; cwd?: string; timeout?: number });
         break;
 
       case AcpMethod.GetCwd:
-        result = { cwd: process.cwd() };
+        result = handleGetCwd();
         break;
 
-      // Agent Management
+      // Agent Management (handlers extracted to ./handlers/agent.ts)
       case AcpMethod.AgentList:
-        result = await handleAgentList();
+        result = await handleAgentList(agentHandlerContext);
         break;
 
       case AcpMethod.AgentSelect:
-        result = await handleAgentSelect(params as AgentSelectParams);
+        result = await handleAgentSelect(params as AgentSelectParams, agentHandlerContext);
         break;
 
       case AcpMethod.AgentStatus:
-        result = handleAgentStatus();
+        result = handleAgentStatus(agentHandlerContext);
         break;
 
-      // Permission Management
+      // Permission Management (handlers extracted to ./handlers/permission.ts)
       case AcpMethod.PermissionRespond:
-        {
-          const permParams = params as { requestId: string; optionId: string };
-          if (!permParams.requestId || !permParams.optionId) {
-            throw new Error("Missing requestId or optionId parameter");
-          }
-          const success = respondToPermission(permParams.requestId, permParams.optionId);
-          result = { success };
-        }
+        result = handlePermissionRespond(params as { requestId: string; optionId: string });
         break;
 
       case AcpMethod.PermissionCancel:
-        {
-          const permParams = params as { requestId: string };
-          if (!permParams.requestId) {
-            throw new Error("Missing requestId parameter");
-          }
-          const success = cancelPermission(permParams.requestId);
-          result = { success };
-        }
+        result = handlePermissionCancel(params as { requestId: string });
         break;
 
       default:
