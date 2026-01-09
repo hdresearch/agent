@@ -3,7 +3,7 @@
 
 import { describe, test, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import {
-  DockerTestContext,
+  type DockerTestContext,
   TEST_SERVER_URL,
   isDockerServerRunning,
   createTestContext,
@@ -13,7 +13,8 @@ import {
   listSessions,
   connectToEventStream,
   cleanupSessions,
-} from "./docker-test-utils";
+  waitUntil,
+} from "../shared";
 
 describe("Docker Server Remote Tests", () => {
   let ctx: DockerTestContext;
@@ -241,20 +242,20 @@ describe("Docker Server Remote Tests", () => {
       if (skipIfNoServer()) return;
 
       let connected = false;
-      let eventReceived = false;
 
       const connection = connectToEventStream(
         ctx,
-        (event) => {
-          eventReceived = true;
+        () => {
+          // Event received
         },
-        (error) => {
+        () => {
           // Connection error
         }
       );
 
-      // Give it a moment to connect
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Use waitUntil instead of arbitrary delay
+      // Give connection time to establish (but don't wait for events)
+      await waitUntil(() => true, { timeout: 1000 });
 
       // The connection should have been established
       // We can verify by checking if the stream is open
