@@ -8,22 +8,21 @@ import type {
   PromptEvent,
   RunPromptOptions,
   AcpSessionUpdate,
-  AcpAgentMessageChunk,
-  AcpAgentThoughtChunk,
-  AcpToolCall,
-  AcpToolCallUpdate,
-  AcpPlan,
   AcpAvailableCommandsUpdate,
   AcpContentBlock,
   AcpRequestPermissionParams,
   AcpRequestPermissionResult,
 } from "./types";
+import type { AvailableCommandData } from "../protocol/acp-types";
 import { getAgent, getRunCommand, getAgentEnv, ensureAgentInstalled } from "./registry";
 import { SubprocessManager, getSubprocessManager } from "./subprocess-manager";
 import { AcpClient, createContentBlocks } from "./acp-client";
 import { AcpServer } from "./acp-server";
 import { getAgentConfig } from "./configs";
 import { logStream } from "../utils/log-stream";
+import { cleanTitle } from "../utils/string-utils";
+import { mapSessionUpdateToPromptEvent } from "./event-mapper";
+import { buildContentBlocks } from "./content-builder";
 // Note: Claude Agent SDK has been removed. All agents use ACP subprocess mode.
 
 // ============================================================
@@ -55,8 +54,8 @@ export class SubprocessAgentRunner implements AgentRunner {
   private currentAbortController: AbortController | null = null;
   private pendingPermissions: Map<string, PendingPermissionRequest> = new Map();
   private permissionRequestCounter = 0;
-  private availableCommands: Array<{ name: string; description: string; input?: { hint: string } }> = [];
-  private commandsCallback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null = null;
+  private availableCommands: AvailableCommandData[] = [];
+  private commandsCallback: ((commands: AvailableCommandData[]) => void) | null = null;
   private stderrCallback: ((text: string) => void) | null = null;
   private sessionIdCallback: ((sessionId: string) => void) | null = null;
   private options: AgentRunnerOptions;
@@ -129,17 +128,6 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       // Emit permission request event
       if (this.currentEventTarget) {
-        // Clean up title: strip surrounding quotes and filter invalid values
-        const cleanTitle = (s: string | undefined): string | undefined => {
-          if (!s || s === "undefined" || s.trim() === "") return undefined;
-          // Strip surrounding quotes if present
-          let cleaned = s.trim();
-          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-            cleaned = cleaned.slice(1, -1);
-          }
-          return cleaned || undefined;
-        };
         // Use title with fallback to toolCallId or "Tool" - never show "undefined"
         const permissionTitle = cleanTitle(params.toolCall.title) || params.toolCall.toolCallId || "Tool";
         const event: PromptEvent = {
@@ -303,14 +291,14 @@ export class SubprocessAgentRunner implements AgentRunner {
   /**
    * Get the available commands from the agent
    */
-  getAvailableCommands(): Array<{ name: string; description: string; input?: { hint: string } }> {
+  getAvailableCommands(): AvailableCommandData[] {
     return this.availableCommands;
   }
 
   /**
    * Set a callback to be notified when commands are updated
    */
-  onCommandsUpdated(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void {
+  onCommandsUpdated(callback: ((commands: AvailableCommandData[]) => void) | null): void {
     this.commandsCallback = callback;
   }
 
@@ -338,8 +326,8 @@ export class SubprocessAgentRunner implements AgentRunner {
     // Session updates are handled via handleAgentNotification (registered in constructor)
     // which forwards notifications to this.currentEventTarget
 
-    // Create content blocks
-    const contentBlocks = this.buildContentBlocks(options);
+    // Create content blocks using extracted helper
+    const contentBlocks = buildContentBlocks(options);
 
     // Start the prompt in background
     const promptPromise = this.executePrompt(contentBlocks, eventTarget, abortController);
@@ -354,43 +342,6 @@ export class SubprocessAgentRunner implements AgentRunner {
       },
       isRunning: () => this.running,
     };
-  }
-
-  private buildContentBlocks(options: RunPromptOptions): AcpContentBlock[] {
-    const blocks: AcpContentBlock[] = [];
-
-    // Add text
-    if (options.prompt) {
-      blocks.push({ type: "text", text: options.prompt });
-    }
-
-    // Add images
-    if (options.images) {
-      for (const img of options.images) {
-        if (img.base64 && !img.error) {
-          blocks.push({
-            type: "image",
-            data: img.base64,
-            mimeType: img.mediaType,
-          });
-        }
-      }
-    }
-
-    // Add attachments
-    if (options.attachments) {
-      for (const att of options.attachments) {
-        if (att.type === "image" && att.content) {
-          blocks.push({
-            type: "image",
-            data: att.content,
-            mimeType: att.mimeType || "image/png",
-          });
-        }
-      }
-    }
-
-    return blocks;
   }
 
   private async executePrompt(
@@ -502,95 +453,6 @@ export class SubprocessAgentRunner implements AgentRunner {
     }
   }
 
-  private mapSessionUpdateToPromptEvent(update: AcpSessionUpdate): PromptEvent | null {
-    switch (update.sessionUpdate) {
-      case "agent_message_chunk": {
-        const chunk = update as AcpAgentMessageChunk;
-        if (chunk.content.type === "text") {
-          return {
-            type: "text_delta",
-            data: { text: chunk.content.text },
-          };
-        }
-        return null;
-      }
-
-      case "agent_thought_chunk": {
-        const thought = update as AcpAgentThoughtChunk;
-        if (thought.content.type === "text") {
-          return {
-            type: "thinking",
-            data: { thinking: thought.content.text },
-          };
-        }
-        return null;
-      }
-
-      case "tool_call": {
-        const toolCall = update as AcpToolCall;
-        // Clean up title: strip surrounding quotes and filter invalid values
-        const cleanTitle = (s: string | undefined): string | undefined => {
-          if (!s || s === "undefined" || s.trim() === "") return undefined;
-          // Strip surrounding quotes if present
-          let cleaned = s.trim();
-          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
-            cleaned = cleaned.slice(1, -1);
-          }
-          return cleaned || undefined;
-        };
-        // Use cleaned title if valid, fallback to toolCallId or "Tool"
-        const displayTitle = cleanTitle(toolCall.title) || toolCall.toolCallId || "Tool";
-        return {
-          type: "tool_use",
-          data: {
-            toolCallId: toolCall.toolCallId,
-            name: displayTitle,
-            input: toolCall.rawInput || {},
-            title: displayTitle,
-            kind: toolCall.kind,
-            status: toolCall.status,
-            locations: toolCall.locations,
-            content: toolCall.content,
-          },
-        };
-      }
-
-      case "tool_call_update": {
-        const toolUpdate = update as AcpToolCallUpdate;
-        if (toolUpdate.status) {
-          return {
-            type: "tool_result",
-            data: {
-              toolCallId: toolUpdate.toolCallId,
-              status: toolUpdate.status,
-              content: toolUpdate.rawOutput,
-              locations: toolUpdate.locations,
-              richContent: toolUpdate.content,
-            },
-          };
-        }
-        return null;
-      }
-
-      case "plan": {
-        // Plans are handled separately, not mapped to PromptEvent
-        return null;
-      }
-
-      case "available_commands_update": {
-        const commandsUpdate = update as AcpAvailableCommandsUpdate;
-        return {
-          type: "available_commands",
-          data: { commands: commandsUpdate.availableCommands },
-        };
-      }
-
-      default:
-        return null;
-    }
-  }
-
   private async handleAgentRequest(
     agentId: string,
     request: import("../protocol/jsonrpc").JsonRpcRequest
@@ -652,7 +514,7 @@ export class SubprocessAgentRunner implements AgentRunner {
 
       // Forward to the current event target if we're running a prompt
       if (this.currentEventTarget) {
-        const event = this.mapSessionUpdateToPromptEvent(params.update);
+        const event = mapSessionUpdateToPromptEvent(params.update);
         if (event) {
           this.currentEventTarget.dispatchEvent(
             new CustomEvent("prompt-event", { detail: event })

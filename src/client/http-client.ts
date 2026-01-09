@@ -39,6 +39,7 @@ import {
   type QueueRemoveResult,
   type QueueClearResult,
   type SessionMode,
+  type AvailableCommandData,
 } from "../protocol/acp-types";
 
 export type NotificationHandler = (params: SessionNotificationParams) => void;
@@ -496,7 +497,7 @@ export class HttpAcpClient {
     return this.request(AcpMethod.GetCwd, {});
   }
 
-  async getCommands(): Promise<{ commands: Array<{ name: string; description: string; input?: { hint: string } }> }> {
+  async getCommands(): Promise<{ commands: AvailableCommandData[] }> {
     const headers: Record<string, string> = {};
     if (this._authToken) {
       headers["Authorization"] = `Bearer ${this._authToken}`;
@@ -505,7 +506,7 @@ export class HttpAcpClient {
     if (!response.ok) {
       throw new Error(`Failed to get commands: ${response.status}`);
     }
-    return response.json() as Promise<{ commands: Array<{ name: string; description: string; input?: { hint: string } }> }>;
+    return response.json() as Promise<{ commands: AvailableCommandData[] }>;
   }
 
   // Agent management
