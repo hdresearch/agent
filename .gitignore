@@ -38,3 +38,7 @@ vers-agent
 
 # CLI bin folder
 bin
+
+# Nix
+result
+.direnv/
