@@ -63,6 +63,45 @@ docker-test:
     docker compose -f docker-compose.test.yml down -v
     rm -f /tmp/.vers-agent-test-token
 
+# ── Nix ───────────────────────────────────────────────────────────────────────
+
+# Update the node_modules hash in flake.nix
+# Note: Local bun may differ from nixpkgs bun, so if nix build fails with
+# hash mismatch, use the hash from the error message instead
+nix-hash:
+    #!/usr/bin/env bash
+    set -e
+
+    echo "Computing node_modules hash..."
+    echo "(Note: If nix build fails with hash mismatch, use the hash from the error)"
+    echo ""
+
+    # Create temp directory and install deps
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+
+    cp package.json bun.lock "$tmpdir/"
+    cd "$tmpdir"
+
+    HOME=/tmp/bun-hash-home bun install --frozen-lockfile 2>/dev/null
+
+    # Compute the hash of node_modules
+    hash=$(nix --extra-experimental-features nix-command hash path --type sha256 --base64 node_modules)
+    sri_hash="sha256-$hash"
+
+    echo "New hash: $sri_hash"
+
+    # Update flake.nix
+    cd "{{justfile_directory()}}"
+    sed -i.bak "s|outputHash = \"sha256-.*\";|outputHash = \"$sri_hash\";|" flake.nix
+    rm -f flake.nix.bak
+
+    echo "Updated flake.nix with new hash"
+
+# Build with nix
+nix-build:
+    nix --extra-experimental-features 'nix-command flakes' build
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 clean:
