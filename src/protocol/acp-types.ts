@@ -15,6 +15,8 @@ export interface AcpAgentConfig {
   capabilities: ClientCapabilities;
   defaultModel?: string;
   authMethods?: string[];
+  /** Filter function for stderr - return true to suppress the message */
+  stderrFilter?: (text: string) => boolean;
 }
 
 // Default config for agents that don't specify their own
@@ -164,7 +166,6 @@ export interface GetSessionOutputsResult {
 
 export interface SessionConfig {
   model?: string;
-  thinkingBudget?: number | null;
   maxTurns?: number;
   maxBudgetUsd?: number;
   allowedTools?: string[];

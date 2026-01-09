@@ -13,6 +13,7 @@ import {
   type ConversationHistory,
 } from "../../utils/history";
 import { getConfig, setConfig } from "../../utils/config";
+import { logStream } from "../../utils/log-stream";
 
 export interface UseAcpClientOptions {
   serverUrl?: string;
@@ -40,6 +41,9 @@ export interface UseAcpClientResult {
   agentCommands: AvailableCommandData[];
   // Current agent info
   agentName: string | null;
+  // Agent output (for popup display)
+  agentOutput: string;
+  clearAgentOutput: () => void;
 }
 
 // Reconnect configuration
@@ -57,6 +61,7 @@ export function useAcpClient({
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
   const [agentCommands, setAgentCommands] = useState<AvailableCommandData[]>([]);
   const [agentName, setAgentName] = useState<string | null>(null);
+  const [agentOutput, setAgentOutput] = useState<string>("");
   const clientRef = useRef<HttpAcpClient | null>(null);
   const historyRef = useRef<ConversationHistory | null>(null);
   const sessionConfigRef = useRef(sessionConfig);
@@ -107,16 +112,17 @@ export function useAcpClient({
     });
   }, [permissionRequest, onOutput]);
 
+  // Callback to clear agent output (dismiss popup)
+  const clearAgentOutput = useCallback(() => {
+    setAgentOutput("");
+  }, []);
+
   // Load persisted config
   const persistedConfig = getConfig();
 
   // Status bar state - initialized from persisted config
   const [statusInfo, setStatusInfo] = useState<StatusInfo>({
     model: persistedConfig.model,
-    thinking: {
-      enabled: persistedConfig.thinkingBudget !== null,
-      budget: persistedConfig.thinkingBudget,
-    },
     cost: { totalCost: 0, inputTokens: 0, outputTokens: 0 },
     planMode: false,
     sessionId: null,
@@ -311,8 +317,11 @@ export function useAcpClient({
           case "content_chunk":
             if ("text" in data && data.text) {
               const text = data.text as string;
-              onOutput({ type: "text", content: text });
-              if (historyRef.current) {
+              const isFinal = "final" in data && data.final === true;
+              // Output each chunk for streaming display
+              onOutput({ type: "text", content: text, streaming: !isFinal });
+              // Only save to history on final chunks
+              if (isFinal && historyRef.current) {
                 addMessage(historyRef.current, "assistant", text);
                 saveHistory(historyRef.current);
               }
@@ -497,6 +506,21 @@ export function useAcpClient({
               setAgentCommands(data.commands as AvailableCommandData[]);
             }
             break;
+
+          case "agent_output":
+            if ("text" in data && data.text) {
+              // Append to agent output buffer for popup display
+              setAgentOutput(prev => prev + (data.text as string));
+            }
+            break;
+
+          case "session_id_updated":
+            if ("sessionId" in data && data.sessionId) {
+              const newSessionId = data.sessionId as string;
+              lastSessionIdRef.current = newSessionId;
+              setStatusInfo(prev => ({ ...prev, sessionId: newSessionId }));
+            }
+            break;
         }
       });
     };
@@ -514,20 +538,33 @@ export function useAcpClient({
       }
 
       // Create or load session
+      // First check if server already has an active session (agent already running)
       let sessionLoaded = false;
       let currentSessionId: string | null = null;
-      if (continueMode) {
-        try {
-          const sessions = await client.listSessions();
-          if (sessions.sessions.length > 0) {
-            const mostRecent = sessions.sessions[0]!;
-            const loadResult = await client.loadSession(mostRecent.id);
-            currentSessionId = loadResult.sessionId;
-            sessionLoaded = true;
-          }
-        } catch {
-          // Fall back to new session
+
+      try {
+        const sessionsResult = await client.listSessions();
+        logStream.debug("Initial listSessions:", {
+          currentSessionId: sessionsResult.currentSessionId,
+          sessionCount: sessionsResult.sessions.length
+        });
+
+        if (sessionsResult.currentSessionId) {
+          // Server already has an active session with the agent - use it directly
+          currentSessionId = sessionsResult.currentSessionId;
+          sessionLoaded = true;
+          logStream.debug("Using existing server session:", currentSessionId);
+        } else if (sessionsResult.sessions.length > 0) {
+          // No active session, but have history - load most recent
+          const mostRecent = sessionsResult.sessions[0]!;
+          const loadResult = await client.loadSession(mostRecent.id);
+          currentSessionId = loadResult.sessionId;
+          sessionLoaded = true;
+          logStream.debug("Loaded session from history:", currentSessionId);
         }
+      } catch (err) {
+        logStream.debug("listSessions failed:", err);
+        // Fall back to new session
       }
 
       if (!sessionLoaded) {
@@ -535,15 +572,47 @@ export function useAcpClient({
         seenToolResultsRef.current.clear();
         const newResult = await client.newSession(sessionConfigRef.current);
         currentSessionId = newResult.sessionId;
+        logStream.debug("Created new session:", currentSessionId);
       }
 
+      logStream.debug("Final session ID:", currentSessionId);
       if (currentSessionId) {
         lastSessionIdRef.current = currentSessionId;
         setStatusInfo(prev => ({ ...prev, sessionId: currentSessionId }));
       }
 
-      // Note: Session outputs are loaded via SSE notifications when the session is loaded
-      // No need to call getSessionOutputs() as it would duplicate messages
+      // Load historical outputs for resumed sessions
+      if (sessionLoaded && currentSessionId) {
+        try {
+          const outputsResult = await client.getSessionOutputs({ sessionId: currentSessionId });
+          if (outputsResult.outputs && outputsResult.outputs.length > 0) {
+            logStream.debug("Loading historical outputs:", outputsResult.outputs.length);
+            // Send historical outputs to the UI
+            for (const output of outputsResult.outputs) {
+              if (output.type === "user") {
+                onOutput({
+                  type: "user",
+                  content: output.content,
+                });
+              } else if (output.type === "assistant" || output.type === "text") {
+                onOutput({
+                  type: "text",
+                  content: output.content,
+                });
+              } else if (output.type === "tool") {
+                // Tool outputs are reconstructed via tool events
+              } else if (output.type === "system") {
+                onOutput({
+                  type: "system",
+                  content: output.content,
+                });
+              }
+            }
+          }
+        } catch (err) {
+          logStream.debug("Failed to load historical outputs:", err);
+        }
+      }
 
       // Fetch remote working directory if in remote mode
       if (isRemoteMode) {
@@ -649,5 +718,7 @@ export function useAcpClient({
     cancelPermission,
     agentCommands,
     agentName,
+    agentOutput,
+    clearAgentOutput,
   };
 }

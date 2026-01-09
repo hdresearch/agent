@@ -1,12 +1,13 @@
 // Agent Manager - manages agent lifecycle and prompt execution
 // Uses ACP subprocess runner instead of Claude Agent SDK
 
-import { createAgentRunner, type SubprocessAgentRunner } from "../agents/agent-runner";
+import { createAgentRunner, type SubprocessAgentRunner, type AgentRunnerOptions } from "../agents/agent-runner";
 import { initializeRegistry } from "../agents/registry";
 import type { AgentRunner, PromptEvent, RunPromptOptions } from "../agents/types";
 import { getConfig } from "../utils/config";
 import { taskStore } from "./tasks";
 import { logStream } from "../utils/log-stream";
+import { snapshotBaseline, resetBaseline } from "../utils/claude-usage";
 
 function debug(message: string, data?: unknown): void {
   logStream.debug(`[agent-manager] ${message}`, data);
@@ -27,35 +28,80 @@ let currentAgentId: string = "claude.com"; // Default to Claude Code ACP
 // Running prompt handles for cancellation
 const runningPrompts: Map<string, { cancel: () => Promise<void> }> = new Map();
 
+// Callback for when agent commands are updated
+let commandsCallback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null = null;
+
+// Callback for agent stderr output
+let stderrCallback: ((text: string) => void) | null = null;
+
+// Callback for session ID updates (from agent notifications)
+let sessionIdCallback: ((sessionId: string) => void) | null = null;
+
+export interface InitializeAgentOptions {
+  /** Session ID to resume (for Claude Code's session resume via _meta) */
+  resumeSessionId?: string;
+}
+
 /**
  * Initialize the agent manager with an agent
  */
-export async function initializeAgent(agentId?: string, cwd?: string): Promise<void> {
+export async function initializeAgent(agentId?: string, cwd?: string, options?: InitializeAgentOptions): Promise<void> {
   const targetAgent = agentId || currentAgentId;
   const targetCwd = cwd || process.cwd();
 
-  info("Initializing agent", { agentId: targetAgent, cwd: targetCwd });
+  info("Initializing agent", { agentId: targetAgent, cwd: targetCwd, resumeSessionId: options?.resumeSessionId });
 
   // Ensure registry is loaded
   await initializeRegistry();
 
-  // Stop existing runner if switching agents
-  if (currentRunner && currentAgentId !== targetAgent) {
+  // Stop existing runner if switching agents OR if resumeSessionId is provided
+  // When resumeSessionId is provided, we MUST restart the agent to pass --resume to Claude CLI
+  if (currentRunner && (currentAgentId !== targetAgent || options?.resumeSessionId)) {
+    if (options?.resumeSessionId) {
+      info("Stopping agent to restart with resume option", { resumeSessionId: options.resumeSessionId });
+    }
     await stopAgent();
   }
 
-  // Reuse existing runner if same agent is already running
+  // Reuse existing runner if same agent is already running (and no resume requested)
   if (currentRunner && currentAgentId === targetAgent) {
     debug("Reusing existing agent runner", { agentId: targetAgent });
     return;
   }
 
-  // Create and start new runner
+  // Create and start new runner with resume option if provided
+  const runnerOptions: AgentRunnerOptions = {};
+  if (options?.resumeSessionId) {
+    runnerOptions.resumeSessionId = options.resumeSessionId;
+    info("Will resume session", { sessionId: options.resumeSessionId });
+  }
+
   try {
-    currentRunner = createAgentRunner(targetAgent, targetCwd);
+    currentRunner = createAgentRunner(targetAgent, targetCwd, runnerOptions);
+
+    // Register commands callback before starting (commands may be sent during init)
+    if (currentRunner.onCommandsUpdated && commandsCallback) {
+      currentRunner.onCommandsUpdated(commandsCallback);
+    }
+
+    // Register stderr callback for agent output
+    if (currentRunner.onStderr && stderrCallback) {
+      currentRunner.onStderr(stderrCallback);
+    }
+
+    // Register session ID callback (for when agent sends real session ID in notifications)
+    if (currentRunner.onSessionIdUpdated && sessionIdCallback) {
+      currentRunner.onSessionIdUpdated(sessionIdCallback);
+    }
+
     await currentRunner.start();
     currentAgentId = targetAgent;
     info("Agent initialized", { agentId: targetAgent });
+
+    // Snapshot Claude Code usage baseline for usage tracking
+    if (targetAgent === "claude.com") {
+      await snapshotBaseline();
+    }
   } catch (err) {
     error("Failed to initialize agent", { agentId: targetAgent, error: err instanceof Error ? err.message : String(err) });
     throw err;
@@ -85,6 +131,22 @@ export function getCurrentAgentId(): string {
  */
 export function isAgentRunning(): boolean {
   return currentRunner?.isRunning() ?? false;
+}
+
+/**
+ * Get the agent's internal session ID (from ACP session/new)
+ * This is the session ID that Claude Code uses internally
+ */
+export function getAgentSessionId(): string | null {
+  return currentRunner?.getSessionId() ?? null;
+}
+
+/**
+ * Get Claude CLI's actual session ID (8-char format from notifications)
+ * This is the ID that Claude Code uses for session persistence and resume
+ */
+export function getClaudeSessionId(): string | null {
+  return currentRunner?.getClaudeSessionId?.() ?? null;
 }
 
 /**
@@ -144,9 +206,9 @@ export async function runTask(taskId: string): Promise<void> {
       }
     }
 
-    // If we have accumulated text but no text_complete event, add it now
+    // If we have accumulated text but no text_complete event, emit a final marker
     if (currentText) {
-      taskStore.addEvent(taskId, "assistant_message", { text: currentText });
+      taskStore.addEvent(taskId, "text_delta", { text: "", final: true });
     }
 
     // Check final status
@@ -192,12 +254,17 @@ async function processPromptEvent(
       break;
 
     case "text_delta":
-      // Accumulate text, will emit assistant_message on text_complete
+      // Emit delta for incremental streaming display
+      taskStore.addEvent(taskId, "text_delta", {
+        text: (event.data as { text: string }).text
+      });
       break;
 
     case "text_complete":
-      taskStore.addEvent(taskId, "assistant_message", {
-        text: (event.data as { text: string }).text
+      // Just emit a marker to finalize the streaming text (no content since it was already streamed)
+      taskStore.addEvent(taskId, "text_delta", {
+        text: "",
+        final: true
       });
       break;
 
@@ -309,6 +376,16 @@ async function processPromptEvent(
       });
       break;
     }
+
+    case "available_commands": {
+      const data = event.data as {
+        commands: Array<{ name: string; description: string; input?: { hint: string } }>;
+      };
+      taskStore.addEvent(taskId, "available_commands", {
+        commands: data.commands,
+      });
+      break;
+    }
   }
 }
 
@@ -396,4 +473,55 @@ export function cancelPermission(requestId: string): boolean {
     return currentRunner.cancelPermission(requestId);
   }
   return false;
+}
+
+/**
+ * Get available commands from the current agent
+ */
+export function getAgentCommands(): Array<{ name: string; description: string; input?: { hint: string } }> {
+  if (currentRunner?.getAvailableCommands) {
+    return currentRunner.getAvailableCommands();
+  }
+  return [];
+}
+
+/**
+ * Set a callback to be notified when agent commands are updated
+ */
+export function onAgentCommandsUpdated(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void {
+  // Store the callback for future runners
+  commandsCallback = callback;
+
+  // Register on current runner if exists
+  if (currentRunner?.onCommandsUpdated) {
+    currentRunner.onCommandsUpdated(callback);
+  }
+}
+
+/**
+ * Set a callback to receive agent stderr output (for popup display)
+ */
+export function onAgentStderr(callback: ((text: string) => void) | null): void {
+  // Store the callback for future runners
+  stderrCallback = callback;
+
+  // Register on current runner if exists
+  if (currentRunner?.onStderr) {
+    currentRunner.onStderr(callback);
+  }
+}
+
+/**
+ * Set a callback to be notified when the agent's session ID is updated.
+ * This is needed because some agents (like Claude Code) send the real session ID
+ * in notifications rather than in the session/new response.
+ */
+export function onAgentSessionIdUpdated(callback: ((sessionId: string) => void) | null): void {
+  // Store the callback for future runners
+  sessionIdCallback = callback;
+
+  // Register on current runner if exists
+  if (currentRunner?.onSessionIdUpdated) {
+    currentRunner.onSessionIdUpdated(callback);
+  }
 }

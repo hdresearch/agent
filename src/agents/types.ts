@@ -612,9 +612,21 @@ export interface AgentRunner {
   stop(): Promise<void>;
   runPrompt(options: RunPromptOptions): PromptHandle;
   isRunning(): boolean;
+  // Get the agent's internal session ID (from ACP session/new)
+  getSessionId(): string | null;
+  // Get Claude CLI's actual session ID (8-char format from notifications)
+  // This is the ID needed for session resume
+  getClaudeSessionId?(): string | null;
   // Permission handling (optional - for ACP agents with interactive permissions)
   respondToPermission?(requestId: string, optionId: string): boolean;
   cancelPermission?(requestId: string): boolean;
+  // Command handling (optional - for agents that expose slash commands)
+  getAvailableCommands?(): Array<{ name: string; description: string; input?: { hint: string } }>;
+  onCommandsUpdated?(callback: ((commands: Array<{ name: string; description: string; input?: { hint: string } }>) => void) | null): void;
+  // Stderr output handling (optional - for capturing agent command output)
+  onStderr?(callback: ((text: string) => void) | null): void;
+  // Session ID update handling (optional - for agents that send session ID in notifications)
+  onSessionIdUpdated?(callback: ((sessionId: string) => void) | null): void;
 }
 
 // ============================================================

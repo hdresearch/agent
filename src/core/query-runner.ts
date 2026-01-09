@@ -20,7 +20,6 @@ export interface QueryHandle {
 export interface RunQueryOptions {
   prompt: string;
   model?: string;
-  thinkingBudget?: number | null;
   resume?: string;
   continueLastSession?: boolean;
   cwd?: string;

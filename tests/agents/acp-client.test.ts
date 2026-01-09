@@ -233,9 +233,88 @@ describe("AcpClient", () => {
       (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({});
 
       await client.sessionNew("/test/cwd");
-      // Should handle gracefully - sessionId will be undefined
-      expect(client.getSessionId()).toBeUndefined();
+      // Should handle gracefully - sessionId will be null (initial value)
+      expect(client.getSessionId()).toBeNull();
     });
+  });
+});
+
+describe("AcpClient session ID updates", () => {
+  let subprocess: ReturnType<typeof createMockSubprocess>;
+  let client: AcpClient;
+
+  beforeEach(() => {
+    subprocess = createMockSubprocess();
+    client = new AcpClient(subprocess, "test-agent");
+  });
+
+  test("setSessionId updates the session ID", () => {
+    expect(client.getSessionId()).toBeNull();
+
+    client.setSessionId("notification-session-id-123");
+
+    expect(client.getSessionId()).toBe("notification-session-id-123");
+  });
+
+  test("setSessionId can override session ID from sessionNew", async () => {
+    // First, set session ID via sessionNew
+    (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+      sessionId: "session-new-id",
+    });
+    await client.sessionNew("/test/cwd");
+    expect(client.getSessionId()).toBe("session-new-id");
+
+    // Then override with notification-based session ID
+    client.setSessionId("notification-session-id");
+    expect(client.getSessionId()).toBe("notification-session-id");
+  });
+
+  test("session ID matches UUID format", () => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    client.setSessionId("0d54cb28-b599-4b7f-b4e1-e155535b9437");
+
+    expect(client.getSessionId()).toMatch(uuidRegex);
+  });
+
+  test("notification session ID is preserved when sessionNew response arrives", async () => {
+    // Simulate: notification arrives BEFORE sessionNew response
+    // 1. Client is created (sessionId = null)
+    // 2. Notification arrives with session ID "notification-id"
+    // 3. sessionNew response arrives with session ID "response-id"
+    // Expected: notification ID should be preserved (not overwritten)
+
+    const notificationId = "notification-aaaa-bbbb-cccc-dddddddddddd";
+    const responseId = "response-1111-2222-3333-444444444444";
+
+    // Simulate notification arriving first
+    client.setSessionId(notificationId);
+    expect(client.getSessionId()).toBe(notificationId);
+
+    // Simulate sessionNew response arriving after
+    (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+      sessionId: responseId,
+    });
+    await client.sessionNew("/test/cwd");
+
+    // Notification ID should be preserved
+    expect(client.getSessionId()).toBe(notificationId);
+  });
+
+  test("sessionNew response is used when no notification arrived", async () => {
+    const responseId = "response-1111-2222-3333-444444444444";
+
+    // No notification, sessionId starts as null
+    expect(client.getSessionId()).toBeNull();
+
+    // sessionNew response provides the session ID
+    (subprocess.request as ReturnType<typeof mock>).mockResolvedValue({
+      sessionId: responseId,
+    });
+    await client.sessionNew("/test/cwd");
+
+    // Response ID should be used
+    expect(client.getSessionId()).toBe(responseId);
   });
 });
 

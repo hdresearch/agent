@@ -9,6 +9,7 @@ import {
   InputBar,
 } from "./components";
 import { PermissionDialog } from "./components/permission-dialog";
+import { PopupWindow } from "./components/popup-window";
 
 // Hooks
 import { useAcpClient } from "./hooks/use-acp-client";
@@ -55,7 +56,6 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
   const persistedConfig = getConfig();
   const [sessionConfig, setSessionConfigState] = useState<SessionConfig>({
     model: persistedConfig.model,
-    thinkingBudget: persistedConfig.thinkingBudget,
   });
 
   const setSessionConfig = useCallback((updates: Partial<SessionConfig>) => {
@@ -64,7 +64,24 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
 
   // Output helper - auto-scroll to bottom when adding output
   const addOutput = useCallback((line: Omit<OutputLine, "id">) => {
-    setOutput((prev) => [...prev, { ...line, id: uniqueId() }]);
+    setOutput((prev) => {
+      // Handle streaming text: append to last line if it's a streaming text chunk
+      if (line.type === "text" && prev.length > 0) {
+        const lastLine = prev[prev.length - 1]!;
+        // If last line is a streaming text line, append to it
+        if (lastLine.type === "text" && lastLine.streaming) {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...lastLine,
+            content: lastLine.content + line.content,
+            streaming: line.streaming, // Keep streaming status from new chunk
+          };
+          return updated;
+        }
+      }
+      // Otherwise add as new line
+      return [...prev, { ...line, id: uniqueId() }];
+    });
     setScrollOffset(0); // Reset scroll to bottom on new output
   }, []);
 
@@ -132,6 +149,8 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     cancelPermission,
     agentCommands,
     agentName,
+    agentOutput,
+    clearAgentOutput,
   } = useAcpClient({
     serverUrl,
     continueMode,
@@ -402,7 +421,6 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     <Box flexDirection="column" height={containerHeight}>
       <TopStatusBar
         model={statusInfo.model}
-        cost={statusInfo.cost}
         connected={connected}
         planMode={statusInfo.planMode}
         sessionId={statusInfo.sessionId}
@@ -417,6 +435,14 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
           request={permissionRequest}
           onRespond={respondToPermission}
           onCancel={cancelPermission}
+        />
+      )}
+      {/* Agent output popup - shown when agent sends stderr output (e.g., /usage) */}
+      {agentOutput && (
+        <PopupWindow
+          title="Agent Output"
+          content={agentOutput}
+          onClose={clearAgentOutput}
         />
       )}
       {/* Show pending attachments above input like Claude Code */}

@@ -94,41 +94,6 @@ describe("handleSlashCommand", () => {
     });
   });
 
-  describe("/thinking", () => {
-    test("shows current state when no arg", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking", ctx);
-
-      expect(result.handled).toBe(true);
-      // Should enable with default budget
-      expect(ctx.outputs.some(o => o.content.includes("Thinking mode: ON"))).toBe(true);
-    });
-
-    test("turns thinking off", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking off", ctx);
-
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.content.includes("Thinking mode: OFF"))).toBe(true);
-    });
-
-    test("turns thinking on with custom budget", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking on 5000", ctx);
-
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.content.includes("5,000 tokens"))).toBe(true);
-    });
-
-    test("rejects budget below 1024", () => {
-      const ctx = createMockContext();
-      const result = handleSlashCommand("/thinking on 500", ctx);
-
-      expect(result.handled).toBe(true);
-      expect(ctx.outputs.some(o => o.type === "error")).toBe(true);
-    });
-  });
-
   describe("/clear", () => {
     test("clears output", () => {
       const ctx = createMockContext();
@@ -337,28 +302,6 @@ describe("handleSlashCommand", () => {
       expect(result.handled).toBe(false);
       // setStatusInfo should not be called for model display
       expect(ctx.setStatusInfo).not.toHaveBeenCalled();
-    });
-
-    test("/thinking off syncs to status bar", () => {
-      const agentCommandsWithThinking = [
-        { name: "thinking", description: "Toggle thinking" },
-      ];
-      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
-      const result = handleSlashCommand("/thinking off", ctx);
-
-      expect(result.handled).toBe(false);
-      expect(ctx.setStatusInfo).toHaveBeenCalled();
-    });
-
-    test("/thinking on 5000 syncs budget to status bar", () => {
-      const agentCommandsWithThinking = [
-        { name: "thinking", description: "Toggle thinking" },
-      ];
-      const ctx = createMockContext({ agentCommands: agentCommandsWithThinking });
-      const result = handleSlashCommand("/thinking on 5000", ctx);
-
-      expect(result.handled).toBe(false);
-      expect(ctx.setStatusInfo).toHaveBeenCalled();
     });
   });
 });

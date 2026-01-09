@@ -34,7 +34,6 @@ export type McpServerConfig = McpStdioServerConfig | McpSSEServerConfig | McpHtt
 
 export interface AgentConfig {
   model: string;
-  thinkingBudget: number | null; // null = off, number = budget tokens (min 1024)
   lastSessionId: string | null;  // For --continue functionality
   lastServerUrl: string | null;  // Last remote server URL for auto-reconnect
   defaultAgent: string;          // Default agent identity (e.g., "claude-sdk", "claude.com")
@@ -71,7 +70,6 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
 // Default configuration
 const defaultConfig: AgentConfig = {
   model: "opus",
-  thinkingBudget: null,
   lastSessionId: null,
   lastServerUrl: null,
   defaultAgent: "claude.com",  // Default to Claude Code ACP subprocess mode
@@ -162,13 +160,6 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
     config.model = updates.model;
   }
 
-  if (updates.thinkingBudget !== undefined) {
-    if (updates.thinkingBudget !== null && updates.thinkingBudget < 1024) {
-      throw new Error("Thinking budget must be at least 1024 tokens");
-    }
-    config.thinkingBudget = updates.thinkingBudget;
-  }
-
   if (updates.lastSessionId !== undefined) {
     config.lastSessionId = updates.lastSessionId;
   }
@@ -195,13 +186,6 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
       throw new Error(`Invalid model: ${updates.model}. Must be one of: ${validModels.join(", ")}`);
     }
     config.model = updates.model;
-  }
-
-  if (updates.thinkingBudget !== undefined) {
-    if (updates.thinkingBudget !== null && updates.thinkingBudget < 1024) {
-      throw new Error("Thinking budget must be at least 1024 tokens");
-    }
-    config.thinkingBudget = updates.thinkingBudget;
   }
 
   if (updates.lastSessionId !== undefined) {
