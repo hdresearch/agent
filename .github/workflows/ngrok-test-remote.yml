@@ -1,0 +1,68 @@
+name: Test Remote MCP via ngrok
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/tunnel/**'
+      - 'src/server/**'
+
+env:
+  NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+
+jobs:
+  test-remote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Install ngrok
+        run: |
+          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+            | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+            | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt-get update && sudo apt-get install ngrok
+          
+      - name: Configure ngrok
+        run: ngrok config add-authtoken $NGROK_AUTHTOKEN
+        
+      - name: Start server
+        run: |
+          bun run start --server --port 8765 &
+          sleep 3
+          
+      - name: Start tunnel
+        run: |
+          ngrok http 8765 &
+          sleep 5
+          
+      - name: Get tunnel URL
+        id: tunnel
+        run: |
+          URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Tunnel URL: $URL"
+          
+      - name: Test remote health endpoint
+        run: |
+          curl -sf "${{ steps.tunnel.outputs.url }}/health" || exit 1
+          echo "✓ Remote health check passed"
+          
+      - name: Test remote query
+        run: |
+          RESPONSE=$(curl -sf -X POST "${{ steps.tunnel.outputs.url }}/query" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "echo hello"}')
+          echo "Response: $RESPONSE"
+          echo "✓ Remote query passed"

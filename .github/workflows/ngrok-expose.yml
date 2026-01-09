@@ -1,0 +1,79 @@
+name: Expose vers-agent via ngrok
+
+on:
+  workflow_dispatch:
+    inputs:
+      port:
+        description: 'Port to expose'
+        required: true
+        default: '8765'
+      duration:
+        description: 'Duration in minutes (max 60)'
+        required: true
+        default: '30'
+      custom_domain:
+        description: 'Custom domain (optional, requires ngrok paid)'
+        required: false
+
+env:
+  NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+
+jobs:
+  expose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Install ngrok
+        run: |
+          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+            | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+            | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt-get update && sudo apt-get install ngrok
+          
+      - name: Configure ngrok
+        run: ngrok config add-authtoken $NGROK_AUTHTOKEN
+        
+      - name: Start vers-agent server
+        run: |
+          bun run start --server --port ${{ github.event.inputs.port }} &
+          sleep 5
+          
+      - name: Start ngrok tunnel
+        run: |
+          if [ -n "${{ github.event.inputs.custom_domain }}" ]; then
+            ngrok http ${{ github.event.inputs.port }} \
+              --url=${{ github.event.inputs.custom_domain }} \
+              --traffic-policy-file=src/tunnel/policy.yml &
+          else
+            ngrok http ${{ github.event.inputs.port }} \
+              --traffic-policy-file=src/tunnel/policy.yml &
+          fi
+          sleep 5
+          
+      - name: Get tunnel URL
+        id: tunnel
+        run: |
+          URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "## 🚇 Tunnel Active" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Duration:** ${{ github.event.inputs.duration }} minutes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Port:** ${{ github.event.inputs.port }}" >> $GITHUB_STEP_SUMMARY
+          
+      - name: Keep tunnel alive
+        run: sleep $(( ${{ github.event.inputs.duration }} * 60 ))
