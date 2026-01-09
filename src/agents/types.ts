@@ -567,7 +567,7 @@ export interface PromptResultEvent {
 
 export interface PromptErrorEvent {
   type: "error";
-  data: { message: string };
+  data: { message: string; isAgentOutput?: boolean };
 }
 
 export interface PromptCancelledEvent {
