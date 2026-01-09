@@ -129,7 +129,6 @@ export async function waitForFrame(
       return pattern.test(frame);
     },
     {
-      timeout: 5000,
       interval: 10,
       message: `Frame did not match ${pattern} within timeout`,
       ...options,
@@ -168,7 +167,6 @@ export async function waitForStableFrame(
       return stableTime >= stabilityMs;
     },
     {
-      timeout: 5000,
       interval: 20,
       message: `Frame did not stabilize within timeout`,
       ...waitOptions,

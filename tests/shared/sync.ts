@@ -2,6 +2,17 @@
 // Replaces magic timing delays with proper async patterns
 
 /**
+ * Get the appropriate test timeout based on environment
+ * CI environments are slower and need longer timeouts
+ */
+export function getTestTimeout(baseTimeout: number = 5000): number {
+  return process.env.CI ? baseTimeout * 2 : baseTimeout;
+}
+
+/** Default test timeout - use this for most waitUntil calls */
+export const TEST_TIMEOUT = getTestTimeout(5000);
+
+/**
  * Deferred promise for event-driven synchronization
  * Useful when you need to resolve a promise from outside its executor
  */
@@ -40,7 +51,7 @@ export async function waitUntil(
   condition: () => boolean | Promise<boolean>,
   options: WaitUntilOptions = {}
 ): Promise<void> {
-  const { timeout = 5000, interval = 10, message } = options;
+  const { timeout = TEST_TIMEOUT, interval = 10, message } = options;
   const start = Date.now();
 
   while (true) {
@@ -100,7 +111,7 @@ export async function flushAsync(iterations: number = 3): Promise<void> {
 export async function waitForEvent<T>(
   emitter: { on: (event: string, handler: (data: T) => void) => void; off?: (event: string, handler: (data: T) => void) => void },
   event: string,
-  timeout: number = 5000
+  timeout: number = TEST_TIMEOUT
 ): Promise<T> {
   return withTimeout(
     new Promise<T>((resolve) => {
@@ -123,7 +134,7 @@ export async function waitForEvents<T>(
   emitter: { on: (event: string, handler: (data: T) => void) => void; off?: (event: string, handler: (data: T) => void) => void },
   event: string,
   count: number = 1,
-  timeout: number = 5000
+  timeout: number = TEST_TIMEOUT
 ): Promise<T[]> {
   const results: T[] = [];
   const deferred = createDeferred<T[]>();

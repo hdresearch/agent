@@ -10,6 +10,8 @@ export {
   waitForEvent,
   waitForEvents,
   retry,
+  getTestTimeout,
+  TEST_TIMEOUT,
   type Deferred,
   type WaitUntilOptions,
   type RetryOptions,
