@@ -41,10 +41,10 @@ function parseArgs(): { patterns: string[]; options: Options } {
   };
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+    const arg = args[i]!;
 
     if (arg === "--parallel" || arg === "-p") {
-      options.parallel = parseInt(args[++i] || "1", 10);
+      options.parallel = parseInt(args[++i] ?? "1", 10);
     } else if (arg === "--verbose" || arg === "-v") {
       options.verbose = true;
     } else if (arg === "--bail" || arg === "-b") {
@@ -150,7 +150,7 @@ async function runTestsSequentially(
   const results: TestResult[] = [];
 
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+    const file = files[i]!;
     const relativePath = file.replace(process.cwd() + "/", "");
 
     if (!options.verbose) {

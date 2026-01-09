@@ -13,6 +13,12 @@ default:
 install:
     bun install
 
+# Install git hooks (typecheck on pre-commit)
+setup-hooks:
+    cp .githooks/pre-commit .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+    @echo "✓ Git hooks installed"
+
 install-global:
     ./install.sh
 
@@ -192,7 +198,7 @@ server-fresh:
 
 # ── Quick Workflows ───────────────────────────────────────────────────────────
 # One command from clone to running
-bootstrap: install build
+bootstrap: install build setup-hooks
     @echo "✓ Ready: source ~/.topos/.env && just run"
 
 # Pre-commit sanity check
