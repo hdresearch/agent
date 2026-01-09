@@ -220,6 +220,10 @@ export async function initializeConnection(ctx: DockerTestContext): Promise<bool
     },
   });
 
+  if (response.error) {
+    console.error("[initializeConnection] error:", response.error);
+  }
+
   return !response.error;
 }
 
@@ -233,6 +237,7 @@ export async function createSession(
   // First ensure we're initialized
   const initResult = await initializeConnection(ctx);
   if (!initResult) {
+    console.error("[createSession] initializeConnection failed");
     return null;
   }
 
@@ -242,8 +247,13 @@ export async function createSession(
 
   if (response.error) {
     // Session creation can fail with UNIQUE constraint if session already exists
-    // This is expected when running multiple tests
+    // Log the error for debugging but don't fail hard
+    console.error("[createSession] session/new error:", response.error);
     return null;
+  }
+
+  if (!response.result?.sessionId) {
+    console.error("[createSession] session/new returned no sessionId:", response);
   }
 
   return response.result?.sessionId || null;
