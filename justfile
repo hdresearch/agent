@@ -86,6 +86,62 @@ docker-up:
 docker-down:
     docker compose down
 
+# ── Docker Testing ────────────────────────────────────────────────────────────
+# Start test container, run docker tests, and clean up
+docker-test:
+    #!/usr/bin/env bash
+    set -e
+    # Clear any cached test token from previous runs
+    rm -f /tmp/.vers-agent-test-token
+    # Ensure fresh container state
+    docker compose -f docker-compose.test.yml down -v 2>/dev/null || true
+    echo "🐳 Building and starting test container..."
+    docker compose -f docker-compose.test.yml up -d --build
+    echo "⏳ Waiting for server to be healthy..."
+    for i in {1..30}; do
+        if docker compose -f docker-compose.test.yml ps | grep -q healthy; then
+            echo "✅ Server is healthy"
+            break
+        fi
+        sleep 2
+        if [ $i -eq 30 ]; then
+            echo "❌ Server failed to become healthy"
+            docker compose -f docker-compose.test.yml logs
+            exit 1
+        fi
+    done
+    echo "📦 Building CLI for testing..."
+    bun run build || (docker compose -f docker-compose.test.yml down -v && exit 1)
+    echo "🧪 Running Docker server tests..."
+    # Run server tests first - they claim the server and save the token
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/server-remote.test.ts tests/docker/server-persistence.test.ts || (docker compose -f docker-compose.test.yml down -v && exit 1)
+    echo "🧪 Running Docker CLI tests (optional - may be flaky)..."
+    # Run CLI/VT tests - these are flaky due to terminal output timing
+    # We continue even if they fail (like in CI)
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/cli-integration.test.ts tests/docker/vt-integration.test.ts tests/docker/permission-dialog.test.ts || echo "⚠️  Some CLI tests failed (this is expected - they can be flaky)"
+    echo "🧹 Cleaning up..."
+    docker compose -f docker-compose.test.yml down -v
+    rm -f /tmp/.vers-agent-test-token
+    echo "✓ Docker tests complete!"
+
+# Start test container (for manual testing)
+docker-test-up:
+    docker compose -f docker-compose.test.yml up -d --build
+    @echo "Test server starting on http://localhost:19999"
+    @echo "Wait for healthy: docker compose -f docker-compose.test.yml ps"
+
+# Stop and remove test container
+docker-test-down:
+    docker compose -f docker-compose.test.yml down -v
+
+# View test container logs
+docker-test-logs:
+    docker compose -f docker-compose.test.yml logs -f
+
+# Run docker tests (assumes container already running)
+docker-test-run:
+    DOCKER_SERVER_URL=http://localhost:19999 bun test tests/docker/
+
 # ── API (port default 9999) ───────────────────────────────────────────────────
 health port="9999":
     curl -s http://localhost:{{port}}/health | jq

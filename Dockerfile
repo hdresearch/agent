@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y curl \
 
 # Create non-root user (Claude Code refuses --dangerously-skip-permissions as root)
 RUN useradd -m -s /bin/bash agent \
-    && mkdir -p /home/agent/.claude /home/agent/.vers \
+    && mkdir -p /home/agent/.claude /home/agent/.vers-agent \
     && chown -R agent:agent /home/agent
 
 # Copy built files and dependencies
