@@ -17,8 +17,8 @@ RUN bun run build:bundle
 FROM base AS production
 WORKDIR /app
 
-# Install Node.js, Claude Code, and the Zed ACP adapter
-RUN apt-get update && apt-get install -y curl \
+# Install Node.js, Claude Code, the Zed ACP adapter, and expect (for PTY testing)
+RUN apt-get update && apt-get install -y curl expect \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g @anthropic-ai/claude-code @zed-industries/claude-code-acp \
@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y curl \
 
 # Create non-root user (Claude Code refuses --dangerously-skip-permissions as root)
 RUN useradd -m -s /bin/bash agent \
-    && mkdir -p /home/agent/.claude /home/agent/.vers \
+    && mkdir -p /home/agent/.claude /home/agent/.vers-agent \
     && chown -R agent:agent /home/agent
 
 # Copy built files and dependencies

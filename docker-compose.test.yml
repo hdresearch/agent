@@ -1,0 +1,31 @@
+# Docker Compose configuration for integration testing
+# Uses port 19999 to avoid conflicts with development server on 9999
+
+services:
+  vers-agent-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "19999:9999"
+    environment:
+      - PORT=9999
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - NODE_ENV=test
+      - DEBUG=1
+    volumes:
+      # Use named volumes for test data persistence
+      - vers-test-data:/home/agent/.vers-agent
+      - claude-test-data:/home/agent/.claude
+    healthcheck:
+      # Use /health endpoint which doesn't require auth (avoids auto-claiming the server)
+      test: ["CMD", "curl", "-f", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: "no"
+
+volumes:
+  vers-test-data:
+  claude-test-data:
