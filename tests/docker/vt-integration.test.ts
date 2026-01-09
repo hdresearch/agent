@@ -9,6 +9,7 @@ import {
   createTestContext,
   type DockerTestContext,
   waitUntil,
+  TEST_TIMEOUT,
 } from "../shared";
 import {
   VT,
@@ -74,7 +75,7 @@ async function spawnCliForVtTest(
 
   // Wait for CLI to start - use waitUntil for output instead of fixed delay
   await waitUntil(() => output.length > 0, {
-    timeout: 5000,
+    timeout: TEST_TIMEOUT,
     message: "CLI did not produce output within timeout",
   });
 
@@ -127,7 +128,7 @@ describe("VT Sequence Integration Tests", () => {
       // Wait for output to contain help content instead of fixed delay
       await waitUntil(
         () => /help|command/i.test(extractText(cliCtx!.getOutput())),
-        { timeout: 2000, message: "Help output not received" }
+        { timeout: TEST_TIMEOUT, message: "Help output not received" }
       );
 
       const output = cliCtx.getOutput();
@@ -174,7 +175,7 @@ describe("VT Sequence Integration Tests", () => {
       // Wait for response instead of fixed delay
       await waitUntil(
         () => cliCtx!.getOutput().length > 100,
-        { timeout: 2000 }
+        { timeout: TEST_TIMEOUT }
       );
 
       const output = cliCtx.getOutput();
@@ -226,7 +227,7 @@ describe("VT Sequence Integration Tests", () => {
       // Wait for clear response
       await waitUntil(
         () => cliCtx!.getOutput().length > 50,
-        { timeout: 2000 }
+        { timeout: TEST_TIMEOUT }
       );
 
       const output = cliCtx.getOutput();
@@ -258,7 +259,7 @@ describe("VT Sequence Integration Tests", () => {
       // Wait for help output
       await waitUntil(
         () => extractText(cliCtx!.getOutput()).length > 50,
-        { timeout: 2000 }
+        { timeout: TEST_TIMEOUT }
       );
 
       const output = cliCtx.getOutput();
@@ -281,7 +282,7 @@ describe("VT Sequence Integration Tests", () => {
       // Wait for meaningful content
       await waitUntil(
         () => /help|command|session/i.test(extractText(cliCtx!.getOutput())),
-        { timeout: 2000 }
+        { timeout: TEST_TIMEOUT }
       );
 
       const output = cliCtx.getOutput();
@@ -329,10 +330,10 @@ describe("VT Sequence Integration Tests", () => {
 
       // Generate mixed content
       cliCtx.write("/help" + VT.enter);
-      await waitUntil(() => extractText(cliCtx!.getOutput()).length > 20, { timeout: 1000 });
+      await waitUntil(() => extractText(cliCtx!.getOutput()).length > 20, { timeout: TEST_TIMEOUT });
 
       cliCtx.write("/sessions" + VT.enter);
-      await waitUntil(() => extractText(cliCtx!.getOutput()).length > 50, { timeout: 1000 });
+      await waitUntil(() => extractText(cliCtx!.getOutput()).length > 50, { timeout: TEST_TIMEOUT });
 
       const output = cliCtx.getOutput();
       const { text, sequences } = parseVtSequences(output);
@@ -357,7 +358,7 @@ describe("VT Sequence Integration Tests", () => {
       // Wait for all responses
       await waitUntil(
         () => cliCtx!.getOutput().length > 500,
-        { timeout: 3000 }
+        { timeout: TEST_TIMEOUT }
       );
 
       const output = cliCtx.getOutput();
