@@ -135,6 +135,12 @@ export function handleSlashCommand(
       handleLocal(ctx);
       return { handled: true };
 
+    case "skill":
+      handleSkill(parts, ctx).catch(err => {
+        ctx.addOutput({ type: "error", content: `Skill error: ${err.message}` });
+      });
+      return { handled: true };
+
     default:
       // Pass unknown commands through to the agent - it may handle them
       // (e.g., /usage, /review, /compact are agent commands in Claude Code)
@@ -908,4 +914,101 @@ function handleAgent(parts: string[], ctx: CommandHandlerContext): void {
   ctx.addOutput({ type: "system", content: "  list              - Show available agents" });
   ctx.addOutput({ type: "system", content: "  select <id>       - Switch to a different agent" });
   ctx.addOutput({ type: "system", content: "  status            - Show current agent status" });
+}
+
+async function handleSkill(parts: string[], ctx: CommandHandlerContext): Promise<void> {
+  const subCmd = parts[1]?.toLowerCase();
+  const skillsetName = parts[2];
+
+  // Import skillset functions
+  const { listSkillsets, getSkillset, getSkillsetsDir } = await import("../../utils/skillsets");
+
+  if (!subCmd || subCmd === "list") {
+    // List local skillsets
+    const skillsets = await listSkillsets();
+    if (skillsets.length === 0) {
+      ctx.addOutput({ type: "system", content: "No skillsets defined." });
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: `Create skillsets in: ${getSkillsetsDir()}` });
+      ctx.addOutput({ type: "system", content: "  Example: ~/.vers-agent/skillsets/coding/commit.md" });
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Then sync to remote: /skill sync <skillset>" });
+    } else {
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: `Skillsets (${skillsets.length}):` });
+      for (const name of skillsets) {
+        const skillset = await getSkillset(name);
+        const count = skillset?.skills.length || 0;
+        ctx.addOutput({ type: "system", content: `  ${name} (${count} skills)` });
+      }
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Sync to remote: /skill sync <skillset>" });
+    }
+    return;
+  }
+
+  if (subCmd === "show" && skillsetName) {
+    const skillset = await getSkillset(skillsetName);
+    if (!skillset) {
+      ctx.addOutput({ type: "error", content: `Skillset not found: ${skillsetName}` });
+      return;
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: `Skillset: ${skillset.name}` });
+    ctx.addOutput({ type: "system", content: `Skills (${skillset.skills.length}):` });
+    for (const skill of skillset.skills) {
+      ctx.addOutput({ type: "system", content: `  /${skill.name}` });
+    }
+    ctx.addOutput({ type: "system", content: "" });
+    return;
+  }
+
+  if (subCmd === "sync" && skillsetName) {
+    if (!ctx.client) {
+      ctx.addOutput({ type: "error", content: "Not connected to remote server" });
+      return;
+    }
+
+    const skillset = await getSkillset(skillsetName);
+    if (!skillset) {
+      ctx.addOutput({ type: "error", content: `Skillset not found: ${skillsetName}` });
+      return;
+    }
+
+    if (skillset.skills.length === 0) {
+      ctx.addOutput({ type: "error", content: `Skillset "${skillsetName}" has no skills` });
+      return;
+    }
+
+    ctx.addOutput({ type: "system", content: `Syncing ${skillset.skills.length} skills to remote...` });
+
+    // Sync each skill to ~/.claude/skills/<name>/SKILL.md
+    let synced = 0;
+    for (const skill of skillset.skills) {
+      try {
+        // Create skill directory and write SKILL.md
+        const skillDir = `~/.claude/skills/${skill.name}`;
+        await ctx.client.bashExecute(`mkdir -p ${skillDir}`);
+        await ctx.client.bashExecute(`cat > ${skillDir}/SKILL.md << 'SKILLEOF'\n${skill.content}\nSKILLEOF`);
+        synced++;
+        ctx.addOutput({ type: "system", content: `  ✓ ${skill.name}` });
+      } catch (err) {
+        ctx.addOutput({ type: "error", content: `  ✗ ${skill.name}: ${err}` });
+      }
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: `Synced ${synced}/${skillset.skills.length} skills to ~/.claude/skills/` });
+    ctx.addOutput({ type: "system", content: "Claude will use these skills automatically based on context" });
+    return;
+  }
+
+  // Show usage
+  ctx.addOutput({ type: "system", content: "Usage: /skill <list|show|sync> [skillset]" });
+  ctx.addOutput({ type: "system", content: "  list              - Show local skillsets" });
+  ctx.addOutput({ type: "system", content: "  show <name>       - Show skills in a skillset" });
+  ctx.addOutput({ type: "system", content: "  sync <name>       - Push skillset to remote ~/.claude/commands/" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: `Skillsets dir: ${getSkillsetsDir()}` });
 }

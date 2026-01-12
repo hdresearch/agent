@@ -543,6 +543,13 @@ export const AcpMethod = {
   // Permission Management
   PermissionRespond: "permission/respond",
   PermissionCancel: "permission/cancel",
+
+  // Skill Management
+  SkillList: "skill/list",
+  SkillGet: "skill/get",
+  SkillSave: "skill/save",
+  SkillDelete: "skill/delete",
+  SkillInvoke: "skill/invoke",
 } as const;
 
 // ============================================================
@@ -649,4 +656,58 @@ export interface AgentStatusResult {
   currentAgent: string | null;
   isRunning: boolean;
   protocol: "acp" | "claude-sdk" | null;
+}
+
+// ============================================================
+// Skill Management Types
+// ============================================================
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  prompt: string;
+  argsHint?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SkillListResult {
+  skills: SkillInfo[];
+}
+
+export interface SkillGetParams {
+  name: string;
+}
+
+export interface SkillGetResult {
+  skill: SkillInfo | null;
+}
+
+export interface SkillSaveParams {
+  name: string;
+  description: string;
+  prompt: string;
+  argsHint?: string;
+}
+
+export interface SkillSaveResult {
+  skill: SkillInfo;
+}
+
+export interface SkillDeleteParams {
+  name: string;
+}
+
+export interface SkillDeleteResult {
+  deleted: boolean;
+}
+
+export interface SkillInvokeParams {
+  name: string;
+  args?: string;
+}
+
+export interface SkillInvokeResult {
+  success: boolean;
+  message?: string;
 }

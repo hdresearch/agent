@@ -1,3 +1,98 @@
+# vers-agent Development Guide
+
+## Architecture Overview
+
+vers-agent is an ACP (Agent Client Protocol) compliant harness that can:
+1. Run as a local server + CLI
+2. Connect to remote servers (e.g., on Vers VMs)
+3. Orchestrate multiple VMs via the vers-sdk
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           vers-agent                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐  │
+│  │    CLI      │────▶│   HTTP Client    │────▶│  Remote Server  │  │
+│  │  (Ink/React)│     │  (http-client.ts)│     │  or localhost   │  │
+│  └─────────────┘     └──────────────────┘     └─────────────────┘  │
+│                              │                        │             │
+│                              │ JSON-RPC               │             │
+│                              │ + SSE                  │             │
+│                              ▼                        ▼             │
+│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐  │
+│  │  Handlers   │────▶│   HTTP Server    │────▶│  Agent Runner   │  │
+│  │  (server/)  │     │  (http-server.ts)│     │  (subprocess)   │  │
+│  └─────────────┘     └──────────────────┘     └─────────────────┘  │
+│                                                       │             │
+│                                                       ▼             │
+│                                               ┌─────────────────┐  │
+│                                               │  Claude Code    │  │
+│                                               │  (or other ACP  │  │
+│                                               │   agents)       │  │
+│                                               └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Directories
+
+```
+src/
+├── cli/           # Terminal UI (React/Ink)
+│   ├── app.tsx              # Main component
+│   ├── handlers/            # Command handlers (/new, /model, etc)
+│   └── hooks/               # useAcpClient, etc
+├── client/        # HTTP client for connecting to servers
+│   └── http-client.ts       # JSON-RPC + SSE client
+├── server/        # HTTP server implementation
+│   ├── http-server.ts       # Main server, RPC router
+│   ├── sse-manager.ts       # SSE client management
+│   └── handlers/            # RPC method handlers
+├── agents/        # Agent subprocess management
+│   ├── agent-runner.ts      # Spawns and manages agent process
+│   ├── acp-client.ts        # Talks to agent via stdin/stdout
+│   ├── registry.ts          # Discovers agents from JSON files
+│   └── event-mapper.ts      # Maps ACP events to PromptEvents
+├── core/          # Business logic
+│   ├── agent-manager.ts     # High-level agent control
+│   ├── tasks.ts             # Task state machine
+│   └── prompt-queue.ts      # Queue for prompts
+├── protocol/      # Type definitions
+│   ├── acp-types.ts         # All ACP types (500+ lines)
+│   └── jsonrpc.ts           # JSON-RPC 2.0 types
+├── vm/            # Vers VM integration
+│   ├── index.ts             # createVm, branch, commit, etc
+│   └── bootstrap.ts         # Install Node/Claude on VM
+├── orchestrator/  # Multi-VM orchestration
+│   └── index.ts             # Managed VMs, parallel execution
+└── utils/         # Shared utilities
+    ├── config.ts            # ~/.vers-agent/config.json
+    ├── session-store.ts     # SQLite for sessions
+    └── log-stream.ts        # Rotating file logger
+```
+
+### Request Flow
+
+1. User types in CLI → `handleSlashCommand()` or `handleSessionPrompt()`
+2. HTTP client sends JSON-RPC to server
+3. Server routes to handler in `http-server.ts`
+4. Handler may invoke agent via `AgentRunner`
+5. Agent events stream back via SSE
+6. CLI displays via React components
+
+### Data Storage
+
+All persisted data in `~/.vers-agent/`:
+- `sessions.db` - SQLite (sessions, outputs)
+- `config.json` - User preferences
+- `tokens.json` - Auth tokens
+- `logs/` - Rotating logs
+- `orchestrator/` - VM metadata (JSON)
+- `skills/` - Local skill definitions (JSON)
+
+---
+
+## Bun Conventions
 
 Default to using Bun instead of Node.js.
 

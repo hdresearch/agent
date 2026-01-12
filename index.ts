@@ -194,8 +194,9 @@ async function main() {
     remoteMode = true;
     // Save for auto-reconnect (explicit --url always saves)
     await setConfig({ lastServerUrl: serverUrl });
-  } else if (savedConfig.lastServerUrl && !cliOnly && !serverOnly) {
+  } else if (savedConfig.lastServerUrl && !serverOnly) {
     // Use saved URL (set via /connect or --url)
+    // Works for both --cli mode and default mode
     serverUrl = savedConfig.lastServerUrl;
     remoteMode = true;
     console.log(`Reconnecting to saved server: ${serverUrl}`);
@@ -206,10 +207,11 @@ async function main() {
     console.log(`Connecting to ${serverUrl}...`);
     await runCli({ continueSession, serverUrl });
   } else {
-    // Local mode: need Claude Code executable
-    const claudePath = await findClaudeCode();
-    if (!claudePath) {
-      console.error(`Error: Claude Code executable not found.
+    // Local mode: check for Claude Code executable (unless server-only mode which defers to auto-install)
+    if (!serverOnly) {
+      const claudePath = await findClaudeCode();
+      if (!claudePath) {
+        console.error(`Error: Claude Code executable not found.
 
 Please either:
   1. Install Claude Code: npm install -g @anthropic-ai/claude-code
@@ -220,9 +222,10 @@ Example:
   export CLAUDE_CODE_EXECUTABLE=/path/to/claude
   vers-agent
 `);
-      process.exit(1);
+        process.exit(1);
+      }
+      console.log(`Using Claude Code: ${claudePath}`);
     }
-    console.log(`Using Claude Code: ${claudePath}`);
 
     if (cliOnly) {
       // CLI only (connects to local HTTP server)
