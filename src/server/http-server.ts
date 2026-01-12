@@ -47,6 +47,15 @@ import {
   type AgentSelectParams,
   type AgentSelectResult,
   type AgentStatusResult,
+  type SkillListResult,
+  type SkillGetParams,
+  type SkillGetResult,
+  type SkillSaveParams,
+  type SkillSaveResult,
+  type SkillDeleteParams,
+  type SkillDeleteResult,
+  type SkillInvokeParams,
+  type SkillInvokeResult,
 } from "../protocol/acp-types";
 import {
   initializeRegistry,
@@ -84,6 +93,7 @@ import { metrics, MetricNames } from "../utils/metrics";
 import { logStream, shouldIncludeLevel, type LogLevel } from "../utils/log-stream";
 import { authStore } from "../utils/auth-store";
 import { cleanTitle } from "../utils/string-utils";
+import { listSkills, getSkill, saveSkill, deleteSkill, buildSkillPrompt } from "../utils/skill-store";
 import { randomUUID } from "crypto";
 
 // Extracted handlers
@@ -827,6 +837,50 @@ async function handleSessionSetMode(params: SetModeParams): Promise<SetModeResul
   return { mode: params.mode };
 }
 
+// ============================================================
+// Skill Handlers
+// ============================================================
+
+async function handleSkillList(): Promise<SkillListResult> {
+  const skills = await listSkills();
+  return { skills };
+}
+
+async function handleSkillGet(params: SkillGetParams): Promise<SkillGetResult> {
+  const skill = await getSkill(params.name);
+  return { skill };
+}
+
+async function handleSkillSave(params: SkillSaveParams): Promise<SkillSaveResult> {
+  const skill = await saveSkill({
+    name: params.name,
+    description: params.description,
+    prompt: params.prompt,
+    argsHint: params.argsHint,
+  });
+  return { skill };
+}
+
+async function handleSkillDelete(params: SkillDeleteParams): Promise<SkillDeleteResult> {
+  const deleted = await deleteSkill(params.name);
+  return { deleted };
+}
+
+async function handleSkillInvoke(params: SkillInvokeParams): Promise<SkillInvokeResult> {
+  const skill = await getSkill(params.name);
+  if (!skill) {
+    return { success: false, message: `Skill not found: ${params.name}` };
+  }
+
+  // Build the full prompt with skill instructions + user args
+  const fullPrompt = buildSkillPrompt(skill, params.args);
+
+  // Execute via session/prompt
+  await handleSessionPrompt({ text: fullPrompt });
+
+  return { success: true };
+}
+
 // File system and agent handlers have been extracted to ./handlers/
 // See: handlers/filesystem.ts, handlers/agent.ts
 
@@ -1107,6 +1161,27 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         result = handlePermissionCancel(params as { requestId: string });
         break;
 
+      // Skill Management
+      case AcpMethod.SkillList:
+        result = await handleSkillList();
+        break;
+
+      case AcpMethod.SkillGet:
+        result = await handleSkillGet(params as SkillGetParams);
+        break;
+
+      case AcpMethod.SkillSave:
+        result = await handleSkillSave(params as SkillSaveParams);
+        break;
+
+      case AcpMethod.SkillDelete:
+        result = await handleSkillDelete(params as SkillDeleteParams);
+        break;
+
+      case AcpMethod.SkillInvoke:
+        result = await handleSkillInvoke(params as SkillInvokeParams);
+        break;
+
       default:
         return createErrorResponse(id, ErrorCode.MethodNotFound, `Unknown method: ${method}`);
     }
@@ -1297,6 +1372,20 @@ async function handleRequest(req: Request): Promise<Response> {
         "Connection": "keep-alive",
       },
     });
+  }
+
+  // Root endpoint - identify this as vers-agent
+  if (url.pathname === "/" && req.method === "GET") {
+    return Response.json({
+      service: "vers-agent",
+      version: "0.1.0",
+      endpoints: ["/health", "/rpc", "/events", "/logs"]
+    }, { headers: corsHeaders });
+  }
+
+  // Health check endpoint
+  if (url.pathname === "/health" && req.method === "GET") {
+    return Response.json({ status: "ok" }, { headers: corsHeaders });
   }
 
   // Prometheus metrics endpoint

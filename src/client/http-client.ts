@@ -59,6 +59,12 @@ export interface ConnectResult {
   error?: string;
 }
 
+export interface ClientOptions {
+  clientId?: string;
+  /** Skip TLS certificate verification (for self-signed certs) */
+  rejectUnauthorized?: boolean;
+}
+
 export class HttpAcpClient {
   private baseUrl: string;
   private eventSource: EventSource | null = null;
@@ -71,14 +77,29 @@ export class HttpAcpClient {
   private _isOwner = false;
   private requestId = 0;
   private clientId: string;
+  private tlsOptions: { rejectUnauthorized: boolean } | undefined;
 
-  constructor(baseUrl: string, clientId = "vers-cli") {
+  constructor(baseUrl: string, options: ClientOptions = {}) {
     // Normalize URL (remove trailing slash)
     this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.clientId = clientId;
+    this.clientId = options.clientId ?? "vers-cli";
+
+    // TLS options for self-signed certs
+    if (options.rejectUnauthorized === false) {
+      this.tlsOptions = { rejectUnauthorized: false };
+    }
 
     // Load stored token for this server
     this._authToken = tokenStore.getToken(baseUrl);
+  }
+
+  // Helper to get fetch options with TLS settings
+  private getFetchOptions(options: RequestInit = {}): RequestInit {
+    if (this.tlsOptions) {
+      // @ts-ignore - Bun's fetch supports tls option
+      return { ...options, tls: this.tlsOptions };
+    }
+    return options;
   }
 
   // Claim or verify ownership of the server
@@ -95,10 +116,10 @@ export class HttpAcpClient {
 
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/claim`, {
+      response = await fetch(`${this.baseUrl}/claim`, this.getFetchOptions({
         method: "POST",
         headers,
-      });
+      }));
     } catch (err) {
       throw new Error(`Failed to connect to server: ${err instanceof Error ? err.message : "Network error"}`);
     }
@@ -175,7 +196,7 @@ export class HttpAcpClient {
       }
 
       // Use fetch with streaming instead of EventSource for better Bun compatibility
-      fetch(eventsUrl)
+      fetch(eventsUrl, this.getFetchOptions())
         .then(async (response) => {
           if (!response.ok) {
             if (response.status === 401 || response.status === 403) {
@@ -262,11 +283,11 @@ export class HttpAcpClient {
       headers["Authorization"] = `Bearer ${this._authToken}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/rpc`, {
+    const response = await fetch(`${this.baseUrl}/rpc`, this.getFetchOptions({
       method: "POST",
       headers,
       body: JSON.stringify(request),
-    });
+    }));
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
@@ -502,7 +523,7 @@ export class HttpAcpClient {
     if (this._authToken) {
       headers["Authorization"] = `Bearer ${this._authToken}`;
     }
-    const response = await fetch(`${this.baseUrl}/commands`, { headers });
+    const response = await fetch(`${this.baseUrl}/commands`, this.getFetchOptions({ headers }));
     if (!response.ok) {
       throw new Error(`Failed to get commands: ${response.status}`);
     }
@@ -550,6 +571,59 @@ export class HttpAcpClient {
     return this.request(AcpMethod.PermissionCancel, { requestId });
   }
 
+  // Skill management
+  async skillList(): Promise<{
+    skills: Array<{
+      name: string;
+      description: string;
+      prompt: string;
+      argsHint?: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }> {
+    return this.request(AcpMethod.SkillList, {});
+  }
+
+  async skillGet(name: string): Promise<{
+    skill: {
+      name: string;
+      description: string;
+      prompt: string;
+      argsHint?: string;
+      createdAt: string;
+      updatedAt: string;
+    } | null;
+  }> {
+    return this.request(AcpMethod.SkillGet, { name });
+  }
+
+  async skillSave(params: {
+    name: string;
+    description: string;
+    prompt: string;
+    argsHint?: string;
+  }): Promise<{
+    skill: {
+      name: string;
+      description: string;
+      prompt: string;
+      argsHint?: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }> {
+    return this.request(AcpMethod.SkillSave, params);
+  }
+
+  async skillDelete(name: string): Promise<{ deleted: boolean }> {
+    return this.request(AcpMethod.SkillDelete, { name });
+  }
+
+  async skillInvoke(name: string, args?: string): Promise<{ success: boolean; message?: string }> {
+    return this.request(AcpMethod.SkillInvoke, { name, args });
+  }
+
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
   }
@@ -592,8 +666,11 @@ export class HttpAcpClient {
 }
 
 // Connect to ACP server and return client
-export async function connectToAcpServer(baseUrl: string): Promise<HttpAcpClient> {
-  const client = new HttpAcpClient(baseUrl);
+export async function connectToAcpServer(baseUrl: string, options?: ClientOptions): Promise<HttpAcpClient> {
+  const client = new HttpAcpClient(baseUrl, options);
   await client.connect();
   return client;
 }
+
+// Alias for convenience
+export { HttpAcpClient as VersAgentClient };

@@ -17,10 +17,12 @@
     "start": "bun run index.ts",
     "dev": "bun --hot run index.ts",
     "build": "bun build --compile --minify ./index.ts --outfile vers-agent",
+    "build:linux": "bun build --compile --target=bun-linux-x64 ./index.ts --outfile dist/vers-agent-linux",
     "build:bundle": "bun build --target=bun --minify ./index.ts --outdir=dist",
     "bundle": "bun run scripts/bundle.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build:bundle"
+    "prepublishOnly": "bun run build:bundle",
+    "test:vm": "bun run build:linux && bun src/vm/test.ts"
   },
   "keywords": [
     "ai",
@@ -48,6 +50,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "vers": "file:../vers-sdk-ts",
     "@crosscopy/clipboard": "^0.2.8",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "boxen": "^8.0.1",

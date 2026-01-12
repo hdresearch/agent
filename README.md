@@ -30,38 +30,49 @@ vers-agent implements ACP to provide:
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph Client["CLI / External Client"]
-        A[Terminal UI]
-        B[HTTP Client]
-    end
-
-    subgraph Server["ACP Server :9999"]
-        C[JSON-RPC Handler]
-        D[Session Store]
-        E[SSE Stream]
-    end
-
-    subgraph Agent["Agent Subprocess"]
-        F[Claude Code]
-        G[Tool Execution]
-    end
-
-    A --> B
-    B -->|initialize| C
-    B -->|session/new| C
-    B -->|session/prompt| C
-    C --> D
-    C --> F
-    F --> G
-    G -->|events| E
-    E -->|SSE| B
-
-    style C fill:#c778ea,color:#000
-    style D fill:#98c379,color:#000
-    style F fill:#61afef,color:#000
 ```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           vers-agent                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐  │
+│  │    CLI      │────▶│   HTTP Client    │────▶│  Remote Server  │  │
+│  │  (Ink/React)│     │  (http-client.ts)│     │  or localhost   │  │
+│  └─────────────┘     └──────────────────┘     └─────────────────┘  │
+│                              │                        │             │
+│                              │ JSON-RPC               │             │
+│                              │ + SSE                  │             │
+│                              ▼                        ▼             │
+│  ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐  │
+│  │  Handlers   │────▶│   HTTP Server    │────▶│  Agent Runner   │  │
+│  │  (server/)  │     │  (http-server.ts)│     │  (subprocess)   │  │
+│  └─────────────┘     └──────────────────┘     └─────────────────┘  │
+│                                                       │             │
+│                                                       ▼             │
+│                                               ┌─────────────────┐  │
+│                                               │  Claude Code    │  │
+│                                               │  (or other ACP  │  │
+│                                               │   agents)       │  │
+│                                               └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Remote Mode
+
+vers-agent can connect to remote servers (e.g., running on Vers VMs):
+
+```bash
+# Connect to remote server
+./vers-agent --url http://34.204.180.108:9999
+
+# Or use /connect command from CLI
+/connect http://34.204.180.108:9999
+
+# Return to local mode
+/local
+```
+
+The CLI remembers your last server and auto-reconnects on restart.
 
 ## Modes
 
