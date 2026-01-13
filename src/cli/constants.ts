@@ -23,10 +23,11 @@ export const COMMANDS = [
   { name: "vm", alias: "v", description: "Manage VMs (list/create/branch/connect/delete)" },
   { name: "vm:list", alias: null, description: "Show VMs with tree structure" },
   { name: "vm:new", alias: null, description: "Create a new root VM" },
-  { name: "vm:branch", alias: null, description: "Fork an existing VM" },
+  { name: "vm:branch", alias: null, description: "Fork an existing VM (optionally N times)" },
   { name: "vm:connect", alias: null, description: "Connect CLI to VM's agent" },
   { name: "vm:delete", alias: null, description: "Delete a VM" },
   { name: "vm:status", alias: null, description: "Show current VM connection" },
+  { name: "vm:run", alias: null, description: "Fire prompt to all VMs (fire & forget)" },
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];

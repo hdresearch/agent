@@ -23,6 +23,7 @@ import { logStream } from "../utils/log-stream";
 import { cleanTitle } from "../utils/string-utils";
 import { mapSessionUpdateToPromptEvent } from "./event-mapper";
 import { buildContentBlocks } from "./content-builder";
+import { getConfig } from "../utils/config";
 // Note: Claude Agent SDK has been removed. All agents use ACP subprocess mode.
 
 // ============================================================
@@ -113,11 +114,27 @@ export class SubprocessAgentRunner implements AgentRunner {
   /**
    * Handle a permission request from the agent.
    * Emits an event and waits for respondToPermission to be called.
+   * If autoApprovePermissions is enabled in config, auto-approves immediately.
    */
   private async handlePermissionRequest(
     _agentId: string,
     params: AcpRequestPermissionParams
   ): Promise<AcpRequestPermissionResult> {
+    // Check if auto-approve is enabled
+    const config = getConfig();
+    if (config.autoApprovePermissions) {
+      logStream.debug("Auto-approving permission request (autoApprovePermissions=true)");
+      const allowOption = params.options.find(
+        (opt) => opt.kind === "allow_once" || opt.kind === "allow_always"
+      );
+      return {
+        outcome: {
+          outcome: "selected",
+          optionId: allowOption?.optionId ?? params.options[0]?.optionId ?? "allow",
+        },
+      };
+    }
+
     // Generate unique request ID
     const requestId = `perm-${++this.permissionRequestCounter}`;
 
