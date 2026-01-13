@@ -624,6 +624,57 @@ export class HttpAcpClient {
     return this.request(AcpMethod.SkillInvoke, { name, args });
   }
 
+  // VM Management (orchestrator)
+  async vmList(): Promise<{
+    vms: Array<{
+      vmId: string;
+      parent?: string | null;
+      status: string;
+      task?: string;
+      approach?: string;
+      createdAt: string;
+    }>;
+    currentVmId?: string;
+  }> {
+    return this.request(AcpMethod.VmList, {});
+  }
+
+  async vmCreate(task?: string): Promise<{
+    vmId: string;
+    agentUrl: string;
+  }> {
+    return this.request(AcpMethod.VmCreate, { task });
+  }
+
+  async vmBranch(vmId: string, task?: string, approach?: string): Promise<{
+    vmId: string;
+    parentId: string;
+    agentUrl: string;
+  }> {
+    return this.request(AcpMethod.VmBranch, { vmId, task, approach });
+  }
+
+  async vmDelete(vmId: string): Promise<{ deleted: boolean }> {
+    return this.request(AcpMethod.VmDelete, { vmId });
+  }
+
+  async vmConnect(vmId: string): Promise<{
+    success: boolean;
+    vmId: string;
+    agentUrl: string;
+    error?: string;
+  }> {
+    return this.request(AcpMethod.VmConnect, { vmId });
+  }
+
+  async vmStatus(): Promise<{
+    currentVmId?: string;
+    currentAgentUrl?: string;
+    isLocal: boolean;
+  }> {
+    return this.request(AcpMethod.VmStatus, {});
+  }
+
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
   }

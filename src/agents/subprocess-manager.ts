@@ -274,6 +274,13 @@ export class SubprocessManager {
     response: JsonRpcResponse
   ): void {
     const responseJson = JSON.stringify(response) + "\n";
+    logStream.debug(`[subprocess] Sending response`, { 
+      agentId: state.agentId, 
+      id: response.id,
+      hasResult: !!response.result,
+      hasError: !!response.error,
+      responseLen: responseJson.length
+    });
     state.process.stdin.write(responseJson);
     state.process.stdin.flush();
   }
@@ -425,6 +432,12 @@ export class SubprocessManager {
     state: SubprocessState,
     request: JsonRpcRequest
   ): Promise<void> {
+    logStream.debug(`[subprocess] Incoming request`, { 
+      agentId: state.agentId, 
+      method: request.method, 
+      id: request.id 
+    });
+
     if (!this.requestHandler) {
       // No handler registered, send error response
       const response = createErrorResponse(
@@ -432,22 +445,27 @@ export class SubprocessManager {
         ErrorCode.MethodNotFound,
         `No handler for ${request.method}`
       );
-      await this.sendResponse(state, response);
+      this.sendResponse(state, response);
       return;
     }
 
     try {
       const result = await this.requestHandler(state.agentId, request);
       const response = createResponse(request.id, result);
-      await this.sendResponse(state, response);
+      this.sendResponse(state, response);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      logStream.error(`[subprocess] Request handler error`, { 
+        agentId: state.agentId, 
+        method: request.method, 
+        error: errorMsg 
+      });
       const response = createErrorResponse(
         request.id,
         ErrorCode.InternalError,
         errorMsg
       );
-      await this.sendResponse(state, response);
+      this.sendResponse(state, response);
     }
   }
 

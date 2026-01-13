@@ -56,6 +56,16 @@ import {
   type SkillDeleteResult,
   type SkillInvokeParams,
   type SkillInvokeResult,
+  type VmListResult,
+  type VmCreateParams,
+  type VmCreateResult,
+  type VmBranchParams,
+  type VmBranchResult,
+  type VmDeleteParams,
+  type VmDeleteResult,
+  type VmConnectParams,
+  type VmConnectResult,
+  type VmStatusResult,
 } from "../protocol/acp-types";
 import {
   initializeRegistry,
@@ -881,6 +891,136 @@ async function handleSkillInvoke(params: SkillInvokeParams): Promise<SkillInvoke
   return { success: true };
 }
 
+// ============================================================
+// VM Management Handlers (orchestrator)
+// ============================================================
+
+// Track current VM connection
+let currentVmId: string | null = null;
+let currentVmAgentUrl: string | null = null;
+
+async function handleVmList(): Promise<VmListResult> {
+  try {
+    const { listManagedVms } = await import("../orchestrator");
+    const vms = await listManagedVms();
+
+    return {
+      vms: vms.map(vm => ({
+        vmId: vm.vmId,
+        parent: vm.parent,
+        status: vm.metadata?.status || "ready",
+        task: vm.metadata?.task,
+        approach: vm.metadata?.approach,
+        createdAt: vm.metadata?.createdAt || new Date().toISOString(),
+      })),
+      currentVmId: currentVmId || undefined,
+    };
+  } catch (err) {
+    error("Failed to list VMs", { error: err instanceof Error ? err.message : String(err) });
+    return { vms: [] };
+  }
+}
+
+async function handleVmCreate(params: VmCreateParams): Promise<VmCreateResult> {
+  const { createManagedVm } = await import("../orchestrator");
+  const { getAgentUrl } = await import("../vm");
+
+  const vm = await createManagedVm({}, params.task);
+  const agentUrl = getAgentUrl(vm.vmId);
+
+  info("Created VM", { vmId: vm.vmId, agentUrl });
+
+  return {
+    vmId: vm.vmId,
+    agentUrl,
+  };
+}
+
+async function handleVmBranch(params: VmBranchParams): Promise<VmBranchResult> {
+  const { branchVm } = await import("../orchestrator");
+  const { getAgentUrl } = await import("../vm");
+
+  try {
+    const vm = await branchVm(params.vmId, params.task, params.approach);
+    const agentUrl = getAgentUrl(vm.vmId);
+
+    info("Branched VM", { vmId: vm.vmId, parentId: params.vmId, agentUrl });
+
+    return {
+      vmId: vm.vmId,
+      parentId: params.vmId,
+      agentUrl,
+    };
+  } catch (err) {
+    error("Failed to branch VM", { parentId: params.vmId, error: err instanceof Error ? err.message : String(err) });
+    throw new Error(`Failed to branch VM ${params.vmId}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function handleVmDelete(params: VmDeleteParams): Promise<VmDeleteResult> {
+  const { deleteManagedVm } = await import("../orchestrator");
+
+  try {
+    await deleteManagedVm(params.vmId);
+    info("Deleted VM", { vmId: params.vmId });
+
+    // Clear current VM if it was deleted
+    if (currentVmId === params.vmId) {
+      currentVmId = null;
+      currentVmAgentUrl = null;
+    }
+
+    return { deleted: true };
+  } catch (err) {
+    error("Failed to delete VM", { vmId: params.vmId, error: err instanceof Error ? err.message : String(err) });
+    return { deleted: false };
+  }
+}
+
+async function handleVmConnect(params: VmConnectParams): Promise<VmConnectResult> {
+  const { getManagedVm } = await import("../orchestrator");
+  const { getAgentUrl } = await import("../vm");
+
+  try {
+    const vm = await getManagedVm(params.vmId);
+    if (!vm) {
+      return {
+        success: false,
+        vmId: params.vmId,
+        agentUrl: "",
+        error: "VM not found or not connected",
+      };
+    }
+
+    const agentUrl = getAgentUrl(params.vmId);
+    currentVmId = params.vmId;
+    currentVmAgentUrl = agentUrl;
+
+    info("Connected to VM", { vmId: params.vmId, agentUrl });
+
+    return {
+      success: true,
+      vmId: params.vmId,
+      agentUrl,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      vmId: params.vmId,
+      agentUrl: "",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function handleVmStatus(): VmStatusResult {
+  return {
+    currentVmId: currentVmId || undefined,
+    currentAgentUrl: currentVmAgentUrl || undefined,
+    isLocal: currentVmId === null,
+  };
+}
+
 // File system and agent handlers have been extracted to ./handlers/
 // See: handlers/filesystem.ts, handlers/agent.ts
 
@@ -1180,6 +1320,31 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
 
       case AcpMethod.SkillInvoke:
         result = await handleSkillInvoke(params as SkillInvokeParams);
+        break;
+
+      // VM Management (orchestrator)
+      case AcpMethod.VmList:
+        result = await handleVmList();
+        break;
+
+      case AcpMethod.VmCreate:
+        result = await handleVmCreate(params as VmCreateParams);
+        break;
+
+      case AcpMethod.VmBranch:
+        result = await handleVmBranch(params as VmBranchParams);
+        break;
+
+      case AcpMethod.VmDelete:
+        result = await handleVmDelete(params as VmDeleteParams);
+        break;
+
+      case AcpMethod.VmConnect:
+        result = await handleVmConnect(params as VmConnectParams);
+        break;
+
+      case AcpMethod.VmStatus:
+        result = handleVmStatus();
         break;
 
       default:
