@@ -675,6 +675,13 @@ export class HttpAcpClient {
     return this.request(AcpMethod.VmStatus, {});
   }
 
+  async vmRun(prompt: string, vmIds?: string[]): Promise<{
+    dispatched: number;
+    vmIds: string[];
+  }> {
+    return this.request(AcpMethod.VmRun, { prompt, vmIds });
+  }
+
   onNotification(handler: NotificationHandler): void {
     this.notificationHandler = handler;
   }

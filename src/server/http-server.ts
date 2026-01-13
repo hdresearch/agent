@@ -66,6 +66,8 @@ import {
   type VmConnectParams,
   type VmConnectResult,
   type VmStatusResult,
+  type VmRunParams,
+  type VmRunResult,
 } from "../protocol/acp-types";
 import {
   initializeRegistry,
@@ -1021,6 +1023,58 @@ function handleVmStatus(): VmStatusResult {
   };
 }
 
+async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
+  const { listManagedVms, getManagedVm } = await import("../orchestrator");
+  const { getAgentUrl } = await import("../vm");
+  const { HttpAcpClient } = await import("../client/http-client");
+
+  // Get list of VMs to run on
+  const allVms = await listManagedVms();
+  const targetVmIds = params.vmIds && params.vmIds.length > 0
+    ? params.vmIds
+    : allVms.map(v => v.vmId);
+
+  info("Dispatching prompt to VMs", { count: targetVmIds.length, prompt: params.prompt.slice(0, 50) });
+
+  const dispatched: string[] = [];
+
+  // Fire prompts to all VMs without waiting for completion
+  for (const vmId of targetVmIds) {
+    try {
+      const agentUrl = getAgentUrl(vmId);
+
+      // Create a client and send the prompt (fire and forget)
+      const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
+      const connectResult = await client.connect();
+
+      if (connectResult.success) {
+        // Initialize and send prompt without waiting
+        client.initialize("vers-agent").then(() => {
+          client.newSession().then(() => {
+            client.prompt(params.prompt).catch(err => {
+              warn(`Prompt failed on VM ${vmId}`, { error: err.message });
+            });
+          });
+        }).catch(err => {
+          warn(`Failed to initialize VM ${vmId}`, { error: err.message });
+        });
+
+        dispatched.push(vmId);
+        info(`Dispatched prompt to VM ${vmId.slice(0, 8)}`);
+      } else {
+        warn(`Failed to connect to VM ${vmId}`, { error: connectResult.error });
+      }
+    } catch (err) {
+      warn(`Failed to dispatch to VM ${vmId}`, { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return {
+    dispatched: dispatched.length,
+    vmIds: dispatched,
+  };
+}
+
 // File system and agent handlers have been extracted to ./handlers/
 // See: handlers/filesystem.ts, handlers/agent.ts
 
@@ -1345,6 +1399,23 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
 
       case AcpMethod.VmStatus:
         result = handleVmStatus();
+        break;
+
+      case AcpMethod.VmRun:
+        result = await handleVmRun(params as VmRunParams);
+        break;
+
+      // Config Management
+      case AcpMethod.ConfigGet:
+        result = { config: getConfig() };
+        break;
+
+      case AcpMethod.ConfigSet:
+        {
+          const configParams = params as { autoApprovePermissions?: boolean; model?: string; defaultAgent?: string };
+          const updatedConfig = await setConfig(configParams);
+          result = { success: true, config: updatedConfig };
+        }
         break;
 
       default:

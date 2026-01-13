@@ -238,7 +238,8 @@ Example:
       // Initialize agent eagerly so commands are available immediately
       await initializeAgent();
 
-      console.log("ACP server running. Press Ctrl+C to stop.");
+      console.log(`\n  vers-agent server running on http://localhost:${server.port}\n`);
+      console.log("  Press Ctrl+C to stop.\n");
 
       // Handle shutdown
       process.on("SIGINT", () => {
@@ -272,6 +273,7 @@ Example:
         process.exit(0);
       });
 
+      console.log(`  Server: http://localhost:${actualPort}`);
       console.log(""); // blank line before CLI prompt
       await runCli({ continueSession, serverUrl: `http://localhost:${actualPort}` });
     }

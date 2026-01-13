@@ -542,6 +542,16 @@ export interface VmStatusResult {
   isLocal: boolean;
 }
 
+export interface VmRunParams {
+  prompt: string;
+  vmIds?: string[];  // If not specified, run on all VMs
+}
+
+export interface VmRunResult {
+  dispatched: number;
+  vmIds: string[];
+}
+
 // ============================================================
 // ACP Method Names
 // ============================================================
@@ -622,6 +632,11 @@ export const AcpMethod = {
   VmDelete: "vm/delete",
   VmConnect: "vm/connect",
   VmStatus: "vm/status",
+  VmRun: "vm/run",
+
+  // Config Management
+  ConfigGet: "config/get",
+  ConfigSet: "config/set",
 } as const;
 
 // ============================================================

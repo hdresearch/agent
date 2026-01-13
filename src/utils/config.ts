@@ -37,6 +37,7 @@ export interface AgentConfig {
   lastSessionId: string | null;  // For --continue functionality
   lastServerUrl: string | null;  // Last remote server URL for auto-reconnect
   defaultAgent: string;          // Default agent identity (e.g., "claude-sdk", "claude.com")
+  autoApprovePermissions: boolean; // Auto-approve all permission requests (yolo mode)
 }
 
 export interface SessionStats {
@@ -73,6 +74,7 @@ const defaultConfig: AgentConfig = {
   lastSessionId: null,
   lastServerUrl: null,
   defaultAgent: "claude.com",  // Default to Claude Code ACP subprocess mode
+  autoApprovePermissions: true, // Auto-approve all permissions (yolo mode)
 };
 
 let config: AgentConfig = { ...defaultConfig };
@@ -172,6 +174,10 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
     config.defaultAgent = updates.defaultAgent;
   }
 
+  if (updates.autoApprovePermissions !== undefined) {
+    config.autoApprovePermissions = updates.autoApprovePermissions;
+  }
+
   // Persist changes
   await saveConfig();
 
@@ -198,6 +204,10 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
 
   if (updates.defaultAgent !== undefined) {
     config.defaultAgent = updates.defaultAgent;
+  }
+
+  if (updates.autoApprovePermissions !== undefined) {
+    config.autoApprovePermissions = updates.autoApprovePermissions;
   }
 
   // Fire and forget save

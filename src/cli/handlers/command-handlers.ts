@@ -150,6 +150,7 @@ export function handleSlashCommand(
     case "vm:connect":
     case "vm:delete":
     case "vm:status":
+    case "vm:run":
       handleVm(parts, ctx).catch(err => {
         ctx.addOutput({ type: "error", content: `VM error: ${err.message}` });
       });
@@ -224,17 +225,27 @@ function handleContinue(ctx: CommandHandlerContext): void {
 }
 
 function handleNew(ctx: CommandHandlerContext): void {
+  console.error("[DEBUG] handleNew called"); // Debug log to stderr
   ctx.setContinueMode(false);
   // Reset history
   ctx.historyRef.current = createHistory("new");
   saveHistory(ctx.historyRef.current);
-  ctx.setOutput([]);
+  
+  // Clear screen and set new output atomically (avoid stale state from addOutput)
+  console.error("[DEBUG] About to clear screen"); // Debug log
+  process.stdout.write("\x1b[2J\x1b[H");
+  console.error("[DEBUG] About to setOutput"); // Debug log
+  ctx.setOutput([{ type: "system", content: "🆕 Starting new conversation", id: `new-${Date.now()}` }]);
+  console.error("[DEBUG] setOutput called"); // Debug log
+  
   ctx.client?.newSession(ctx.sessionConfig)
     .then((result) => {
+      console.error("[DEBUG] newSession resolved", result.sessionId); // Debug log
       ctx.setStatusInfo(prev => ({ ...prev, sessionId: result.sessionId }));
     })
-    .catch(() => {});
-  ctx.addOutput({ type: "system", content: "🆕 Starting new conversation" });
+    .catch((err) => {
+      console.error("[DEBUG] newSession failed", err); // Debug log
+    });
 }
 
 function handleSessions(ctx: CommandHandlerContext): void {
@@ -364,6 +375,7 @@ function formatRelativeTime(date: Date): string {
 }
 
 function handleClear(ctx: CommandHandlerContext): void {
+  process.stdout.write("\x1b[2J\x1b[H"); // Clear screen and move cursor to top
   ctx.setOutput([]);
 }
 
@@ -1165,10 +1177,11 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "branch" && vmId) {
-    // Branch a VM
-    const task = restArgs[0];
-    const approach = restArgs[1];
-    ctx.addOutput({ type: "system", content: `Branching VM ${vmId}...` });
+    // Branch a VM - optionally multiple times
+    // /vm:branch:<id> 3 → create 3 branches
+    // /vm:branch:<id> → create 1 branch
+    const countArg = restArgs[0];
+    const count = countArg && /^\d+$/.test(countArg) ? parseInt(countArg, 10) : 1;
 
     try {
       // Find full VM ID from partial
@@ -1179,10 +1192,37 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
         return;
       }
 
-      const result = await ctx.client.vmBranch(vm.vmId, task, approach);
-      ctx.addOutput({ type: "system", content: `✓ Branched VM: ${result.vmId.slice(0, 8)}` });
-      ctx.addOutput({ type: "system", content: `  Parent: ${result.parentId.slice(0, 8)}` });
-      ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
+      if (count === 1) {
+        ctx.addOutput({ type: "system", content: `Branching VM ${vmId}...` });
+        const result = await ctx.client.vmBranch(vm.vmId);
+        ctx.addOutput({ type: "system", content: `✓ Branched VM: ${result.vmId.slice(0, 8)}` });
+        ctx.addOutput({ type: "system", content: `  Parent: ${result.parentId.slice(0, 8)}` });
+      } else {
+        ctx.addOutput({ type: "system", content: `Creating ${count} branches from ${vmId.slice(0, 8)}...` });
+        ctx.addOutput({ type: "system", content: "" });
+
+        // Create branches in parallel
+        const branchPromises = Array.from({ length: count }, () =>
+          ctx.client!.vmBranch(vm.vmId)
+        );
+        const results = await Promise.allSettled(branchPromises);
+
+        let succeeded = 0;
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            ctx.addOutput({ type: "system", content: `  ✓ ${result.value.vmId.slice(0, 8)}` });
+            succeeded++;
+          } else {
+            ctx.addOutput({ type: "error", content: `  ✗ Failed: ${result.reason}` });
+          }
+        }
+
+        ctx.addOutput({ type: "system", content: "" });
+        ctx.addOutput({ type: "system", content: `Created ${succeeded}/${count} branches` });
+        if (succeeded > 0) {
+          ctx.addOutput({ type: "system", content: `Run prompts: /vm:run <prompt>` });
+        }
+      }
     } catch (err) {
       ctx.addOutput({ type: "error", content: `Failed to branch VM: ${err}` });
     }
@@ -1259,15 +1299,49 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
     return;
   }
 
+  if (subCmd === "run") {
+    // Run a prompt on all (or selected) VMs - fire and forget
+    const prompt = vmId ? `${vmId} ${restArgs.join(" ")}` : restArgs.join(" ");
+
+    if (!prompt.trim()) {
+      ctx.addOutput({ type: "error", content: "Usage: /vm:run <prompt>" });
+      return;
+    }
+
+    ctx.addOutput({ type: "system", content: "Dispatching prompt to VMs..." });
+
+    try {
+      const result = await ctx.client.vmRun(prompt);
+
+      if (result.dispatched === 0) {
+        ctx.addOutput({ type: "system", content: "No VMs to dispatch to." });
+        ctx.addOutput({ type: "system", content: "Create VMs first: /vm:new" });
+      } else {
+        ctx.addOutput({ type: "system", content: "" });
+        ctx.addOutput({ type: "system", content: `✓ Dispatched to ${result.dispatched} VM(s):` });
+        for (const id of result.vmIds) {
+          ctx.addOutput({ type: "system", content: `  • ${id.slice(0, 8)}` });
+        }
+        ctx.addOutput({ type: "system", content: "" });
+        ctx.addOutput({ type: "system", content: "Check status: /vm:list" });
+        ctx.addOutput({ type: "system", content: "Connect to VM: /vm:connect:<id>" });
+      }
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to dispatch: ${err}` });
+    }
+    return;
+  }
+
   // Show usage
   ctx.addOutput({ type: "system", content: "Usage: /vm:<command>[:<id>] [args]" });
   ctx.addOutput({ type: "system", content: "" });
   ctx.addOutput({ type: "system", content: "  /vm:list              - Show VMs with tree structure" });
   ctx.addOutput({ type: "system", content: "  /vm:new [task]        - Create a new root VM" });
-  ctx.addOutput({ type: "system", content: "  /vm:branch:<id>       - Fork an existing VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:branch:<id> [n]   - Fork VM (optionally n times)" });
   ctx.addOutput({ type: "system", content: "  /vm:connect:<id>      - Connect CLI to VM's agent" });
   ctx.addOutput({ type: "system", content: "  /vm:delete:<id>       - Delete a VM" });
   ctx.addOutput({ type: "system", content: "  /vm:status            - Show current VM connection" });
+  ctx.addOutput({ type: "system", content: "  /vm:run <prompt>      - Fire prompt to all VMs" });
   ctx.addOutput({ type: "system", content: "" });
   ctx.addOutput({ type: "system", content: "Space-separated format also works: /vm new, /vm branch <id>, etc." });
 }
