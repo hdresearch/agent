@@ -3,6 +3,7 @@
 
 import { join, resolve, isAbsolute } from "node:path";
 import type { JsonRpcRequest } from "../protocol/jsonrpc";
+import { logStream } from "../utils/log-stream";
 import type {
   AcpSessionUpdate,
   AcpFsReadTextFileParams,
@@ -54,6 +55,7 @@ interface TerminalState {
   signal: string | null;
   exitPromise: Promise<{ exitCode: number; signal: string | null }>;
   exitResolve: (result: { exitCode: number; signal: string | null }) => void;
+  lastReadOffset: number;
 }
 
 // ============================================================
@@ -233,6 +235,8 @@ export class AcpServer {
     this.terminalCounter++;
     const terminalId = `terminal-${this.terminalCounter}`;
 
+    logStream.debug(`[acp-server] terminal/create`, { terminalId, command: params.command, args: params.args });
+
     // Build command
     const args = params.args ?? [];
     const cwd = params.cwd ? this.resolvePath(params.cwd) : this.cwd;
@@ -250,8 +254,16 @@ export class AcpServer {
       }
     }
 
-    // Spawn the process with pipe I/O
-    const bunProc = Bun.spawn([params.command, ...args], {
+    // Determine shell - wrap command like toad does with $SHELL -c
+    const shell = env.SHELL || "/bin/bash";
+    const innerCommand = args.length > 0
+      ? [params.command, ...args].join(" ")
+      : params.command;
+
+    logStream.debug(`[acp-server] spawning`, { shell, innerCommand, cwd });
+
+    // Spawn the process with shell wrapping and pipe I/O
+    const bunProc = Bun.spawn([shell, "-c", innerCommand], {
       cwd,
       env,
       stdout: "pipe",
@@ -277,13 +289,15 @@ export class AcpServer {
       signal: null,
       exitPromise,
       exitResolve: exitResolve!,
+      lastReadOffset: 0,
     };
 
     this.terminals.set(terminalId, state);
 
-    // Start output collection
+    // Start output collection (fire-and-forget)
     this.collectTerminalOutput(terminalId, state, params.outputByteLimit);
 
+    logStream.debug(`[acp-server] terminal/create returning`, { terminalId });
     return { terminalId };
   }
 
@@ -306,34 +320,51 @@ export class AcpServer {
     };
 
     const collectStream = async (reader: StreamReader) => {
+      let reachedLimit = false;
+
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           if (!value) continue;
 
-          const text = decoder.decode(value, { stream: true });
-          if (state.output.length + text.length > maxBytes) {
-            state.output += text.slice(0, maxBytes - state.output.length);
-            state.truncated = true;
-            break;
+          // If we've hit the limit, keep draining to prevent child from blocking
+          // but don't store the output (prevents deadlock on pipe buffer full)
+          if (reachedLimit) {
+            continue;
           }
-          state.output += text;
+
+          const text = decoder.decode(value, { stream: true });
+          const remaining = maxBytes - state.output.length;
+
+          if (remaining <= 0) {
+            state.truncated = true;
+            reachedLimit = true;
+            continue;
+          }
+
+          if (text.length > remaining) {
+            state.output += text.slice(0, remaining);
+            state.truncated = true;
+            reachedLimit = true;
+          } else {
+            state.output += text;
+          }
         }
       } catch {
-        // Stream ended
+        // Stream ended or error - treat as end of stream
       } finally {
         reader.releaseLock();
       }
     };
 
-    // Collect both streams
+    // Collect both streams in parallel
     await Promise.all([
       collectStream(stdoutReader as unknown as StreamReader),
       collectStream(stderrReader as unknown as StreamReader),
     ]);
 
-    // Wait for process exit
+    // Wait for process exit (should be unblocked now that streams are drained)
     const exitCode = await state.process.exited;
     state.exitCode = exitCode;
 
@@ -347,8 +378,11 @@ export class AcpServer {
   private handleTerminalOutput(
     params: AcpTerminalOutputParams
   ): AcpTerminalOutputResult {
+    logStream.debug(`[acp-server] terminal/output`, { terminalId: params.terminalId });
+
     const state = this.terminals.get(params.terminalId);
     if (!state) {
+      logStream.debug(`[acp-server] terminal/output - terminal not found`);
       return {
         output: "",
         truncated: false,
@@ -356,8 +390,12 @@ export class AcpServer {
       };
     }
 
+    // Return only new output since last read (incremental, like toad)
+    const newOutput = state.output.slice(state.lastReadOffset);
+    state.lastReadOffset = state.output.length;
+
     const result: AcpTerminalOutputResult = {
-      output: state.output,
+      output: newOutput,
       truncated: state.truncated,
     };
 
@@ -368,33 +406,44 @@ export class AcpServer {
       };
     }
 
+    logStream.debug(`[acp-server] terminal/output returning`, { 
+      outputLen: newOutput.length, 
+      truncated: result.truncated, 
+      exitCode: result.exitStatus?.exitCode 
+    });
     return result;
   }
 
-  private handleTerminalKill(params: AcpTerminalKillParams): void {
+  private handleTerminalKill(params: AcpTerminalKillParams): Record<string, never> {
     const state = this.terminals.get(params.terminalId);
     if (state && !state.process.killed) {
       state.signal = "SIGTERM";
       state.process.kill();
     }
+    return {};
   }
 
   private async handleTerminalWaitForExit(
     params: AcpTerminalWaitForExitParams
   ): Promise<AcpTerminalWaitForExitResult> {
+    logStream.debug(`[acp-server] terminal/wait_for_exit`, { terminalId: params.terminalId });
+
     const state = this.terminals.get(params.terminalId);
     if (!state) {
+      logStream.debug(`[acp-server] terminal/wait_for_exit - terminal not found`);
       return { exitCode: -1 };
     }
 
+    logStream.debug(`[acp-server] terminal/wait_for_exit - awaiting exit promise`);
     const result = await state.exitPromise;
+    logStream.debug(`[acp-server] terminal/wait_for_exit - exit complete`, { exitCode: result.exitCode });
     return {
       exitCode: result.exitCode,
       signal: result.signal ?? undefined,
     };
   }
 
-  private handleTerminalRelease(params: AcpTerminalReleaseParams): void {
+  private handleTerminalRelease(params: AcpTerminalReleaseParams): Record<string, never> {
     const state = this.terminals.get(params.terminalId);
     if (state) {
       if (!state.process.killed) {
@@ -402,6 +451,7 @@ export class AcpServer {
       }
       this.terminals.delete(params.terminalId);
     }
+    return {};
   }
 
   // ============================================================
