@@ -79,10 +79,16 @@ export async function loadAgentRegistry(): Promise<Map<string, AgentDefinition>>
     const files = await readdir(dataDir);
     const jsonFiles = files.filter(f => extname(f) === ".json");
 
-    for (const file of jsonFiles) {
+    // Load all files in parallel instead of sequentially
+    const agentPromises = jsonFiles.map(file => {
       const filePath = join(dataDir, file);
-      const agent = await loadAgentFile(filePath);
+      return loadAgentFile(filePath);
+    });
 
+    const agents = await Promise.all(agentPromises);
+
+    // Register all successfully loaded agents
+    for (const agent of agents) {
       if (agent && agent.active !== false) {
         agentRegistry.set(agent.identity, agent);
       }

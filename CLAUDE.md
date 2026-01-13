@@ -65,6 +65,10 @@ src/
 │   └── bootstrap.ts         # Install Node/Claude on VM
 ├── orchestrator/  # Multi-VM orchestration
 │   └── index.ts             # Managed VMs, parallel execution
+├── evaluation/    # Deterministic evaluation system
+│   ├── evaluator.ts         # Runs build/test/lint/typecheck commands
+│   ├── detector.ts          # Auto-detects project type and commands
+│   └── index.ts             # Public API
 └── utils/         # Shared utilities
     ├── config.ts            # ~/.vers-agent/config.json
     ├── session-store.ts     # SQLite for sessions
