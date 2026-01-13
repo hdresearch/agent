@@ -396,6 +396,122 @@ case "${1:-help}" in
     rpc "vm/outputs/all" "{\"limit\":${limit}}" | jq .result
     ;;
 
+  vm-sync)
+    # Sync local changes to VM using git bundle
+    vmId="${2:-}"
+    baseCommit="${3:-${VERS_GOLDEN_COMMIT_ID:-}}"
+
+    if [ -z "$vmId" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-sync <vmId> [baseCommit]${NC}"
+      echo -e "  baseCommit: defaults to VERS_GOLDEN_COMMIT_ID env var"
+      exit 1
+    fi
+
+    if [ -z "$baseCommit" ]; then
+      echo -e "${RED}Error: No base commit specified and VERS_GOLDEN_COMMIT_ID not set${NC}"
+      echo -e "Provide a base commit or set VERS_GOLDEN_COMMIT_ID"
+      exit 1
+    fi
+
+    # Create bundle from base commit to HEAD
+    bundlePath="/tmp/vers-sync-${vmId}.bundle"
+    echo -e "${BLUE}Creating git bundle from ${baseCommit:0:8}..HEAD${NC}"
+
+    if ! git bundle create "$bundlePath" "${baseCommit}..HEAD" 2>/dev/null; then
+      echo -e "${RED}Failed to create bundle. Is ${baseCommit:0:8} an ancestor of HEAD?${NC}"
+      exit 1
+    fi
+
+    bundleSize=$(du -h "$bundlePath" | cut -f1)
+    commitCount=$(git rev-list "${baseCommit}..HEAD" | wc -l | tr -d ' ')
+    echo -e "${GREEN}Bundle created: ${bundleSize} (${commitCount} commits)${NC}"
+
+    # Upload bundle to VM
+    echo -e "${BLUE}Uploading bundle to VM...${NC}"
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":\"${bundlePath}\",\"remotePath\":\"/tmp/sync.bundle\"}" > /dev/null
+
+    # Apply bundle on VM
+    echo -e "${BLUE}Applying bundle on VM...${NC}"
+    result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":\"cd /root/vers-agent && git fetch /tmp/sync.bundle HEAD:synced && git checkout synced && rm /tmp/sync.bundle\"}")
+
+    exitCode=$(echo "$result" | jq -r '.result.exitCode // 1')
+    if [ "$exitCode" = "0" ]; then
+      echo -e "${GREEN}Sync complete!${NC}"
+    else
+      echo -e "${RED}Sync failed:${NC}"
+      echo "$result" | jq -r '.result.stderr // .result.stdout // "Unknown error"'
+      exit 1
+    fi
+
+    # Cleanup local bundle
+    rm -f "$bundlePath"
+    ;;
+
+  vm-sync-all)
+    # Sync local changes to ALL VMs using git bundle
+    baseCommit="${2:-${VERS_GOLDEN_COMMIT_ID:-}}"
+
+    if [ -z "$baseCommit" ]; then
+      echo -e "${RED}Error: No base commit specified and VERS_GOLDEN_COMMIT_ID not set${NC}"
+      echo -e "Usage: vers-client.sh vm-sync-all [baseCommit]"
+      exit 1
+    fi
+
+    # Get list of VM IDs
+    vmIds=$(rpc "vm/list" | jq -r '.result.vms[].vmId // empty' 2>/dev/null)
+    if [ -z "$vmIds" ]; then
+      echo -e "${YELLOW}No VMs found${NC}"
+      exit 0
+    fi
+
+    vmCount=$(echo "$vmIds" | wc -l | tr -d ' ')
+    echo -e "${BLUE}Syncing to ${vmCount} VMs...${NC}"
+
+    # Create bundle once
+    bundlePath="/tmp/vers-sync-all.bundle"
+    echo -e "${BLUE}Creating git bundle from ${baseCommit:0:8}..HEAD${NC}"
+
+    if ! git bundle create "$bundlePath" "${baseCommit}..HEAD" 2>/dev/null; then
+      echo -e "${RED}Failed to create bundle. Is ${baseCommit:0:8} an ancestor of HEAD?${NC}"
+      exit 1
+    fi
+
+    bundleSize=$(du -h "$bundlePath" | cut -f1)
+    commitCount=$(git rev-list "${baseCommit}..HEAD" | wc -l | tr -d ' ')
+    echo -e "${GREEN}Bundle created: ${bundleSize} (${commitCount} commits)${NC}"
+
+    # Sync to each VM
+    success=0
+    failed=0
+    for vmId in $vmIds; do
+      shortId="${vmId:0:8}"
+      echo -e "${BLUE}[${shortId}] Uploading...${NC}"
+      escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+
+      # Upload
+      rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":\"${bundlePath}\",\"remotePath\":\"/tmp/sync.bundle\"}" > /dev/null
+
+      # Apply
+      result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":\"cd /root/vers-agent && git fetch /tmp/sync.bundle HEAD:synced && git checkout synced && rm /tmp/sync.bundle\"}")
+      exitCode=$(echo "$result" | jq -r '.result.exitCode // 1')
+
+      if [ "$exitCode" = "0" ]; then
+        echo -e "${GREEN}[${shortId}] Synced${NC}"
+        success=$((success + 1))
+      else
+        echo -e "${RED}[${shortId}] Failed${NC}"
+        failed=$((failed + 1))
+      fi
+    done
+
+    # Cleanup
+    rm -f "$bundlePath"
+
+    echo ""
+    echo -e "${GREEN}Done: ${success} synced${NC}${failed:+, ${RED}${failed} failed${NC}}"
+    ;;
+
   vm-eval)
     # Evaluate a VM's project (run build, test, lint, typecheck)
     vmId="${2:-}"
@@ -493,6 +609,8 @@ case "${1:-help}" in
     echo "  vm-watch [vmIds]    Watch multiplexed VM event stream (SSE)"
     echo "  vm-outputs <vmId> [limit]  Get outputs from a VM"
     echo "  vm-status [limit]          Get status + last message from all VMs"
+    echo "  vm-sync <vmId> [base]      Sync local git changes to VM via bundle"
+    echo "  vm-sync-all [base]         Sync local git changes to ALL VMs"
     echo "  vm-eval <vmId> [skip...]   Evaluate VM (build, test, lint, typecheck)"
     echo "  vm-wait <vmId> [timeout]   Wait for VM to complete task"
     echo ""

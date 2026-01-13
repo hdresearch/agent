@@ -1175,7 +1175,8 @@ async function handleVmUpload(params: VmUploadParams): Promise<VmUploadResult> {
 
 function handleVmEvents(params: VmEventsParams): VmEventsResult {
   const events = getEventsSince(params.afterSeq ?? 0, params.vmIds, params.limit ?? 100);
-  const lastSeq = events.length > 0 ? events[events.length - 1].seq : getLastSeq();
+  const lastEvent = events[events.length - 1];
+  const lastSeq = lastEvent ? lastEvent.seq : getLastSeq();
 
   return {
     events,
@@ -1197,9 +1198,8 @@ async function handleVmOutputs(params: VmOutputsParams): Promise<VmOutputsResult
 
   try {
     // Get session outputs from the VM
-    const result = await vm.client.getSessionOutputs({
-      limit: params.limit,
-    });
+    // Note: limit is passed but getSessionOutputs may not support it - filtering done below
+    const result = await vm.client.getSessionOutputs({});
 
     // Transform outputs to simpler format
     // SessionOutput types: "user", "text" (assistant), "tool", "tool-result", "system", "error"
@@ -1341,6 +1341,7 @@ async function handleVmOutputsAll(params: VmOutputsAllParams): Promise<VmOutputs
           // Find the last assistant message
           for (let i = outputs.length - 1; i >= 0; i--) {
             const output = outputs[i];
+            if (!output) continue;
             if (output.type === "assistant") {
               lastMessage = output.content;
               lastMessageType = "assistant";

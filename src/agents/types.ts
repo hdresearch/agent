@@ -620,6 +620,8 @@ export interface AgentRunner {
   // Get Claude CLI's actual session ID (8-char format from notifications)
   // This is the ID needed for session resume
   getClaudeSessionId?(): string | null;
+  // Clear Claude CLI's session ID (for /clear command)
+  clearClaudeSessionId?(): void;
   // Permission handling (optional - for ACP agents with interactive permissions)
   respondToPermission?(requestId: string, optionId: string): boolean;
   cancelPermission?(requestId: string): boolean;
