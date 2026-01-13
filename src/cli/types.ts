@@ -23,6 +23,9 @@ export interface ToolContentDiff {
 export interface ToolContentTerminal {
   type: "terminal";
   terminalId: string;
+  output?: string;
+  exitCode?: number;
+  running?: boolean;
 }
 
 export interface ToolContentText {
@@ -30,7 +33,25 @@ export interface ToolContentText {
   content: { type: "text"; text: string };
 }
 
-export type ToolContent = ToolContentDiff | ToolContentTerminal | ToolContentText;
+export interface ToolContentSearch {
+  type: "search";
+  query: string;
+  results: Array<{ file: string; line?: number; text?: string }>;
+}
+
+export interface ToolContentFileRead {
+  type: "file-read";
+  path: string;
+  lines: number;
+  preview: string;
+}
+
+export interface ToolContentRaw {
+  type: "raw";
+  text: string;
+}
+
+export type ToolContent = ToolContentDiff | ToolContentTerminal | ToolContentText | ToolContentSearch | ToolContentFileRead | ToolContentRaw;
 
 export type OutputLine = {
   id: string;
