@@ -111,7 +111,12 @@ describe("handleSlashCommand", () => {
 
       expect(result.handled).toBe(true);
       expect(ctx.setContinueMode).toHaveBeenCalled();
-      expect(ctx.outputs.some(o => o.content.includes("Starting new conversation"))).toBe(true);
+      // handleNew uses setOutput (not addOutput) to atomically replace output
+      expect(ctx.setOutput).toHaveBeenCalled();
+      const setOutputCalls = (ctx.setOutput as ReturnType<typeof mock>).mock.calls;
+      expect(setOutputCalls.length).toBeGreaterThan(0);
+      const outputArg = setOutputCalls[0][0] as Array<{ content: string }>;
+      expect(outputArg.some(o => o.content.includes("Starting new conversation"))).toBe(true);
     });
   });
 
