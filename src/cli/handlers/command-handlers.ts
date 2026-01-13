@@ -141,6 +141,20 @@ export function handleSlashCommand(
       });
       return { handled: true };
 
+    case "vm":
+    case "v":
+    case "vm:list":
+    case "vm:new":
+    case "vm:create":
+    case "vm:branch":
+    case "vm:connect":
+    case "vm:delete":
+    case "vm:status":
+      handleVm(parts, ctx).catch(err => {
+        ctx.addOutput({ type: "error", content: `VM error: ${err.message}` });
+      });
+      return { handled: true };
+
     default:
       // Pass unknown commands through to the agent - it may handle them
       // (e.g., /usage, /review, /compact are agent commands in Claude Code)
@@ -1011,4 +1025,249 @@ async function handleSkill(parts: string[], ctx: CommandHandlerContext): Promise
   ctx.addOutput({ type: "system", content: "  sync <name>       - Push skillset to remote ~/.claude/commands/" });
   ctx.addOutput({ type: "system", content: "" });
   ctx.addOutput({ type: "system", content: `Skillsets dir: ${getSkillsetsDir()}` });
+}
+
+async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<void> {
+  // Support both `/vm:new` and `/vm new` formats
+  // If first part contains ':', split on that instead
+  let subCmd: string | undefined;
+  let vmId: string | undefined;
+  let restArgs: string[] = [];
+
+  if (parts[0]?.includes(":")) {
+    // Format: /vm:new:vmid or /vm:new
+    const colonParts = parts[0].split(":");
+    subCmd = colonParts[1]?.toLowerCase();
+    vmId = colonParts[2];
+    restArgs = parts.slice(1);
+  } else {
+    // Format: /vm new vmid
+    subCmd = parts[1]?.toLowerCase();
+    vmId = parts[2];
+    restArgs = parts.slice(3);
+  }
+
+  if (!ctx.client) {
+    ctx.addOutput({ type: "error", content: "Not connected to server" });
+    return;
+  }
+
+  // Helper to format relative time
+  const formatRelativeTime = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Helper to display VM tree
+  const displayVms = (vms: Array<{
+    vmId: string;
+    parent?: string | null;
+    status: string;
+    task?: string;
+    approach?: string;
+    createdAt: string;
+  }>, currentVmId?: string) => {
+    if (vms.length === 0) {
+      ctx.addOutput({ type: "system", content: "No VMs found." });
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Create a VM: /vm create [task]" });
+      return;
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: `VMs (${vms.length}):` });
+    ctx.addOutput({ type: "system", content: "" });
+
+    // Build tree structure
+    const roots = vms.filter(v => !v.parent);
+    const children = new Map<string, typeof vms>();
+    for (const vm of vms) {
+      if (vm.parent) {
+        const siblings = children.get(vm.parent) || [];
+        siblings.push(vm);
+        children.set(vm.parent, siblings);
+      }
+    }
+
+    // Display tree recursively
+    const displayNode = (vm: typeof vms[0], indent: string = "") => {
+      const isCurrent = vm.vmId === currentVmId;
+      const marker = isCurrent ? "→ " : "  ";
+      const shortId = vm.vmId.slice(0, 8);
+      const statusIcon = vm.status === "ready" ? "●" :
+                        vm.status === "busy" ? "◐" :
+                        vm.status === "completed" ? "✓" :
+                        vm.status === "failed" ? "✗" : "○";
+      const task = vm.task ? ` "${vm.task.slice(0, 30)}..."` : "";
+      const approach = vm.approach ? ` [${vm.approach}]` : "";
+      const time = formatRelativeTime(vm.createdAt);
+
+      ctx.addOutput({
+        type: "system",
+        content: `${indent}${marker}${statusIcon} ${shortId}${task}${approach} - ${time}`,
+      });
+
+      // Display children
+      const nodeChildren = children.get(vm.vmId) || [];
+      for (const child of nodeChildren) {
+        displayNode(child, indent + "  ");
+      }
+    };
+
+    for (const root of roots) {
+      displayNode(root);
+    }
+
+    ctx.addOutput({ type: "system", content: "" });
+  };
+
+  if (!subCmd || subCmd === "list") {
+    // List VMs
+    try {
+      const result = await ctx.client.vmList();
+      displayVms(result.vms, result.currentVmId);
+
+      if (result.vms.length > 0) {
+        ctx.addOutput({ type: "system", content: "Commands:" });
+        ctx.addOutput({ type: "system", content: "  /vm connect <id>  - Connect to VM's agent" });
+        ctx.addOutput({ type: "system", content: "  /vm branch <id>   - Fork a VM" });
+        ctx.addOutput({ type: "system", content: "  /vm delete <id>   - Delete a VM" });
+      }
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to list VMs: ${err}` });
+    }
+    return;
+  }
+
+  if (subCmd === "create" || subCmd === "new") {
+    // Create a new VM
+    const task = restArgs.join(" ") || undefined;
+    ctx.addOutput({ type: "system", content: "Creating VM..." });
+
+    try {
+      const result = await ctx.client.vmCreate(task);
+      ctx.addOutput({ type: "system", content: `✓ Created VM: ${result.vmId.slice(0, 8)}` });
+      ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: `Connect to it: /vm connect ${result.vmId.slice(0, 8)}` });
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to create VM: ${err}` });
+    }
+    return;
+  }
+
+  if (subCmd === "branch" && vmId) {
+    // Branch a VM
+    const task = restArgs[0];
+    const approach = restArgs[1];
+    ctx.addOutput({ type: "system", content: `Branching VM ${vmId}...` });
+
+    try {
+      // Find full VM ID from partial
+      const listResult = await ctx.client.vmList();
+      const vm = listResult.vms.find(v => v.vmId.startsWith(vmId));
+      if (!vm) {
+        ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+        return;
+      }
+
+      const result = await ctx.client.vmBranch(vm.vmId, task, approach);
+      ctx.addOutput({ type: "system", content: `✓ Branched VM: ${result.vmId.slice(0, 8)}` });
+      ctx.addOutput({ type: "system", content: `  Parent: ${result.parentId.slice(0, 8)}` });
+      ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to branch VM: ${err}` });
+    }
+    return;
+  }
+
+  if (subCmd === "delete" && vmId) {
+    // Delete a VM
+    try {
+      // Find full VM ID from partial
+      const listResult = await ctx.client.vmList();
+      const vm = listResult.vms.find(v => v.vmId.startsWith(vmId));
+      if (!vm) {
+        ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+        return;
+      }
+
+      const result = await ctx.client.vmDelete(vm.vmId);
+      if (result.deleted) {
+        ctx.addOutput({ type: "system", content: `✓ Deleted VM: ${vm.vmId.slice(0, 8)}` });
+      } else {
+        ctx.addOutput({ type: "error", content: `Failed to delete VM: ${vmId}` });
+      }
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to delete VM: ${err}` });
+    }
+    return;
+  }
+
+  if (subCmd === "connect" && vmId) {
+    // Connect to a VM
+    try {
+      // Find full VM ID from partial
+      const listResult = await ctx.client.vmList();
+      const vm = listResult.vms.find(v => v.vmId.startsWith(vmId));
+      if (!vm) {
+        ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+        return;
+      }
+
+      const result = await ctx.client.vmConnect(vm.vmId);
+      if (result.success) {
+        ctx.addOutput({ type: "system", content: `✓ Connected to VM: ${result.vmId.slice(0, 8)}` });
+        ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
+        ctx.addOutput({ type: "system", content: "" });
+        ctx.addOutput({ type: "system", content: "Prompts will now be sent to this VM's agent." });
+
+        // Trigger reconnection to the VM's agent
+        ctx.reconnect(result.agentUrl);
+      } else {
+        ctx.addOutput({ type: "error", content: `Failed to connect: ${result.error}` });
+      }
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to connect to VM: ${err}` });
+    }
+    return;
+  }
+
+  if (subCmd === "status") {
+    // Show current VM status
+    try {
+      const result = await ctx.client.vmStatus();
+      ctx.addOutput({ type: "system", content: "" });
+      if (result.isLocal) {
+        ctx.addOutput({ type: "system", content: "Currently running locally (no VM)" });
+      } else {
+        ctx.addOutput({ type: "system", content: `Connected to VM: ${result.currentVmId?.slice(0, 8)}` });
+        ctx.addOutput({ type: "system", content: `Agent URL: ${result.currentAgentUrl}` });
+      }
+      ctx.addOutput({ type: "system", content: "" });
+    } catch (err) {
+      ctx.addOutput({ type: "error", content: `Failed to get VM status: ${err}` });
+    }
+    return;
+  }
+
+  // Show usage
+  ctx.addOutput({ type: "system", content: "Usage: /vm:<command>[:<id>] [args]" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "  /vm:list              - Show VMs with tree structure" });
+  ctx.addOutput({ type: "system", content: "  /vm:new [task]        - Create a new root VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:branch:<id>       - Fork an existing VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:connect:<id>      - Connect CLI to VM's agent" });
+  ctx.addOutput({ type: "system", content: "  /vm:delete:<id>       - Delete a VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:status            - Show current VM connection" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "Space-separated format also works: /vm new, /vm branch <id>, etc." });
 }

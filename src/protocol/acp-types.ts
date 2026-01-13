@@ -479,6 +479,70 @@ export interface SessionIdUpdatedData {
 }
 
 // ============================================================
+// VM Management Types (orchestrator)
+// ============================================================
+
+export interface VmInfo {
+  vmId: string;
+  parent?: string | null;
+  status: "starting" | "ready" | "busy" | "completed" | "failed";
+  task?: string;
+  approach?: string;
+  createdAt: string;
+}
+
+export interface VmListResult {
+  vms: VmInfo[];
+  currentVmId?: string;
+}
+
+export interface VmCreateParams {
+  task?: string;
+}
+
+export interface VmCreateResult {
+  vmId: string;
+  agentUrl: string;
+}
+
+export interface VmBranchParams {
+  vmId: string;
+  task?: string;
+  approach?: string;
+}
+
+export interface VmBranchResult {
+  vmId: string;
+  parentId: string;
+  agentUrl: string;
+}
+
+export interface VmDeleteParams {
+  vmId: string;
+}
+
+export interface VmDeleteResult {
+  deleted: boolean;
+}
+
+export interface VmConnectParams {
+  vmId: string;
+}
+
+export interface VmConnectResult {
+  success: boolean;
+  vmId: string;
+  agentUrl: string;
+  error?: string;
+}
+
+export interface VmStatusResult {
+  currentVmId?: string;
+  currentAgentUrl?: string;
+  isLocal: boolean;
+}
+
+// ============================================================
 // ACP Method Names
 // ============================================================
 
@@ -550,6 +614,14 @@ export const AcpMethod = {
   SkillSave: "skill/save",
   SkillDelete: "skill/delete",
   SkillInvoke: "skill/invoke",
+
+  // VM Management (orchestrator)
+  VmList: "vm/list",
+  VmCreate: "vm/create",
+  VmBranch: "vm/branch",
+  VmDelete: "vm/delete",
+  VmConnect: "vm/connect",
+  VmStatus: "vm/status",
 } as const;
 
 // ============================================================
