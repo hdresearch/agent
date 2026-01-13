@@ -144,7 +144,6 @@ async function connectToVm(connection: VmConnection): Promise<void> {
 
     const response = await fetch(eventsUrl, {
       signal: connection.abortController.signal,
-      // @ts-expect-error - Bun-specific option for self-signed certs
       tls: { rejectUnauthorized: false },
     });
 
