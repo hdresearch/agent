@@ -128,10 +128,10 @@ export function getCurrentAgentId(): string {
 }
 
 /**
- * Check if agent is running
+ * Check if agent subprocess is started and alive
  */
 export function isAgentRunning(): boolean {
-  return currentRunner?.isRunning() ?? false;
+  return currentRunner?.isStarted() ?? false;
 }
 
 /**
@@ -148,6 +148,13 @@ export function getAgentSessionId(): string | null {
  */
 export function getClaudeSessionId(): string | null {
   return currentRunner?.getClaudeSessionId?.() ?? null;
+}
+
+/**
+ * Clear Claude CLI's session ID (for /clear command to reset session)
+ */
+export function clearClaudeSessionId(): void {
+  currentRunner?.clearClaudeSessionId?.();
 }
 
 /**
