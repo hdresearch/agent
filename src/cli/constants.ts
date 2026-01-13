@@ -21,6 +21,12 @@ export const COMMANDS = [
   { name: "local", alias: null, description: "Clear saved remote server for next launch" },
   { name: "skill", alias: null, description: "Manage skillsets (list/show/sync to remote)" },
   { name: "vm", alias: "v", description: "Manage VMs (list/create/branch/connect/delete)" },
+  { name: "vm:list", alias: null, description: "Show VMs with tree structure" },
+  { name: "vm:new", alias: null, description: "Create a new root VM" },
+  { name: "vm:branch", alias: null, description: "Fork an existing VM" },
+  { name: "vm:connect", alias: null, description: "Connect CLI to VM's agent" },
+  { name: "vm:delete", alias: null, description: "Delete a VM" },
+  { name: "vm:status", alias: null, description: "Show current VM connection" },
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];

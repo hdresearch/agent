@@ -143,6 +143,13 @@ export function handleSlashCommand(
 
     case "vm":
     case "v":
+    case "vm:list":
+    case "vm:new":
+    case "vm:create":
+    case "vm:branch":
+    case "vm:connect":
+    case "vm:delete":
+    case "vm:status":
       handleVm(parts, ctx).catch(err => {
         ctx.addOutput({ type: "error", content: `VM error: ${err.message}` });
       });
@@ -1021,8 +1028,24 @@ async function handleSkill(parts: string[], ctx: CommandHandlerContext): Promise
 }
 
 async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<void> {
-  const subCmd = parts[1]?.toLowerCase();
-  const vmId = parts[2];
+  // Support both `/vm:new` and `/vm new` formats
+  // If first part contains ':', split on that instead
+  let subCmd: string | undefined;
+  let vmId: string | undefined;
+  let restArgs: string[] = [];
+
+  if (parts[0]?.includes(":")) {
+    // Format: /vm:new:vmid or /vm:new
+    const colonParts = parts[0].split(":");
+    subCmd = colonParts[1]?.toLowerCase();
+    vmId = colonParts[2];
+    restArgs = parts.slice(1);
+  } else {
+    // Format: /vm new vmid
+    subCmd = parts[1]?.toLowerCase();
+    vmId = parts[2];
+    restArgs = parts.slice(3);
+  }
 
   if (!ctx.client) {
     ctx.addOutput({ type: "error", content: "Not connected to server" });
@@ -1124,9 +1147,9 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
     return;
   }
 
-  if (subCmd === "create") {
+  if (subCmd === "create" || subCmd === "new") {
     // Create a new VM
-    const task = parts.slice(2).join(" ") || undefined;
+    const task = restArgs.join(" ") || undefined;
     ctx.addOutput({ type: "system", content: "Creating VM..." });
 
     try {
@@ -1143,8 +1166,8 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
 
   if (subCmd === "branch" && vmId) {
     // Branch a VM
-    const task = parts[3];
-    const approach = parts[4];
+    const task = restArgs[0];
+    const approach = restArgs[1];
     ctx.addOutput({ type: "system", content: `Branching VM ${vmId}...` });
 
     try {
@@ -1237,11 +1260,14 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   // Show usage
-  ctx.addOutput({ type: "system", content: "Usage: /vm <list|create|branch|connect|delete|status> [args]" });
-  ctx.addOutput({ type: "system", content: "  list              - Show VMs with tree structure" });
-  ctx.addOutput({ type: "system", content: "  create [task]     - Create a new root VM" });
-  ctx.addOutput({ type: "system", content: "  branch <id>       - Fork an existing VM" });
-  ctx.addOutput({ type: "system", content: "  connect <id>      - Connect CLI to VM's agent" });
-  ctx.addOutput({ type: "system", content: "  delete <id>       - Delete a VM" });
-  ctx.addOutput({ type: "system", content: "  status            - Show current VM connection" });
+  ctx.addOutput({ type: "system", content: "Usage: /vm:<command>[:<id>] [args]" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "  /vm:list              - Show VMs with tree structure" });
+  ctx.addOutput({ type: "system", content: "  /vm:new [task]        - Create a new root VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:branch:<id>       - Fork an existing VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:connect:<id>      - Connect CLI to VM's agent" });
+  ctx.addOutput({ type: "system", content: "  /vm:delete:<id>       - Delete a VM" });
+  ctx.addOutput({ type: "system", content: "  /vm:status            - Show current VM connection" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "Space-separated format also works: /vm new, /vm branch <id>, etc." });
 }

@@ -264,11 +264,11 @@ export async function runParallel(
 }
 
 /**
- * List all VMs we're tracking (merges vers API data with our metadata)
+ * List all VMs (uses vers API as source of truth, enriches with local metadata)
  */
 export async function listManagedVms(): Promise<Array<{
   vmId: string;
-  parent?: string;
+  parent?: string | null;
   metadata?: VmMetadata;
 }>> {
   const [vms, metadata] = await Promise.all([
@@ -278,8 +278,8 @@ export async function listManagedVms(): Promise<Array<{
 
   return vms.map(vm => ({
     vmId: vm.vm_id,
-    // Parent tracked in our metadata (vers API doesn't return parent)
-    parent: metadata[vm.vm_id]?.parentId,
+    // Use vers API parent as source of truth
+    parent: vm.parent,
     metadata: metadata[vm.vm_id],
   }));
 }
