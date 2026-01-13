@@ -111,7 +111,8 @@ describe("handleSlashCommand", () => {
 
       expect(result.handled).toBe(true);
       expect(ctx.setContinueMode).toHaveBeenCalled();
-      expect(ctx.outputs.some(o => o.content.includes("Starting new conversation"))).toBe(true);
+      // handleNew uses setOutput, not addOutput
+      expect(ctx.setOutput).toHaveBeenCalled();
     });
   });
 

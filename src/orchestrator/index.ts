@@ -8,6 +8,7 @@
 
 import { createVm, branch, deleteVm, listVms, getAgentUrl, restore, type VmConfig } from "../vm/index";
 import { bootstrap } from "../vm/bootstrap";
+import { registerVm, receiveVmEvent, removeVmConnection } from "../server/vm-event-aggregator";
 
 // Golden image commit ID (pre-installed Node.js, Claude Code, vers-agent)
 const GOLDEN_COMMIT_ID = process.env.VERS_GOLDEN_COMMIT_ID;
@@ -116,8 +117,15 @@ export async function createManagedVm(
   updateVmMetadata(vmId, metadata);
 
   // Connect client
-  const client = new HttpAcpClient(getAgentUrl(vmId), { rejectUnauthorized: false });
+  const agentUrl = getAgentUrl(vmId);
+  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
   await client.connect();
+
+  // Register with event aggregator and forward notifications
+  registerVm(vmId, agentUrl);
+  client.onNotification((notification) => {
+    receiveVmEvent(vmId, notification);
+  });
 
   updateVmMetadata(vmId, { status: "ready" });
 
@@ -148,8 +156,15 @@ export async function branchVm(
 
   // Agent should already be running on branched VM
   // Just need to connect
-  const client = new HttpAcpClient(getAgentUrl(vmId), { rejectUnauthorized: false });
+  const agentUrl = getAgentUrl(vmId);
+  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
   await client.connect();
+
+  // Register with event aggregator and forward notifications
+  registerVm(vmId, agentUrl);
+  client.onNotification((notification) => {
+    receiveVmEvent(vmId, notification);
+  });
 
   updateVmMetadata(vmId, { status: "ready" });
 
@@ -163,6 +178,9 @@ export async function branchVm(
  * Delete a VM and clean up metadata
  */
 export async function deleteManagedVm(vmId: string): Promise<void> {
+  // Remove from event aggregator first
+  removeVmConnection(vmId);
+
   const managed = managedVms.get(vmId);
   if (managed) {
     managed.client.close();
@@ -190,9 +208,15 @@ export async function getManagedVm(vmId: string): Promise<ManagedVm | null> {
   }
 
   // Reconnect
-  const client = new HttpAcpClient(getAgentUrl(vmId), { rejectUnauthorized: false });
+  const agentUrl = getAgentUrl(vmId);
+  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
   try {
     await client.connect();
+    // Register with event aggregator and forward notifications
+    registerVm(vmId, agentUrl);
+    client.onNotification((notification) => {
+      receiveVmEvent(vmId, notification);
+    });
   } catch {
     return null;
   }

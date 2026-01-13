@@ -613,6 +613,8 @@ export interface AgentRunner {
   stop(): Promise<void>;
   runPrompt(options: RunPromptOptions): PromptHandle;
   isRunning(): boolean;
+  // Check if the agent subprocess has been started and is alive
+  isStarted(): boolean;
   // Get the agent's internal session ID (from ACP session/new)
   getSessionId(): string | null;
   // Get Claude CLI's actual session ID (8-char format from notifications)

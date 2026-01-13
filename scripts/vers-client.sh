@@ -225,6 +225,23 @@ case "${1:-help}" in
     rpc "skill/list" | jq .result
     ;;
 
+  skill)
+    name="${2:-}"
+    if [ -z "$name" ]; then
+      echo -e "${RED}Usage: vers-client.sh skill <name> [args]${NC}"
+      exit 1
+    fi
+    shift 2
+    args="$*"
+    escaped_name=$(printf '%s' "$name" | jq -Rs .)
+    if [ -n "$args" ]; then
+      escaped_args=$(printf '%s' "$args" | jq -Rs .)
+      rpc "skill/invoke" "{\"name\":${escaped_name},\"args\":${escaped_args}}" | jq .
+    else
+      rpc "skill/invoke" "{\"name\":${escaped_name}}" | jq .
+    fi
+    ;;
+
   # VMs
   vms)
     rpc "vm/list" | jq .result
@@ -250,6 +267,182 @@ case "${1:-help}" in
     escaped=$(printf '%s' "$prompt" | jq -Rs .)
     echo -e "${BLUE}Running on all VMs:${NC} $prompt"
     rpc "vm/run" "{\"prompt\":${escaped}}" | jq .result
+    ;;
+
+  vm-exec)
+    vmId="${2:-}"
+    shift 2 2>/dev/null
+    cmd="$*"
+    if [ -z "$vmId" ] || [ -z "$cmd" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-exec <vmId> <command>${NC}"
+      exit 1
+    fi
+    escaped_cmd=$(printf '%s' "$cmd" | jq -Rs .)
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}" | jq .result
+    ;;
+
+  vm-upload)
+    vmId="${2:-}"
+    localPath="${3:-}"
+    remotePath="${4:-}"
+    if [ -z "$vmId" ] || [ -z "$localPath" ] || [ -z "$remotePath" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-upload <vmId> <localPath> <remotePath>${NC}"
+      exit 1
+    fi
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    escaped_local=$(printf '%s' "$localPath" | jq -Rs .)
+    escaped_remote=$(printf '%s' "$remotePath" | jq -Rs .)
+    echo -e "${BLUE}Uploading${NC} $localPath -> $remotePath on $vmId"
+    rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":${escaped_local},\"remotePath\":${escaped_remote}}" | jq .result
+    ;;
+
+  vm-events)
+    # Polling endpoint for VM events
+    afterSeq="${2:-0}"
+    vmIds="${3:-}"
+    if [ -n "$vmIds" ]; then
+      escaped_vmIds=$(printf '%s' "$vmIds" | jq -Rs 'split(",")')
+      rpc "vm/events" "{\"afterSeq\":${afterSeq},\"vmIds\":${escaped_vmIds}}" | jq .result
+    else
+      rpc "vm/events" "{\"afterSeq\":${afterSeq}}" | jq .result
+    fi
+    ;;
+
+  vm-watch)
+    # SSE stream of all VM events - pretty printed with VM names
+    vmIds="${2:-}"
+
+    if [ -n "$vmIds" ]; then
+      echo -e "${BLUE}Watching VM events for: ${vmIds} (Ctrl+C to stop)...${NC}"
+      url="${BASE_URL}/events/vms?vmIds=${vmIds}"
+    else
+      echo -e "${BLUE}Watching all VM events (Ctrl+C to stop)...${NC}"
+      url="${BASE_URL}/events/vms"
+    fi
+
+    # Track current VM for streaming continuity
+    CURRENT_VM=""
+
+    curl -sN "$url" | while IFS= read -r line; do
+      if [[ "$line" == data:* ]]; then
+        json="${line#data: }"
+        vmId=$(echo "$json" | jq -r '.vmId // empty' 2>/dev/null)
+        type=$(echo "$json" | jq -r '.event.data.type // .event.type // empty' 2>/dev/null)
+        shortVm="${vmId:0:8}"
+
+        # Simple color based on first char of vmId
+        case "${vmId:0:1}" in
+          [0-3]) vmColor="${BLUE}" ;;
+          [4-7]) vmColor="${GREEN}" ;;
+          [8-b]) vmColor="${YELLOW}" ;;
+          *) vmColor='\033[0;36m' ;;  # cyan
+        esac
+
+        case "$type" in
+          content_chunk)
+            text=$(echo "$json" | jq -r '.event.data.text // empty' 2>/dev/null)
+            if [ -n "$text" ]; then
+              # Print VM prefix if switching VMs
+              if [ "$CURRENT_VM" != "$vmId" ]; then
+                [ -n "$CURRENT_VM" ] && echo ""
+                printf "${vmColor}[${shortVm}]${NC} "
+                CURRENT_VM="$vmId"
+              fi
+              printf '%s' "$text"
+            fi
+            ;;
+          tool_call)
+            tool=$(echo "$json" | jq -r '.event.data.toolName // .event.data.title // empty' 2>/dev/null)
+            echo -e "\n${vmColor}[${shortVm}]${NC} ${YELLOW}⚙ ${tool}${NC}"
+            CURRENT_VM=""
+            ;;
+          tool_result)
+            echo -e "${vmColor}[${shortVm}]${NC} ${GREEN}✓${NC}"
+            ;;
+          completed)
+            echo -e "\n${vmColor}[${shortVm}]${NC} ${GREEN}✓ Done${NC}"
+            CURRENT_VM=""
+            ;;
+          failed)
+            err=$(echo "$json" | jq -r '.event.data.error // empty' 2>/dev/null)
+            echo -e "\n${vmColor}[${shortVm}]${NC} ${RED}✗ Failed: ${err}${NC}"
+            CURRENT_VM=""
+            ;;
+        esac
+      fi
+    done
+    ;;
+
+  vm-outputs)
+    # Get outputs from a VM
+    vmId="${2:-}"
+    limit="${3:-}"
+    if [ -z "$vmId" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-outputs <vmId> [limit]${NC}"
+      exit 1
+    fi
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    if [ -n "$limit" ]; then
+      rpc "vm/outputs" "{\"vmId\":${escaped_vmId},\"limit\":${limit}}" | jq .result
+    else
+      rpc "vm/outputs" "{\"vmId\":${escaped_vmId}}" | jq .result
+    fi
+    ;;
+
+  vm-status|vm-outputs-all)
+    # Get status and last message from all VMs
+    limit="${2:-1}"
+    rpc "vm/outputs/all" "{\"limit\":${limit}}" | jq .result
+    ;;
+
+  vm-eval)
+    # Evaluate a VM's project (run build, test, lint, typecheck)
+    vmId="${2:-}"
+    if [ -z "$vmId" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-eval <vmId> [skip...]${NC}"
+      echo -e "  skip: build, test, lint, typecheck"
+      exit 1
+    fi
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    shift 2 2>/dev/null
+    skip_args=""
+    if [ $# -gt 0 ]; then
+      skip_json=$(printf '%s\n' "$@" | jq -R . | jq -s .)
+      skip_args=",\"skip\":${skip_json}"
+    fi
+    echo -e "${BLUE}Evaluating VM ${vmId}...${NC}"
+    result=$(rpc "vm/eval" "{\"vmId\":${escaped_vmId}${skip_args}}")
+    echo "$result" | jq '.result | {
+      success: .success,
+      projectType: .projectType,
+      score: .score,
+      scoreBreakdown: .scoreBreakdown,
+      results: (.results | to_entries | map({
+        key: .key,
+        success: .value.success,
+        durationMs: .value.durationMs,
+        metrics: .value.metrics
+      }) | from_entries),
+      totalDurationMs: .totalDurationMs
+    }'
+    ;;
+
+  vm-wait)
+    # Wait for a VM to complete its current task
+    vmId="${2:-}"
+    timeout="${3:-}"
+    if [ -z "$vmId" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-wait <vmId> [timeout_ms]${NC}"
+      exit 1
+    fi
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    echo -e "${BLUE}Waiting for VM ${vmId} to complete...${NC}"
+    if [ -n "$timeout" ]; then
+      rpc "vm/wait" "{\"vmId\":${escaped_vmId},\"timeout\":${timeout}}" | jq .result
+    else
+      rpc "vm/wait" "{\"vmId\":${escaped_vmId}}" | jq .result
+    fi
     ;;
 
   # Help
@@ -289,10 +482,19 @@ case "${1:-help}" in
     echo "  agent-status        Show current agent status"
     echo ""
     echo "  skills              List skills"
+    echo "  skill <name> [args] Invoke a skill"
     echo ""
     echo "  vms                 List VMs"
     echo "  vm-create [task]    Create a new VM"
     echo "  vm-run <prompt>     Run prompt on all VMs"
+    echo "  vm-exec <vmId> <cmd>  Execute command on VM via SSH"
+    echo "  vm-upload <vmId> <local> <remote>  Upload file/dir to VM"
+    echo "  vm-events [afterSeq] [vmIds]  Poll for VM events"
+    echo "  vm-watch [vmIds]    Watch multiplexed VM event stream (SSE)"
+    echo "  vm-outputs <vmId> [limit]  Get outputs from a VM"
+    echo "  vm-status [limit]          Get status + last message from all VMs"
+    echo "  vm-eval <vmId> [skip...]   Evaluate VM (build, test, lint, typecheck)"
+    echo "  vm-wait <vmId> [timeout]   Wait for VM to complete task"
     echo ""
     echo "Examples:"
     echo "  ./scripts/vers-client.sh run 'say hello'      # Send + stream response"
