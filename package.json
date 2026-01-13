@@ -63,5 +63,8 @@
     "react": "^19.2.3",
     "react-devtools-core": "^7.0.1",
     "zod": "^4.3.5"
-  }
+  },
+  "trustedDependencies": [
+    "vers"
+  ]
 }

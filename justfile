@@ -7,7 +7,7 @@ default:
 
 # Install dependencies and git hooks
 install:
-    bun install --trust vers
+    bun install
     @just setup-hooks
 
 setup-hooks:
