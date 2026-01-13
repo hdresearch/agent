@@ -8,6 +8,21 @@ HOST="${VERS_HOST:-localhost}"
 PORT="${VERS_PORT:-9999}"
 BASE_URL="http://${HOST}:${PORT}"
 
+# Get auth token (from env or tokens.json)
+get_token() {
+  if [ -n "${VERS_TOKEN:-}" ]; then
+    echo "$VERS_TOKEN"
+    return
+  fi
+  # Compute hash of server URL (matching token-store.ts)
+  local url_hash=$(echo -n "${BASE_URL}" | tr '[:upper:]' '[:lower:]' | sed 's/\/\+$//' | shasum -a 256 | cut -c1-16)
+  local tokens_file="$HOME/.vers-agent/tokens.json"
+  if [ -f "$tokens_file" ]; then
+    jq -r ".tokens[\"${url_hash}\"] // empty" "$tokens_file" 2>/dev/null
+  fi
+}
+AUTH_TOKEN=$(get_token)
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -20,11 +35,19 @@ rpc() {
   local method="$1"
   local params="$2"
   if [ -z "$params" ]; then
-    params="{}"
+    params='{}'
   fi
-  curl -sX POST "${BASE_URL}/rpc" \
-    -H "Content-Type: application/json" \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"${method}\",\"params\":${params}}"
+  local body="{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"${method}\",\"params\":${params}}"
+  if [ -n "$AUTH_TOKEN" ]; then
+    printf '%s' "$body" | curl -sX POST "${BASE_URL}/rpc" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${AUTH_TOKEN}" \
+      -d @-
+  else
+    printf '%s' "$body" | curl -sX POST "${BASE_URL}/rpc" \
+      -H "Content-Type: application/json" \
+      -d @-
+  fi
 }
 
 # Commands
@@ -431,9 +454,11 @@ case "${1:-help}" in
     escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
     rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":\"${bundlePath}\",\"remotePath\":\"/tmp/sync.bundle\"}" > /dev/null
 
-    # Apply bundle on VM
+    # Apply bundle on VM (ensure git is ready, force checkout)
     echo -e "${BLUE}Applying bundle on VM...${NC}"
-    result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":\"cd /root/vers-agent && git fetch /tmp/sync.bundle HEAD:synced && git checkout synced && rm /tmp/sync.bundle\"}")
+    applyCmd='date -s "$(curl -sI google.com 2>/dev/null | grep -i date | cut -d'"'"' '"'"' -f2-)" 2>/dev/null; which git >/dev/null || (apt-get update -qq && apt-get install -y -qq git); git config --global --add safe.directory /root/vers-agent 2>/dev/null; cd /root/vers-agent && git checkout -f main 2>/dev/null || git checkout -f master 2>/dev/null || true && git branch -D synced 2>/dev/null || true && git fetch /tmp/sync.bundle HEAD:synced && git checkout -f synced && rm /tmp/sync.bundle'
+    escaped_cmd=$(printf '%s' "$applyCmd" | jq -Rs .)
+    result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}")
 
     exitCode=$(echo "$result" | jq -r '.result.exitCode // 1')
     if [ "$exitCode" = "0" ]; then
@@ -492,8 +517,10 @@ case "${1:-help}" in
       # Upload
       rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":\"${bundlePath}\",\"remotePath\":\"/tmp/sync.bundle\"}" > /dev/null
 
-      # Apply
-      result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":\"cd /root/vers-agent && git fetch /tmp/sync.bundle HEAD:synced && git checkout synced && rm /tmp/sync.bundle\"}")
+      # Apply (ensure git is ready, force checkout)
+      applyCmd='date -s "$(curl -sI google.com 2>/dev/null | grep -i date | cut -d'"'"' '"'"' -f2-)" 2>/dev/null; which git >/dev/null || (apt-get update -qq && apt-get install -y -qq git); git config --global --add safe.directory /root/vers-agent 2>/dev/null; cd /root/vers-agent && git checkout -f main 2>/dev/null || git checkout -f master 2>/dev/null || true && git branch -D synced 2>/dev/null || true && git fetch /tmp/sync.bundle HEAD:synced && git checkout -f synced && rm /tmp/sync.bundle'
+      escaped_cmd=$(printf '%s' "$applyCmd" | jq -Rs .)
+      result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}")
       exitCode=$(echo "$result" | jq -r '.result.exitCode // 1')
 
       if [ "$exitCode" = "0" ]; then
