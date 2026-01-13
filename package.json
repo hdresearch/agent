@@ -50,7 +50,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "vers": "github:hdresearch/vers-sdk-ts",
+    "vers": "github:hdresearch/vers-sdk-ts#dist-prebuilt",
     "@crosscopy/clipboard": "^0.2.8",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "boxen": "^8.0.1",
