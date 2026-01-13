@@ -940,16 +940,21 @@ async function handleVmBranch(params: VmBranchParams): Promise<VmBranchResult> {
   const { branchVm } = await import("../orchestrator");
   const { getAgentUrl } = await import("../vm");
 
-  const vm = await branchVm(params.vmId, params.task, params.approach);
-  const agentUrl = getAgentUrl(vm.vmId);
+  try {
+    const vm = await branchVm(params.vmId, params.task, params.approach);
+    const agentUrl = getAgentUrl(vm.vmId);
 
-  info("Branched VM", { vmId: vm.vmId, parentId: params.vmId, agentUrl });
+    info("Branched VM", { vmId: vm.vmId, parentId: params.vmId, agentUrl });
 
-  return {
-    vmId: vm.vmId,
-    parentId: params.vmId,
-    agentUrl,
-  };
+    return {
+      vmId: vm.vmId,
+      parentId: params.vmId,
+      agentUrl,
+    };
+  } catch (err) {
+    error("Failed to branch VM", { parentId: params.vmId, error: err instanceof Error ? err.message : String(err) });
+    throw new Error(`Failed to branch VM ${params.vmId}: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function handleVmDelete(params: VmDeleteParams): Promise<VmDeleteResult> {
