@@ -7,9 +7,11 @@
 
 import { execute, upload, getAgentUrl } from "./index";
 import { resolve } from "path";
+import { readFileSync } from "fs";
 
 const LINUX_BINARY_PATH = resolve(import.meta.dir, "../../dist/vers-agent-linux");
 const REMOTE_BINARY_PATH = "/usr/local/bin/vers-agent";
+const SYSTEMD_SERVICE_PATH = resolve(import.meta.dir, "vers-agent.service");
 // Agent listens on port 80 inside VM, vers proxy routes external :443 → VM :80
 const AGENT_PORT = 80;
 
@@ -40,14 +42,23 @@ export async function bootstrap(vmId: string): Promise<string> {
     await execute(vmId, `chmod +x ${REMOTE_BINARY_PATH}`);
   }
 
-  // Start vers-agent in server mode (background)
-  // Requires ANTHROPIC_API_KEY for the agent to function
+  // Start vers-agent via systemd (preferred) or fallback to nohup
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY environment variable is required to bootstrap vers-agent");
   }
-  console.log(`[${vmId}] Starting vers-agent server on port ${AGENT_PORT}...`);
-  await execute(vmId, `ANTHROPIC_API_KEY=${apiKey} PORT=${AGENT_PORT} nohup ${REMOTE_BINARY_PATH} --server > /var/log/vers-agent.log 2>&1 &`);
+
+  // Check if systemd is available
+  const hasSystemd = await checkSystemdAvailable(vmId);
+
+  if (hasSystemd) {
+    console.log(`[${vmId}] Installing systemd service...`);
+    await installSystemdService(vmId, apiKey);
+  } else {
+    // Fallback to nohup for systems without systemd
+    console.log(`[${vmId}] Starting vers-agent server on port ${AGENT_PORT} (nohup)...`);
+    await execute(vmId, `ANTHROPIC_API_KEY=${apiKey} PORT=${AGENT_PORT} nohup ${REMOTE_BINARY_PATH} --server > /var/log/vers-agent.log 2>&1 &`);
+  }
 
   // Wait for it to be healthy (checks via SSH)
   await waitForHealthy(vmId);
@@ -139,8 +150,80 @@ async function waitForHealthy(vmId: string, maxAttempts = 30): Promise<void> {
  */
 export async function stopAgent(vmId: string): Promise<void> {
   try {
-    await execute(vmId, "pkill -f vers-agent || true");
+    // Try systemd first, then pkill as fallback
+    await execute(vmId, "systemctl stop vers-agent 2>/dev/null || pkill -f vers-agent || true");
   } catch {
     // Ignore errors - process might not exist
   }
+}
+
+/**
+ * Check if systemd is available on the VM
+ */
+async function checkSystemdAvailable(vmId: string): Promise<boolean> {
+  try {
+    const result = await execute(vmId, "which systemctl && systemctl --version > /dev/null 2>&1 && echo 'ok'");
+    return result.stdout.includes("ok");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Install and start vers-agent as a systemd service
+ */
+async function installSystemdService(vmId: string, apiKey: string): Promise<void> {
+  // Read the service file template
+  let serviceContent: string;
+  try {
+    serviceContent = readFileSync(SYSTEMD_SERVICE_PATH, "utf-8");
+  } catch {
+    // If service file doesn't exist, use inline template
+    serviceContent = `[Unit]
+Description=Vers Agent Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/vers-agent
+ExecStart=${REMOTE_BINARY_PATH} --server
+Restart=always
+RestartSec=5
+Environment=PORT=${AGENT_PORT}
+Environment=HOME=/root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vers-agent
+
+[Install]
+WantedBy=multi-user.target
+`;
+  }
+
+  // Update the service file to use the binary path and correct port
+  serviceContent = serviceContent
+    .replace(/ExecStart=.*/, `ExecStart=${REMOTE_BINARY_PATH} --server`)
+    .replace(/Environment=PORT=.*/, `Environment=PORT=${AGENT_PORT}`);
+
+  // Add API key to environment
+  serviceContent = serviceContent.replace(
+    /\[Service\]/,
+    `[Service]\nEnvironment=ANTHROPIC_API_KEY=${apiKey}`
+  );
+
+  // Write service file to VM
+  const escapedContent = serviceContent.replace(/'/g, "'\\''");
+  await execute(vmId, `cat > /etc/systemd/system/vers-agent.service << 'EOFSERVICE'
+${serviceContent}
+EOFSERVICE`);
+
+  // Reload systemd, enable and start the service
+  await execute(vmId, "systemctl daemon-reload");
+  await execute(vmId, "systemctl enable vers-agent");
+  await execute(vmId, "systemctl start vers-agent");
+
+  console.log(`[${vmId}] Systemd service installed and started`);
 }
