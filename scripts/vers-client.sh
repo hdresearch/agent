@@ -588,6 +588,68 @@ case "${1:-help}" in
     fi
     ;;
 
+  vm-systemd)
+    # Install/manage systemd service on a VM
+    vmId="${2:-}"
+    action="${3:-status}"
+    if [ -z "$vmId" ]; then
+      echo -e "${RED}Usage: vers-client.sh vm-systemd <vmId> [install|status|restart|logs]${NC}"
+      exit 1
+    fi
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+
+    case "$action" in
+      install)
+        echo -e "${BLUE}Installing systemd service on VM ${vmId}...${NC}"
+        # Create systemd service file
+        serviceFile='[Unit]
+Description=Vers Agent Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/vers-agent
+ExecStart=/usr/local/bin/bun run index.ts --server
+Restart=always
+RestartSec=5
+Environment=PORT=9999
+Environment=HOME=/root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vers-agent
+
+[Install]
+WantedBy=multi-user.target'
+        escaped_service=$(printf '%s' "$serviceFile" | jq -Rs .)
+        installCmd="echo ${escaped_service} | jq -r . > /etc/systemd/system/vers-agent.service && systemctl daemon-reload && systemctl enable vers-agent && systemctl restart vers-agent && sleep 2 && systemctl status vers-agent --no-pager | head -10"
+        escaped_cmd=$(printf '%s' "$installCmd" | jq -Rs .)
+        rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}" | jq -r '.result.stdout // .result.stderr'
+        ;;
+      status)
+        echo -e "${BLUE}Checking systemd service on VM ${vmId}...${NC}"
+        escaped_cmd=$(printf '%s' "systemctl status vers-agent --no-pager 2>/dev/null || echo 'Service not installed'" | jq -Rs .)
+        rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}" | jq -r '.result.stdout // .result.stderr'
+        ;;
+      restart)
+        echo -e "${BLUE}Restarting vers-agent on VM ${vmId}...${NC}"
+        escaped_cmd=$(printf '%s' "systemctl restart vers-agent && sleep 2 && systemctl status vers-agent --no-pager | head -8" | jq -Rs .)
+        rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}" | jq -r '.result.stdout // .result.stderr'
+        ;;
+      logs)
+        echo -e "${BLUE}Recent logs from VM ${vmId}...${NC}"
+        escaped_cmd=$(printf '%s' "journalctl -u vers-agent --no-pager -n 30" | jq -Rs .)
+        rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}" | jq -r '.result.stdout // .result.stderr'
+        ;;
+      *)
+        echo -e "${RED}Unknown action: $action${NC}"
+        echo "Actions: install, status, restart, logs"
+        exit 1
+        ;;
+    esac
+    ;;
+
   # Help
   help|--help|-h|"")
     echo "vers-client.sh - CLI client for vers-agent"
@@ -640,6 +702,7 @@ case "${1:-help}" in
     echo "  vm-sync-all [base]         Sync local git changes to ALL VMs"
     echo "  vm-eval <vmId> [skip...]   Evaluate VM (build, test, lint, typecheck)"
     echo "  vm-wait <vmId> [timeout]   Wait for VM to complete task"
+    echo "  vm-systemd <vmId> [action] Manage systemd service (install|status|restart|logs)"
     echo ""
     echo "Examples:"
     echo "  ./scripts/vers-client.sh run 'say hello'      # Send + stream response"
