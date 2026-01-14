@@ -6,9 +6,10 @@
  * - Uses existing http-client for agent communication
  */
 
-import { createVm, branch, deleteVm, listVms, getAgentUrl, restore, type VmConfig } from "../vm/index";
+import { createVm, branch, deleteVm, listVms, getAgentUrl, restore, execute, type VmConfig } from "../vm/index";
 import { bootstrap } from "../vm/bootstrap";
 import { registerVm, receiveVmEvent, removeVmConnection } from "../server/vm-event-aggregator";
+import { deriveToken } from "../utils/auth-store";
 
 // Golden image commit ID (pre-installed Node.js, Claude Code, vers-agent)
 const GOLDEN_COMMIT_ID = process.env.VERS_GOLDEN_COMMIT_ID;
@@ -98,6 +99,60 @@ export function removeVmMetadata(vmId: string): void {
 }
 
 // ============================================================
+// Auth Helpers
+// ============================================================
+
+const ORCHESTRATOR_SECRET = process.env.VERS_ORCHESTRATOR_SECRET;
+
+/**
+ * Get the derived auth token for a VM.
+ * Returns null if VERS_ORCHESTRATOR_SECRET is not set.
+ */
+function getVmToken(vmId: string): string | null {
+  if (!ORCHESTRATOR_SECRET) return null;
+  return deriveToken(ORCHESTRATOR_SECRET, vmId);
+}
+
+/**
+ * Create an HttpAcpClient for a VM with the derived token pre-set.
+ */
+function createVmClient(vmId: string): HttpAcpClient {
+  const agentUrl = getAgentUrl(vmId);
+  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
+
+  const token = getVmToken(vmId);
+  if (token) {
+    client.setToken(token);
+  }
+
+  return client;
+}
+
+/**
+ * Inject VERS_VM_ID into the VM's systemd env file and restart vers-agent.
+ * This enables auto-claim with derived tokens.
+ */
+async function injectVmIdAndRestart(vmId: string): Promise<void> {
+  if (!ORCHESTRATOR_SECRET) return; // No secret, skip injection
+
+  // Update VERS_VM_ID in systemd EnvironmentFile and restart via systemd
+  const commands = [
+    // Ensure env file exists with required vars
+    `mkdir -p /etc/vers-agent`,
+    // Update or add VERS_VM_ID in the systemd env file
+    `grep -q "^VERS_VM_ID=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_VM_ID=.*/VERS_VM_ID=${vmId}/" /etc/vers-agent/env || echo "VERS_VM_ID=${vmId}" >> /etc/vers-agent/env`,
+    // Also clear any stale auth.db so auto-claim runs fresh
+    `rm -f /root/.vers-agent/auth.db`,
+    // Restart vers-agent via systemd to pick up the new env
+    `systemctl restart vers-agent`,
+  ].join(" && ");
+
+  await execute(vmId, commands);
+  // Wait for agent to restart
+  await new Promise(resolve => setTimeout(resolve, 3000));
+}
+
+// ============================================================
 // Orchestrator
 // ============================================================
 
@@ -136,9 +191,12 @@ export async function createManagedVm(
   };
   updateVmMetadata(vmId, metadata);
 
-  // Connect client
+  // Inject VM ID so agent can auto-claim with derived token
+  await injectVmIdAndRestart(vmId);
+
+  // Connect client (with derived token if VERS_ORCHESTRATOR_SECRET is set)
+  const client = createVmClient(vmId);
   const agentUrl = getAgentUrl(vmId);
-  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
   await client.connect();
 
   // Register with event aggregator and forward notifications
@@ -176,10 +234,13 @@ export async function branchVm(
   };
   updateVmMetadata(vmId, metadata);
 
+  // Inject VM ID so agent can auto-claim with derived token
+  await injectVmIdAndRestart(vmId);
+
   // Agent should already be running on branched VM
-  // Just need to connect
+  // Just need to connect (with derived token if VERS_ORCHESTRATOR_SECRET is set)
+  const client = createVmClient(vmId);
   const agentUrl = getAgentUrl(vmId);
-  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
   await client.connect();
 
   // Register with event aggregator and forward notifications
@@ -231,9 +292,9 @@ export async function getManagedVm(vmId: string): Promise<ManagedVm | null> {
     return null;
   }
 
-  // Reconnect
+  // Reconnect (with derived token if VERS_ORCHESTRATOR_SECRET is set)
+  const client = createVmClient(vmId);
   const agentUrl = getAgentUrl(vmId);
-  const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
   try {
     await client.connect();
     // Register with event aggregator and forward notifications

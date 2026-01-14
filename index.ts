@@ -267,8 +267,11 @@ Example:
       // CLI only (connects to local HTTP server)
       await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
     } else if (serverOnly) {
-      // HTTP server only (daemon mode) - reset claim for local access
-      authStore.resetClaim();
+      // HTTP server only (daemon mode)
+      // Only reset claim for local access if not on a VM (VMs use auto-claim with derived tokens)
+      if (!process.env.VERS_ORCHESTRATOR_SECRET && !process.env.VERS_VM_ID) {
+        authStore.resetClaim();
+      }
       const server = createHttpServer(PORT);
 
       // Initialize agent eagerly so commands are available immediately
@@ -291,8 +294,10 @@ Example:
       await new Promise(() => {});
     } else {
       // Both: start HTTP server, then CLI
-      // Reset claim for local mode - local client should have automatic access
-      authStore.resetClaim();
+      // Only reset claim for local mode if not on a VM (VMs use auto-claim with derived tokens)
+      if (!process.env.VERS_ORCHESTRATOR_SECRET && !process.env.VERS_VM_ID) {
+        authStore.resetClaim();
+      }
       const server = createHttpServer(PORT);
       const actualPort = server.port;
 
