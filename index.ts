@@ -118,6 +118,7 @@ const PORT = parseInt(process.env.PORT || "9999", 10);
 const args = process.argv.slice(2);
 
 const showHelp = args.includes("--help") || args.includes("-h");
+const installSkills = args.includes("--install-skills");
 const cliOnly = args.includes("--cli");
 const serverOnly = args.includes("--server");
 const forceNewSession = args.includes("--new") || args.includes("-n");
@@ -127,6 +128,36 @@ const forceLocal = args.includes("--local");
 // Parse --url option
 const urlIndex = args.indexOf("--url");
 const explicitServerUrl = urlIndex !== -1 && args[urlIndex + 1] ? args[urlIndex + 1] : undefined;
+
+// Install embedded skills to ~/.claude/skills/
+if (installSkills) {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const skillsDir = `${homeDir}/.claude/skills`;
+
+  console.log("Installing embedded skills to ~/.claude/skills/\n");
+
+  for (const skill of embeddedSkills) {
+    const skillPath = `${skillsDir}/${skill.name}`;
+    const filePath = `${skillPath}/SKILL.md`;
+
+    try {
+      // Create directory
+      await Bun.$`mkdir -p ${skillPath}`.quiet();
+
+      // Write skill file
+      await Bun.write(filePath, skill.content);
+
+      console.log(`  ✓ Installed: ${skill.name}`);
+      console.log(`    ${filePath}\n`);
+    } catch (err) {
+      console.error(`  ✗ Failed to install ${skill.name}:`, err);
+    }
+  }
+
+  console.log("Done! Skills are now available in Claude Code.");
+  console.log("Try: /orchestrate");
+  process.exit(0);
+}
 
 if (showHelp) {
   console.log(`vers-agent - ACP-compliant agent harness with CLI
@@ -140,6 +171,7 @@ Options:
   --url <url>       Connect CLI to remote server (e.g., --url http://192.168.1.100:9999)
   --local           Force local mode (clears saved remote server)
   --new, -n         Start a fresh session (default: continue last session)
+  --install-skills  Install bundled skills to ~/.claude/skills/
   (default)         Run both HTTP server and CLI, continuing the last session if one exists
 
 Environment:
