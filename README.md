@@ -17,8 +17,6 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 [Agent Client Protocol](https://agentclientprotocol.com/) is a JSON-RPC 2.0 based protocol for controlling AI agents.
 
-**LLM-friendly docs:** [`docs/acp-llms.txt`](docs/acp-llms.txt) | [`docs/acp-llms-full.txt`](docs/acp-llms-full.txt)
-
 vers-agent implements ACP to provide:
 
 - **Session management** - Create, load, list, and persist sessions with SQLite storage
