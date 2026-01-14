@@ -291,6 +291,13 @@ export class SubprocessAgentRunner implements AgentRunner {
   }
 
   /**
+   * Check if the agent subprocess has been started and is alive
+   */
+  isStarted(): boolean {
+    return this.started;
+  }
+
+  /**
    * Get the agent's internal session ID (from ACP session/new)
    */
   getSessionId(): string | null {
@@ -303,6 +310,13 @@ export class SubprocessAgentRunner implements AgentRunner {
    */
   getClaudeSessionId(): string | null {
     return this.client?.getClaudeSessionId() ?? null;
+  }
+
+  /**
+   * Clear Claude CLI's session ID (for /clear command)
+   */
+  clearClaudeSessionId(): void {
+    this.client?.clearClaudeSessionId();
   }
 
   /**

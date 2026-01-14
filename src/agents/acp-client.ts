@@ -86,6 +86,13 @@ export class AcpClient {
   }
 
   /**
+   * Clear Claude CLI's session ID (for /clear command)
+   */
+  clearClaudeSessionId(): void {
+    this.claudeSessionId = null;
+  }
+
+  /**
    * Get agent capabilities (after initialize)
    */
   getCapabilities(): AcpAgentCapabilities {

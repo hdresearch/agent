@@ -68,7 +68,28 @@ import {
   type VmStatusResult,
   type VmRunParams,
   type VmRunResult,
+  type VmExecuteParams,
+  type VmExecuteResult,
+  type VmUploadParams,
+  type VmUploadResult,
+  type VmEventsParams,
+  type VmEventsResult,
+  type VmOutputsParams,
+  type VmOutputsResult,
+  type VmOutputsAllParams,
+  type VmOutputsAllResult,
+  type VmWaitParams,
+  type VmWaitResult,
+  type VmEvalParams,
+  type VmEvalResult,
 } from "../protocol/acp-types";
+import {
+  subscribeToVmEvents,
+  getEventsSince,
+  getLastSeq,
+  getConnectionStatus,
+  getConnectionStatusObject,
+} from "./vm-event-aggregator";
 import {
   initializeRegistry,
   listAgents,
@@ -80,11 +101,13 @@ import {
   runTask,
   cancelTask,
   initializeAgent,
+  stopAgent,
   selectAgent,
   getCurrentAgentId,
   isAgentRunning,
   getAgentSessionId,
   getClaudeSessionId,
+  clearClaudeSessionId,
   listAgents as getAgentsList,
   clearProjectDocsCache,
   markDocsForReinjection,
@@ -650,7 +673,14 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
     }
   }
 
-  // Ensure agent is initialized (may already be from eager loading)
+  // If agent is already running, stop it to get a fresh session
+  // This ensures we get a new Claude session ID
+  if (isAgentRunning()) {
+    info("Agent already running, restarting for new session");
+    await stopAgent();
+  }
+
+  // Start fresh agent
   await initializeAgent();
 
   // Wait for Claude's session ID with timeout (up to 3 seconds)
@@ -679,11 +709,13 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
     newCurrentSessionId: currentSessionId,
     usingClaude: !!claudeSessionId,
   });
+
   updateSession({ sessionId: currentSessionId });
 
   // Register this session in SQLite storage with Claude's session ID
   // This is critical for resume - we need to store the ID Claude recognizes
-  sessionStore.create(currentSessionId);
+  // Use getOrCreate in case we somehow get a duplicate ID
+  sessionStore.getOrCreate(currentSessionId);
 
   // Get the current mode (should be "default" after reset)
   const mode = getSessionMode();
@@ -1025,8 +1057,6 @@ function handleVmStatus(): VmStatusResult {
 
 async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
   const { listManagedVms, getManagedVm } = await import("../orchestrator");
-  const { getAgentUrl } = await import("../vm");
-  const { HttpAcpClient } = await import("../client/http-client");
 
   // Get list of VMs to run on
   const allVms = await listManagedVms();
@@ -1041,17 +1071,15 @@ async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
   // Fire prompts to all VMs without waiting for completion
   for (const vmId of targetVmIds) {
     try {
-      const agentUrl = getAgentUrl(vmId);
+      // Use getManagedVm to get/reconnect client (this also registers with event aggregator)
+      const managed = await getManagedVm(vmId);
 
-      // Create a client and send the prompt (fire and forget)
-      const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
-      const connectResult = await client.connect();
-
-      if (connectResult.success) {
+      if (managed) {
         // Initialize and send prompt without waiting
-        client.initialize("vers-agent").then(() => {
-          client.newSession().then(() => {
-            client.prompt(params.prompt).catch(err => {
+        managed.client.initialize("vers-agent").then(() => {
+          managed.client.newSession().then((session) => {
+            managed.sessionId = session.sessionId;
+            managed.client.prompt(params.prompt).catch(err => {
               warn(`Prompt failed on VM ${vmId}`, { error: err.message });
             });
           });
@@ -1062,7 +1090,7 @@ async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
         dispatched.push(vmId);
         info(`Dispatched prompt to VM ${vmId.slice(0, 8)}`);
       } else {
-        warn(`Failed to connect to VM ${vmId}`, { error: connectResult.error });
+        warn(`Failed to get managed VM ${vmId}`);
       }
     } catch (err) {
       warn(`Failed to dispatch to VM ${vmId}`, { error: err instanceof Error ? err.message : String(err) });
@@ -1073,6 +1101,450 @@ async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
     dispatched: dispatched.length,
     vmIds: dispatched,
   };
+}
+
+async function handleVmExecute(params: VmExecuteParams): Promise<VmExecuteResult> {
+  const { execute } = await import("../vm");
+
+  info("Executing command on VM", { vmId: params.vmId, command: params.command.slice(0, 50) });
+
+  try {
+    const result = await execute(params.vmId, params.command);
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+    };
+  } catch (err) {
+    warn("VM execute failed", { vmId: params.vmId, error: err instanceof Error ? err.message : String(err) });
+    return {
+      stdout: "",
+      stderr: err instanceof Error ? err.message : String(err),
+      exitCode: 1,
+    };
+  }
+}
+
+async function handleVmUpload(params: VmUploadParams): Promise<VmUploadResult> {
+  const { upload, execute } = await import("../vm");
+  const { statSync } = await import("fs");
+  const { join } = await import("path");
+  const { randomUUID } = await import("crypto");
+
+  info("Uploading to VM", { vmId: params.vmId, localPath: params.localPath, remotePath: params.remotePath });
+
+  try {
+    const stat = statSync(params.localPath);
+
+    if (stat.isDirectory()) {
+      // For directories: zip locally, upload, unzip remotely
+      const tempZip = `/tmp/vers-upload-${randomUUID()}.tar.gz`;
+      const remoteZip = `/tmp/vers-upload-${randomUUID()}.tar.gz`;
+
+      info("Uploading directory via tar", { localPath: params.localPath, tempZip });
+
+      // Create tar.gz locally
+      const tarResult = Bun.spawnSync(["tar", "-czf", tempZip, "-C", params.localPath, "."]);
+      if (tarResult.exitCode !== 0) {
+        throw new Error(`Failed to create tar: ${tarResult.stderr.toString()}`);
+      }
+
+      // Upload the tar
+      await upload(params.vmId, tempZip, remoteZip);
+
+      // Create target directory and extract on remote
+      await execute(params.vmId, `mkdir -p ${params.remotePath} && tar -xzf ${remoteZip} -C ${params.remotePath} && rm ${remoteZip}`);
+
+      // Clean up local temp file
+      Bun.spawnSync(["rm", tempZip]);
+
+      return { success: true };
+    } else {
+      // Single file upload
+      await upload(params.vmId, params.localPath, params.remotePath);
+      return { success: true };
+    }
+  } catch (err) {
+    warn("VM upload failed", { vmId: params.vmId, error: err instanceof Error ? err.message : String(err) });
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function handleVmEvents(params: VmEventsParams): VmEventsResult {
+  const events = getEventsSince(params.afterSeq ?? 0, params.vmIds, params.limit ?? 100);
+  const lastEvent = events[events.length - 1];
+  const lastSeq = lastEvent ? lastEvent.seq : getLastSeq();
+
+  return {
+    events,
+    lastSeq,
+    connectionStatus: getConnectionStatusObject(),
+  };
+}
+
+async function handleVmOutputs(params: VmOutputsParams): Promise<VmOutputsResult> {
+  const { getManagedVm } = await import("../orchestrator");
+
+  const vm = await getManagedVm(params.vmId);
+  if (!vm) {
+    return {
+      vmId: params.vmId,
+      outputs: [],
+    };
+  }
+
+  try {
+    // Get session outputs from the VM
+    // Note: limit is passed but getSessionOutputs may not support it - filtering done below
+    const result = await vm.client.getSessionOutputs({});
+
+    // Transform outputs to simpler format
+    // SessionOutput types: "user", "text" (assistant), "tool", "tool-result", "system", "error"
+    const outputs: VmOutputsResult["outputs"] = [];
+    for (const output of result.outputs || []) {
+      if (output.type === "text") {
+        // "text" type is assistant/Claude output
+        outputs.push({
+          type: "assistant",
+          content: output.content,
+        });
+      } else if (output.type === "tool-result" || output.type === "tool_result") {
+        outputs.push({
+          type: "tool_result",
+          content: output.content,
+          toolName: output.toolName,
+        });
+      } else if (output.type === "user") {
+        outputs.push({
+          type: "user",
+          content: output.content,
+        });
+      }
+      // Skip "system", "error", "tool", "stats" types
+    }
+
+    return {
+      vmId: params.vmId,
+      sessionId: vm.sessionId,
+      outputs,
+    };
+  } catch (err) {
+    warn("Failed to get VM outputs", { vmId: params.vmId, error: err instanceof Error ? err.message : String(err) });
+    return {
+      vmId: params.vmId,
+      outputs: [],
+    };
+  }
+}
+
+async function handleVmWait(params: VmWaitParams): Promise<VmWaitResult> {
+  const { getManagedVm } = await import("../orchestrator");
+  const timeout = params.timeout ?? 300000; // 5 min default
+  const startTime = Date.now();
+
+  const vm = await getManagedVm(params.vmId);
+  if (!vm) {
+    return {
+      vmId: params.vmId,
+      status: "failed",
+      error: "VM not found",
+    };
+  }
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let timeoutId: Timer | null = null;
+
+    // Subscribe to VM events
+    const unsubscribe = subscribeToVmEvents((event) => {
+      if (resolved) return;
+      if (event.vmId !== params.vmId) return;
+
+      const eventType = event.event.type;
+
+      if (eventType === "completed") {
+        resolved = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        unsubscribe();
+
+        const durationMs = Date.now() - startTime;
+
+        // Get outputs after completion
+        handleVmOutputs({ vmId: params.vmId, limit: 10 }).then((outputsResult) => {
+          resolve({
+            vmId: params.vmId,
+            status: "completed",
+            durationMs,
+            outputs: outputsResult.outputs,
+          });
+        });
+      } else if (eventType === "failed") {
+        resolved = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        unsubscribe();
+
+        const errorData = event.event.data as { error?: string };
+        resolve({
+          vmId: params.vmId,
+          status: "failed",
+          durationMs: Date.now() - startTime,
+          error: errorData?.error || "Task failed",
+        });
+      }
+    });
+
+    // Set timeout
+    timeoutId = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      unsubscribe();
+
+      resolve({
+        vmId: params.vmId,
+        status: "timeout",
+        durationMs: timeout,
+        error: `Timeout after ${timeout}ms`,
+      });
+    }, timeout);
+  });
+}
+
+async function handleVmOutputsAll(params: VmOutputsAllParams): Promise<VmOutputsAllResult> {
+  const { listManagedVms, getManagedVm } = await import("../orchestrator");
+  const limit = params.limit ?? 1;
+
+  // Get all VMs with their metadata
+  const vmList = await listManagedVms();
+
+  const result: VmOutputsAllResult = { vms: {} };
+
+  // Fetch outputs from each VM in parallel
+  await Promise.all(
+    vmList.map(async (vm) => {
+      const vmId = vm.vmId;
+      const metadata = vm.metadata;
+
+      // Try to get outputs from this VM
+      let outputs: VmOutputsResult["outputs"] = [];
+      let lastMessage: string | undefined;
+      let lastMessageType: "assistant" | "tool_result" | "user" | undefined;
+
+      try {
+        const managed = await getManagedVm(vmId);
+        if (managed) {
+          const outputsResult = await handleVmOutputs({ vmId, limit });
+          outputs = outputsResult.outputs;
+
+          // Find the last assistant message
+          for (let i = outputs.length - 1; i >= 0; i--) {
+            const output = outputs[i];
+            if (!output) continue;
+            if (output.type === "assistant") {
+              lastMessage = output.content;
+              lastMessageType = "assistant";
+              break;
+            } else if (output.type === "tool_result" && !lastMessage) {
+              lastMessage = output.content.slice(0, 200); // Truncate tool results
+              lastMessageType = "tool_result";
+            }
+          }
+        }
+      } catch {
+        // VM not reachable, still include it with empty outputs
+      }
+
+      result.vms[vmId] = {
+        vmId,
+        status: metadata?.status || "unknown",
+        task: metadata?.task,
+        lastMessage,
+        lastMessageType,
+        outputs,
+      };
+    })
+  );
+
+  return result;
+}
+
+async function handleVmEval(params: VmEvalParams): Promise<VmEvalResult> {
+  const { getManagedVm } = await import("../orchestrator");
+  const { vmId, cwd, commands, skip, timeout } = params;
+
+  const managed = await getManagedVm(vmId);
+  if (!managed) {
+    throw new Error(`VM not found: ${vmId}`);
+  }
+
+  // Run evaluation commands on the VM via SSH
+  const evalTimeout = timeout ?? 60000;
+  const skipSet = new Set(skip ?? []);
+
+  // First detect project type by checking for common files
+  const detectCmd = `
+    if [ -f bun.lock ] || [ -f bun.lockb ]; then echo "bun";
+    elif [ -f package.json ]; then echo "node";
+    elif [ -f Cargo.toml ]; then echo "rust";
+    elif [ -f go.mod ]; then echo "go";
+    elif [ -f pyproject.toml ] || [ -f requirements.txt ]; then echo "python";
+    else echo "unknown"; fi
+  `.trim().replace(/\n\s*/g, ' ');
+
+  const workDir = cwd ?? "/root/vers-agent";
+  const { execute: executeOnVm } = await import("../vm");
+
+  const detectResult = await executeOnVm(vmId, `cd ${workDir} && ${detectCmd}`);
+  const projectType = detectResult.stdout.trim() || "unknown";
+
+  // Get default commands based on project type
+  const defaultCommands: Record<string, { build?: string; test?: string; lint?: string; typecheck?: string }> = {
+    bun: { build: "bun run build", test: "bun test", lint: "bun run lint", typecheck: "bun run tsc --noEmit" },
+    node: { build: "npm run build", test: "npm test", lint: "npm run lint", typecheck: "npm run typecheck" },
+    rust: { build: "cargo build", test: "cargo test", lint: "cargo clippy -- -D warnings", typecheck: "cargo check" },
+    go: { build: "go build ./...", test: "go test ./...", lint: "golangci-lint run", typecheck: "go vet ./..." },
+    python: { test: "pytest", lint: "ruff check .", typecheck: "mypy ." },
+    unknown: {},
+  };
+
+  const cmds = { ...defaultCommands[projectType], ...commands };
+
+  const results: VmEvalResult["results"] = {};
+  const scoreBreakdown = { build: 0, test: 0, lint: 0, typecheck: 0 };
+
+  // Helper to run a command on the VM
+  async function runCmd(cmd: string): Promise<{ success: boolean; exitCode: number; stdout: string; stderr: string; durationMs: number }> {
+    const start = Date.now();
+    try {
+      const result = await executeOnVm(vmId, `cd ${workDir} && timeout ${Math.floor(evalTimeout / 1000)} ${cmd}`);
+      return {
+        success: result.exitCode === 0,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        durationMs: Date.now() - start,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        exitCode: -1,
+        stdout: "",
+        stderr: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - start,
+      };
+    }
+  }
+
+  const startTime = Date.now();
+
+  // Run build
+  if (cmds.build && !skipSet.has("build")) {
+    const buildResult = await runCmd(cmds.build);
+    results.build = buildResult;
+    scoreBreakdown.build = buildResult.success ? 25 : 0;
+  } else {
+    scoreBreakdown.build = 25; // No build = assume success
+  }
+
+  // Run typecheck
+  if (cmds.typecheck && !skipSet.has("typecheck")) {
+    const typecheckResult = await runCmd(cmds.typecheck);
+    results.typecheck = typecheckResult;
+    scoreBreakdown.typecheck = typecheckResult.success ? 15 : 0;
+  } else {
+    scoreBreakdown.typecheck = 10;
+  }
+
+  // Run lint
+  if (cmds.lint && !skipSet.has("lint")) {
+    const lintResult = await runCmd(cmds.lint);
+    results.lint = lintResult;
+    scoreBreakdown.lint = lintResult.success ? 20 : 0;
+  } else {
+    scoreBreakdown.lint = 15;
+  }
+
+  // Run tests
+  if (cmds.test && !skipSet.has("test")) {
+    const testResult = await runCmd(cmds.test);
+    const metrics = parseTestMetrics(testResult.stdout + testResult.stderr, projectType);
+    results.test = {
+      ...testResult,
+      metrics,
+    };
+
+    if (testResult.success) {
+      scoreBreakdown.test = 40;
+    } else if (metrics?.total && metrics.passed) {
+      // Partial credit based on pass rate
+      const passRate = metrics.passed / metrics.total;
+      scoreBreakdown.test = Math.round(passRate * 30);
+    } else {
+      scoreBreakdown.test = 0;
+    }
+  } else {
+    scoreBreakdown.test = 30;
+  }
+
+  const score = scoreBreakdown.build + scoreBreakdown.test + scoreBreakdown.lint + scoreBreakdown.typecheck;
+  const success = (!results.build || results.build.success) && (!results.test || results.test.success);
+
+  return {
+    vmId,
+    success,
+    projectType,
+    score,
+    scoreBreakdown,
+    results,
+    totalDurationMs: Date.now() - startTime,
+  };
+}
+
+// Parse test output metrics based on project type
+function parseTestMetrics(output: string, _projectType: string): { passed?: number; failed?: number; skipped?: number; total?: number } | undefined {
+  // Bun: "560 pass" / "0 fail"
+  const bunPassMatch = output.match(/(\d+)\s+pass\b/i);
+  const bunFailMatch = output.match(/(\d+)\s+fail\b/i);
+  if (bunPassMatch || bunFailMatch) {
+    const passed = bunPassMatch?.[1] ? parseInt(bunPassMatch[1], 10) : 0;
+    const failed = bunFailMatch?.[1] ? parseInt(bunFailMatch[1], 10) : 0;
+    return { passed, failed, total: passed + failed };
+  }
+
+  // Jest/Vitest: "Tests: 5 passed, 2 failed"
+  const jestMatch = output.match(/Tests:\s*(\d+)\s+passed(?:,\s*(\d+)\s+failed)?/i);
+  if (jestMatch?.[1]) {
+    const passed = parseInt(jestMatch[1], 10);
+    const failed = jestMatch[2] ? parseInt(jestMatch[2], 10) : 0;
+    return { passed, failed, total: passed + failed };
+  }
+
+  // pytest: "5 passed, 2 failed"
+  const pytestMatch = output.match(/(\d+)\s+passed(?:,\s*(\d+)\s+failed)?/i);
+  if (pytestMatch?.[1]) {
+    const passed = parseInt(pytestMatch[1], 10);
+    const failed = pytestMatch[2] ? parseInt(pytestMatch[2], 10) : 0;
+    return { passed, failed, total: passed + failed };
+  }
+
+  // Go: count "--- PASS:" and "--- FAIL:"
+  const goPassed = (output.match(/---\s+PASS:/g) || []).length;
+  const goFailed = (output.match(/---\s+FAIL:/g) || []).length;
+  if (goPassed > 0 || goFailed > 0) {
+    return { passed: goPassed, failed: goFailed, total: goPassed + goFailed };
+  }
+
+  // Rust: "test result: ok. 5 passed; 0 failed"
+  const cargoMatch = output.match(/test result:.*?(\d+)\s+passed;\s*(\d+)\s+failed/i);
+  if (cargoMatch?.[1] && cargoMatch?.[2]) {
+    const passed = parseInt(cargoMatch[1], 10);
+    const failed = parseInt(cargoMatch[2], 10);
+    return { passed, failed, total: passed + failed };
+  }
+
+  return undefined;
 }
 
 // File system and agent handlers have been extracted to ./handlers/
@@ -1405,6 +1877,34 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         result = await handleVmRun(params as VmRunParams);
         break;
 
+      case AcpMethod.VmExecute:
+        result = await handleVmExecute(params as VmExecuteParams);
+        break;
+
+      case AcpMethod.VmUpload:
+        result = await handleVmUpload(params as VmUploadParams);
+        break;
+
+      case AcpMethod.VmEvents:
+        result = handleVmEvents(params as VmEventsParams);
+        break;
+
+      case AcpMethod.VmOutputs:
+        result = await handleVmOutputs(params as VmOutputsParams);
+        break;
+
+      case AcpMethod.VmOutputsAll:
+        result = await handleVmOutputsAll(params as VmOutputsAllParams);
+        break;
+
+      case AcpMethod.VmWait:
+        result = await handleVmWait(params as VmWaitParams);
+        break;
+
+      case AcpMethod.VmEval:
+        result = await handleVmEval(params as VmEvalParams);
+        break;
+
       // Config Management
       case AcpMethod.ConfigGet:
         result = { config: getConfig() };
@@ -1610,12 +2110,64 @@ async function handleRequest(req: Request): Promise<Response> {
     });
   }
 
+  // VM Events SSE endpoint - multiplexed stream from all managed VMs
+  if (url.pathname === "/events/vms" && req.method === "GET") {
+    // Parse optional vmIds filter from query params
+    const vmIdsParam = url.searchParams.get("vmIds");
+    const vmIds = vmIdsParam ? vmIdsParam.split(",").filter(Boolean) : undefined;
+    const vmIdSet = vmIds ? new Set(vmIds) : null;
+
+    let unsubscribe: (() => void) | null = null;
+
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+
+        // Send initial connection event with status
+        const status = getConnectionStatus();
+        const connectedData = {
+          vmCount: status.size,
+          vmIds: Array.from(status.keys()),
+          connectionStatus: Object.fromEntries(status),
+        };
+        controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify(connectedData)}\n\n`));
+
+        // Subscribe to VM events
+        unsubscribe = subscribeToVmEvents((vmEvent) => {
+          // Filter by vmIds if specified
+          if (vmIdSet && !vmIdSet.has(vmEvent.vmId)) return;
+
+          const payload = `event: vm_event\ndata: ${JSON.stringify(vmEvent)}\n\n`;
+          try {
+            controller.enqueue(encoder.encode(payload));
+          } catch {
+            // Client disconnected
+            if (unsubscribe) unsubscribe();
+          }
+        });
+      },
+      cancel() {
+        // Client disconnected
+        if (unsubscribe) unsubscribe();
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
+  }
+
   // Root endpoint - identify this as vers-agent
   if (url.pathname === "/" && req.method === "GET") {
     return Response.json({
       service: "vers-agent",
       version: "0.1.0",
-      endpoints: ["/health", "/rpc", "/events", "/logs"]
+      endpoints: ["/health", "/rpc", "/events", "/events/vms", "/logs"]
     }, { headers: corsHeaders });
   }
 

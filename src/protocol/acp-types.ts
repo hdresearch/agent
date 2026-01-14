@@ -552,6 +552,172 @@ export interface VmRunResult {
   vmIds: string[];
 }
 
+export interface VmExecuteParams {
+  vmId: string;
+  command: string;
+}
+
+export interface VmExecuteResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export interface VmUploadParams {
+  vmId: string;
+  localPath: string;
+  remotePath: string;
+}
+
+export interface VmUploadResult {
+  success: boolean;
+  error?: string;
+}
+
+// ============================================================
+// VM Event Streaming Types
+// ============================================================
+
+export type VmConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
+
+export interface VmConnectionInfo {
+  vmId: string;
+  status: VmConnectionStatus;
+  lastEventAt?: string;
+  error?: string;
+  reconnectAttempts: number;
+}
+
+export interface VmEventEnvelope {
+  vmId: string;
+  timestamp: string;
+  seq: number;
+  event: SessionNotificationParams;
+}
+
+export interface VmEventsParams {
+  afterSeq?: number;
+  vmIds?: string[];
+  limit?: number;
+}
+
+export interface VmEventsResult {
+  events: VmEventEnvelope[];
+  lastSeq: number;
+  connectionStatus: Record<string, VmConnectionInfo>;
+}
+
+export interface VmOutputsParams {
+  vmId: string;
+  limit?: number;
+}
+
+export interface VmOutputsResult {
+  vmId: string;
+  sessionId?: string;
+  outputs: Array<{
+    type: "assistant" | "tool_result" | "user";
+    content: string;
+    timestamp?: string;
+    toolName?: string;
+  }>;
+}
+
+export interface VmWaitParams {
+  vmId: string;
+  timeout?: number; // ms, default 300000 (5 min)
+}
+
+export interface VmWaitResult {
+  vmId: string;
+  status: "completed" | "failed" | "timeout";
+  durationMs?: number;
+  error?: string;
+  outputs?: VmOutputsResult["outputs"];
+}
+
+export interface VmOutputsAllParams {
+  limit?: number; // messages per VM, default 1
+}
+
+export interface VmOutputsAllResult {
+  vms: Record<string, {
+    vmId: string;
+    status: string;
+    task?: string;
+    lastMessage?: string;
+    lastMessageType?: "assistant" | "tool_result" | "user";
+    outputs: VmOutputsResult["outputs"];
+  }>;
+}
+
+export interface VmEvalParams {
+  vmId: string;
+  /** Working directory on the VM (default: project root) */
+  cwd?: string;
+  /** Override auto-detected commands */
+  commands?: {
+    build?: string;
+    test?: string;
+    lint?: string;
+    typecheck?: string;
+  };
+  /** Skip certain checks */
+  skip?: Array<"build" | "test" | "lint" | "typecheck">;
+  /** Timeout for each command in ms (default: 60000) */
+  timeout?: number;
+}
+
+export interface VmEvalResult {
+  vmId: string;
+  /** Overall pass/fail */
+  success: boolean;
+  /** Detected project type (bun, node, rust, go, python, etc.) */
+  projectType: string;
+  /** Composite score 0-100 */
+  score: number;
+  /** Breakdown of score by component */
+  scoreBreakdown: {
+    build: number;   // 0-25
+    test: number;    // 0-40
+    lint: number;    // 0-20
+    typecheck: number; // 0-15
+  };
+  /** Individual command results */
+  results: {
+    build?: {
+      success: boolean;
+      exitCode: number;
+      durationMs: number;
+      stdout?: string;
+      stderr?: string;
+    };
+    test?: {
+      success: boolean;
+      exitCode: number;
+      durationMs: number;
+      metrics?: {
+        passed?: number;
+        failed?: number;
+        skipped?: number;
+        total?: number;
+      };
+    };
+    lint?: {
+      success: boolean;
+      exitCode: number;
+      durationMs: number;
+    };
+    typecheck?: {
+      success: boolean;
+      exitCode: number;
+      durationMs: number;
+    };
+  };
+  /** Total evaluation time */
+  totalDurationMs: number;
+}
+
 // ============================================================
 // ACP Method Names
 // ============================================================
@@ -633,6 +799,13 @@ export const AcpMethod = {
   VmConnect: "vm/connect",
   VmStatus: "vm/status",
   VmRun: "vm/run",
+  VmExecute: "vm/execute",
+  VmUpload: "vm/upload",
+  VmEvents: "vm/events",
+  VmOutputs: "vm/outputs",
+  VmOutputsAll: "vm/outputs/all",
+  VmWait: "vm/wait",
+  VmEval: "vm/eval",
 
   // Config Management
   ConfigGet: "config/get",
