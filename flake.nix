@@ -13,47 +13,7 @@
           inherit system;
         };
 
-        # Fixed-output derivation for node_modules
-        # Update this hash when bun.lock changes: just nix-hash
-        node_modules = pkgs.stdenv.mkDerivation {
-          pname = "vers-agent-node_modules";
-          version = "0.1.0";
-
-          src = pkgs.lib.cleanSourceWith {
-            src = ./.;
-            filter = path: type:
-              let name = baseNameOf path; in
-              name == "package.json" || name == "bun.lock";
-          };
-
-          nativeBuildInputs = [ pkgs.bun pkgs.cacert ];
-
-          # FOD settings
-          outputHashMode = "recursive";
-          outputHashAlgo = "sha256";
-          # To get the initial hash, run: just nix-hash
-          # Or set to empty string "" and nix will tell you the correct hash
-          outputHash = "sha256-fX0DE+dpSFej/ikAiR+XHoQFlZAxzt0/pkjx3B7Y864=";
-
-          SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-          HOME = "/tmp/bun-home";
-
-          buildPhase = ''
-            runHook preBuild
-            mkdir -p $HOME
-            bun install --frozen-lockfile
-            runHook postBuild
-          '';
-
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out
-            cp -r node_modules $out/
-            runHook postInstall
-          '';
-        };
-
-        # Build the vers-agent package
+        # Build vers-agent package
         vers-agent = pkgs.stdenv.mkDerivation {
           pname = "vers-agent";
           version = "0.1.0";
@@ -64,21 +24,26 @@
             bun
             nodejs_22
             makeWrapper
+            cacert
           ];
 
+          # Required for bun install to work
+          SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           HOME = "/tmp/bun-build-home";
+
+          # Allow network access for fetching dependencies
+          __noChroot = true;
 
           buildPhase = ''
             runHook preBuild
 
             mkdir -p $HOME
 
-            # Use pre-fetched node_modules
-            cp -r ${node_modules}/node_modules .
-            chmod -R u+w node_modules
+            # Install dependencies
+            bun install --frozen-lockfile
 
-            # Bundle to JS (bun compile doesn't work in Nix sandbox)
-            bun build --target=bun --minify ./index.ts --outdir=dist
+            # Bundle to JS (bun compile doesn't work well in Nix)
+            bun build --target=bun --minify --external cpu-features ./index.ts --outdir=dist
 
             runHook postBuild
           '';
@@ -112,7 +77,6 @@
         packages = {
           default = vers-agent;
           vers-agent = vers-agent;
-          node_modules = node_modules;
         };
 
         # Development shell with all tools needed
@@ -125,9 +89,6 @@
             # Build tools
             just
             typescript
-
-            # Nix tools
-            nix-prefetch
 
             # Utilities
             jq
@@ -143,7 +104,6 @@
             echo "  just build      - Build standalone executable"
             echo "  just test       - Run tests"
             echo "  just check      - Run typecheck and tests"
-            echo "  just nix-hash   - Update flake.nix node_modules hash"
             echo ""
 
             # Set up git hooks if in a git repo
