@@ -314,10 +314,19 @@ export class SubprocessManager {
       logStream.error(`[subprocess] Read loop error`, { agentId: state.agentId, error: error instanceof Error ? error.message : String(error) });
     } finally {
       reader.releaseLock();
-      // Clean up if process is gone
-      if (state.process.killed) {
-        this.processes.delete(state.agentId);
+
+      // Clean up pending requests on exit
+      const errorMsg = "Agent process terminated unexpectedly";
+      for (const [id, pending] of state.pendingRequests) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error(errorMsg));
       }
+      state.pendingRequests.clear();
+
+      // Remove from active processes
+      this.processes.delete(state.agentId);
+
+      logStream.info(`[subprocess] Agent ${state.agentId} read loop ended, cleaned up pending requests`);
     }
   }
 
