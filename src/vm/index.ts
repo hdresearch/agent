@@ -13,6 +13,20 @@ const vm: VmResourceWithSSH = withSSH(client.vm);
 // Re-export types we need
 export type { Vm, ExecuteResult };
 
+/**
+ * Extract vm_id from SDK response.
+ * The vers-sdk types claim NewVmResponse is { vm_id: string } but the actual
+ * API returns { vms: [{ vm_id: string }] } for branch operations.
+ * This helper handles both formats for safety.
+ */
+function extractVmId(response: { vm_id?: string; vms?: Array<{ vm_id: string }> }): string {
+  const vmId = response.vms?.[0]?.vm_id ?? response.vm_id;
+  if (!vmId) {
+    throw new Error(`Failed to extract vm_id from response: ${JSON.stringify(response)}`);
+  }
+  return vmId;
+}
+
 export interface VmConfig {
   memSizeMib?: number;
   vcpuCount?: number;
@@ -25,13 +39,13 @@ export interface VmConfig {
 export async function createVm(config: VmConfig = {}): Promise<string> {
   const params: VmCreateRootParams = {
     vm_config: {
-      mem_size_mib: config.memSizeMib ?? 512,
-      vcpu_count: config.vcpuCount ?? 1,
+      mem_size_mib: config.memSizeMib ?? 2048,
+      vcpu_count: config.vcpuCount ?? 2,
       fs_size_mib: config.fsSizeMib ?? 1024,
     },
   };
   const response = await client.vm.createRoot(params);
-  return response.vm_id;
+  return extractVmId(response);
 }
 
 /**
@@ -39,7 +53,7 @@ export async function createVm(config: VmConfig = {}): Promise<string> {
  */
 export async function branch(vmId: string): Promise<string> {
   const response = await client.vm.branch(vmId);
-  return response.vm_id;
+  return extractVmId(response);
 }
 
 /**
@@ -55,7 +69,7 @@ export async function commit(vmId: string): Promise<string> {
  */
 export async function restore(commitId: string): Promise<string> {
   const response = await client.vm.restoreFromCommit({ commit_id: commitId });
-  return response.vm_id;
+  return extractVmId(response);
 }
 
 /**
