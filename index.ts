@@ -5,6 +5,10 @@ import { loadDocsStore } from "./src/utils/docs-store";
 import { authStore } from "./src/utils/auth-store";
 import { initializeAgent } from "./src/core/agent-manager";
 
+// Import embedded skills to ensure they're bundled
+import { embeddedSkills } from "./src/skills/embedded";
+export { embeddedSkills };
+
 // CRITICAL: Emergency exit handler - must be first!
 // Track rapid SIGINT presses for force exit (works even when Ink blocks SIGINT)
 let sigintCount = 0;
