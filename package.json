@@ -16,8 +16,8 @@
   "scripts": {
     "start": "bun run index.ts",
     "dev": "bun --hot run index.ts",
-    "build": "bun build --compile --minify ./index.ts --outfile vers-agent",
-    "build:linux": "bun build --compile --target=bun-linux-x64 --minify ./index.ts --outfile dist/vers-agent-linux",
+    "build": "bun build --compile --minify --external cpu-features ./index.ts --outfile vers-agent",
+    "build:linux": "bun build --compile --target=bun-linux-x64 --minify --external cpu-features ./index.ts --outfile dist/vers-agent-linux",
     "build:bundle": "bun build --target=bun --minify ./index.ts --outdir=dist",
     "bundle": "bun run scripts/bundle.ts",
     "typecheck": "tsc --noEmit",
