@@ -485,10 +485,14 @@ export interface SessionIdUpdatedData {
 export interface VmInfo {
   vmId: string;
   parent?: string | null;
-  status: "starting" | "ready" | "busy" | "completed" | "failed";
+  status: "starting" | "ready" | "busy" | "completed" | "failed" | "unhealthy" | "recovering";
   task?: string;
   approach?: string;
   createdAt: string;
+  // Health tracking fields (optional)
+  lastHealthCheckAt?: string;
+  healthScore?: number;
+  lastError?: string;
 }
 
 export interface VmListResult {
