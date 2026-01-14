@@ -21,12 +21,29 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 // Types
 // ============================================================
 
+export type VmStatus =
+  | "starting"    // Being created/bootstrapped
+  | "ready"       // Healthy and idle
+  | "busy"        // Running a task
+  | "completed"   // Task finished successfully
+  | "failed"      // Task failed
+  | "unhealthy"   // Health checks failing
+  | "recovering"; // Being recreated by self-healer
+
 export interface VmMetadata {
   task?: string;
   approach?: string;
-  status: "starting" | "ready" | "busy" | "completed" | "failed";
+  status: VmStatus;
   createdAt: string;
   parentId?: string;
+
+  // Health tracking (added for autonomous operation)
+  lastHealthCheckAt?: string;     // Last successful health check
+  lastEventAt?: string;           // Last event received from this VM
+  healthScore?: number;           // 0-100, computed from recent checks
+  consecutiveFailures?: number;   // For circuit breaker logic
+  lastError?: string;             // Most recent error message
+  recoveryAttempts?: number;      // How many times self-healer has tried
 }
 
 export interface ManagedVm {
@@ -47,7 +64,8 @@ function ensureDataDir(): void {
   mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function loadMetadata(): Record<string, VmMetadata> {
+// Export for use by health monitor and watchdog
+export function loadMetadata(): Record<string, VmMetadata> {
   ensureDataDir();
   if (!existsSync(METADATA_FILE)) {
     return {};
@@ -64,14 +82,16 @@ function saveMetadata(metadata: Record<string, VmMetadata>): void {
   writeFileSync(METADATA_FILE, JSON.stringify(metadata, null, 2));
 }
 
-function updateVmMetadata(vmId: string, updates: Partial<VmMetadata>): void {
+// Export for use by health monitor and watchdog
+export function updateVmMetadata(vmId: string, updates: Partial<VmMetadata>): void {
   const all = loadMetadata();
   const existing = all[vmId] || { status: "starting" as const, createdAt: new Date().toISOString() };
   all[vmId] = { ...existing, ...updates } as VmMetadata;
   saveMetadata(all);
 }
 
-function removeVmMetadata(vmId: string): void {
+// Export for use by watchdog
+export function removeVmMetadata(vmId: string): void {
   const all = loadMetadata();
   delete all[vmId];
   saveMetadata(all);
@@ -125,9 +145,11 @@ export async function createManagedVm(
   registerVm(vmId, agentUrl);
   client.onNotification((notification) => {
     receiveVmEvent(vmId, notification);
+    // Track last event time for health monitoring
+    updateVmMetadata(vmId, { lastEventAt: new Date().toISOString() });
   });
 
-  updateVmMetadata(vmId, { status: "ready" });
+  updateVmMetadata(vmId, { status: "ready", lastHealthCheckAt: new Date().toISOString() });
 
   const managed: ManagedVm = { vmId, metadata: { ...metadata, status: "ready" }, client };
   managedVms.set(vmId, managed);
@@ -164,9 +186,11 @@ export async function branchVm(
   registerVm(vmId, agentUrl);
   client.onNotification((notification) => {
     receiveVmEvent(vmId, notification);
+    // Track last event time for health monitoring
+    updateVmMetadata(vmId, { lastEventAt: new Date().toISOString() });
   });
 
-  updateVmMetadata(vmId, { status: "ready" });
+  updateVmMetadata(vmId, { status: "ready", lastHealthCheckAt: new Date().toISOString() });
 
   const managed: ManagedVm = { vmId, metadata: { ...metadata, status: "ready" }, client };
   managedVms.set(vmId, managed);
@@ -216,7 +240,10 @@ export async function getManagedVm(vmId: string): Promise<ManagedVm | null> {
     registerVm(vmId, agentUrl);
     client.onNotification((notification) => {
       receiveVmEvent(vmId, notification);
+      // Track last event time for health monitoring
+      updateVmMetadata(vmId, { lastEventAt: new Date().toISOString() });
     });
+    updateVmMetadata(vmId, { lastHealthCheckAt: new Date().toISOString() });
   } catch {
     return null;
   }
@@ -327,4 +354,87 @@ export async function cleanupAll(): Promise<number> {
   }
 
   return deleted;
+}
+
+// ============================================================
+// Monitoring Integration
+// ============================================================
+
+import { HealthMonitor, type HealthCheckResult, type HealthStatus } from "./health-monitor";
+import { Watchdog } from "./watchdog";
+import { loadMonitoringConfig, type MonitoringConfig } from "./monitoring-config";
+import { logStream } from "../utils/log-stream";
+
+let healthMonitor: HealthMonitor | null = null;
+let watchdog: Watchdog | null = null;
+
+/**
+ * Start autonomous monitoring services
+ */
+export function startMonitoring(configOverride?: Partial<MonitoringConfig>): void {
+  const config = loadMonitoringConfig();
+  const mergedConfig = {
+    ...config,
+    ...configOverride,
+    health: { ...config.health, ...(configOverride?.health ?? {}) },
+    watchdog: { ...config.watchdog, ...(configOverride?.watchdog ?? {}) },
+  };
+
+  if (!mergedConfig.enabled) {
+    logStream.info("[orchestrator] Monitoring disabled by config");
+    return;
+  }
+
+  // Create and start health monitor
+  healthMonitor = new HealthMonitor(mergedConfig.health);
+  healthMonitor.onHealthChange((vmId: string, status: HealthStatus, result: HealthCheckResult) => {
+    logStream.info("[orchestrator] VM health changed", { vmId, status, error: result.error });
+    // Future: hook up self-healer here
+  });
+  healthMonitor.start();
+
+  // Create and start watchdog
+  watchdog = new Watchdog(mergedConfig.watchdog);
+  watchdog.start();
+
+  logStream.info("[orchestrator] Monitoring started", {
+    healthIntervalMs: mergedConfig.health.intervalMs,
+    watchdogIntervalMs: mergedConfig.watchdog.intervalMs,
+  });
+}
+
+/**
+ * Stop monitoring services
+ */
+export function stopMonitoring(): void {
+  if (healthMonitor) {
+    healthMonitor.stop();
+    healthMonitor = null;
+  }
+  if (watchdog) {
+    watchdog.stop();
+    watchdog = null;
+  }
+  logStream.info("[orchestrator] Monitoring stopped");
+}
+
+/**
+ * Check if monitoring is running
+ */
+export function isMonitoringRunning(): boolean {
+  return (healthMonitor?.isRunning() ?? false) || (watchdog?.isRunning() ?? false);
+}
+
+/**
+ * Get the health monitor instance (for direct access)
+ */
+export function getHealthMonitor(): HealthMonitor | null {
+  return healthMonitor;
+}
+
+/**
+ * Get the watchdog instance (for direct access)
+ */
+export function getWatchdog(): Watchdog | null {
+  return watchdog;
 }
