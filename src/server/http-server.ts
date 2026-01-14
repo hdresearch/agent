@@ -532,6 +532,11 @@ function storeAndBroadcastOutput(
   content: string,
   extra?: { color?: string; toolName?: string }
 ): void {
+  // Skip storing if content is null/undefined (defensive check)
+  if (!content) {
+    debug("[OUTPUT_STORE] Skipping empty content", { outputType });
+    return;
+  }
   if (currentSessionId) {
     sessionOutputStore.append(currentSessionId, {
       type: outputType,
@@ -673,15 +678,14 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
     }
   }
 
-  // If agent is already running, stop it to get a fresh session
-  // This ensures we get a new Claude session ID
-  if (isAgentRunning()) {
-    info("Agent already running, restarting for new session");
-    await stopAgent();
+  // Only start agent if not already running
+  // Don't restart - Claude subprocess restarts are flaky and the existing session works fine
+  if (!isAgentRunning()) {
+    info("Agent not running, starting fresh");
+    await initializeAgent();
+  } else {
+    info("Agent already running, reusing existing subprocess");
   }
-
-  // Start fresh agent
-  await initializeAgent();
 
   // Wait for Claude's session ID with timeout (up to 3 seconds)
   // Claude's session ID is the 8-char format that Claude CLI uses internally
@@ -821,6 +825,11 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
   if (!currentSessionId) {
     info("Auto-creating session for incoming prompt");
     await handleSessionNew({});
+  }
+
+  // Validate required params
+  if (!params.text) {
+    throw new Error("Missing required parameter: text");
   }
 
   // Store user message in output history
