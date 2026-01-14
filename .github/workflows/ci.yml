@@ -47,6 +47,10 @@ jobs:
             target: bun-darwin-x64
             artifact: vers-agent-darwin-x64
             can_test: false  # Cross-compiled, can't test on ARM runner
+          - os: windows-latest
+            target: bun-windows-x64
+            artifact: vers-agent-windows-x64.exe
+            can_test: true
 
     runs-on: ${{ matrix.os }}
 
@@ -66,6 +70,7 @@ jobs:
 
       - name: Test binary
         if: matrix.can_test
+        shell: bash
         run: ./${{ matrix.artifact }} --help
 
       - name: Upload artifact
