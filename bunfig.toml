@@ -1,0 +1,3 @@
+[install]
+# Trust vers-sdk-ts lifecycle scripts (prepare builds types)
+trustedDependencies = ["vers"]
