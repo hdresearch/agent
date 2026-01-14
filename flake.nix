@@ -43,7 +43,7 @@
             bun install --frozen-lockfile
 
             # Bundle to JS (bun compile doesn't work well in Nix)
-            bun build --target=bun --minify ./index.ts --outdir=dist
+            bun build --target=bun --minify --external cpu-features ./index.ts --outdir=dist
 
             runHook postBuild
           '';
