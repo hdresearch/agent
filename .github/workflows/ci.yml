@@ -38,12 +38,15 @@ jobs:
           - os: ubuntu-latest
             target: bun-linux-x64
             artifact: vers-agent-linux-x64
+            can_test: true
           - os: macos-latest
             target: bun-darwin-arm64
             artifact: vers-agent-darwin-arm64
-          - os: macos-13
+            can_test: true
+          - os: macos-latest
             target: bun-darwin-x64
             artifact: vers-agent-darwin-x64
+            can_test: false  # Cross-compiled, can't test on ARM runner
 
     runs-on: ${{ matrix.os }}
 
@@ -62,6 +65,7 @@ jobs:
         run: bun build --compile --minify --external cpu-features --target=${{ matrix.target }} ./index.ts --outfile ${{ matrix.artifact }}
 
       - name: Test binary
+        if: matrix.can_test
         run: ./${{ matrix.artifact }} --help
 
       - name: Upload artifact
