@@ -104,6 +104,7 @@ import {
   stopAgent,
   selectAgent,
   getCurrentAgentId,
+  setCurrentAgentId,
   isAgentRunning,
   getAgentSessionId,
   getClaudeSessionId,
@@ -130,6 +131,23 @@ import { authStore } from "../utils/auth-store";
 import { cleanTitle } from "../utils/string-utils";
 import { listSkills, getSkill, saveSkill, deleteSkill, buildSkillPrompt } from "../utils/skill-store";
 import { randomUUID } from "crypto";
+import {
+  serverState,
+  setInitialized,
+  isInitialized,
+  getCurrentSessionId,
+  setCurrentSessionId,
+  getRunningTaskId,
+  setRunningTaskId,
+  appendAssistantText,
+  getAccumulatedAssistantText,
+  resetAccumulatedAssistantText,
+  getCurrentVmId,
+  setCurrentVmId,
+  getCurrentVmAgentUrl,
+  setCurrentVmAgentUrl,
+  clearVmConnection,
+} from "./server-state";
 
 // Extracted handlers
 import {
@@ -252,14 +270,8 @@ const AGENT_CAPABILITIES: AgentCapabilities = {
   },
 };
 
-// Server state
-let initialized = false;
-let authenticated = false;
-let currentSessionId: string | null = null;
-let runningTaskId: string | null = null;
-let autoProcessQueue = true; // Auto-process queued prompts after task completion
-let currentAgentId: string = "claude.com"; // Default to Claude Code ACP
-let accumulatedAssistantText: string = ""; // Buffer for streaming text chunks
+// Server state (managed via ./server-state.ts)
+const AUTO_PROCESS_QUEUE = true; // Auto-process queued prompts after task completion
 
 // Helper to convert QueuedPrompt to QueuedPromptInfo
 function toQueuedPromptInfo(prompt: QueuedPrompt): QueuedPromptInfo {
@@ -274,7 +286,7 @@ function toQueuedPromptInfo(prompt: QueuedPrompt): QueuedPromptInfo {
 
 // Process next queued prompt if available
 async function processNextQueuedPrompt(): Promise<void> {
-  if (!autoProcessQueue || runningTaskId || promptQueue.isEmpty) {
+  if (!AUTO_PROCESS_QUEUE || getRunningTaskId() || promptQueue.isEmpty) {
     return;
   }
 
@@ -324,7 +336,7 @@ async function executePrompt(text: string, attachments?: import("../protocol/acp
 
   const task = taskStore.create(promptText, {}, taskAttachments);
   info("Task created", { taskId: task.id, status: task.status });
-  runningTaskId = task.id;
+  setRunningTaskId(task.id);
   promptQueue.setProcessing(true);
   metrics.setGauge(MetricNames.RUNNING_TASKS, 1);
 
@@ -335,13 +347,13 @@ async function executePrompt(text: string, attachments?: import("../protocol/acp
 
     if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
       info("Task finished", { taskId: task.id, status: event.type });
-      runningTaskId = null;
+      setRunningTaskId(null);
       promptQueue.setProcessing(false);
       metrics.setGauge(MetricNames.RUNNING_TASKS, 0);
       metrics.setGauge(MetricNames.QUEUE_LENGTH, promptQueue.length);
 
       // Process next queued prompt if available
-      if (autoProcessQueue && !promptQueue.isEmpty) {
+      if (AUTO_PROCESS_QUEUE && !promptQueue.isEmpty) {
         // Use setImmediate to avoid blocking
         setTimeout(() => processNextQueuedPrompt(), 0);
       }
@@ -352,13 +364,13 @@ async function executePrompt(text: string, attachments?: import("../protocol/acp
   info("Starting task execution", { taskId: task.id });
   runTask(task.id).catch((err) => {
     error(`Task ${task.id} failed`, { error: err instanceof Error ? err.message : String(err) });
-    runningTaskId = null;
+    setRunningTaskId(null);
     promptQueue.setProcessing(false);
     metrics.setGauge(MetricNames.RUNNING_TASKS, 0);
     unsubscribe();
 
     // Still try to process next queued prompt
-    if (autoProcessQueue && !promptQueue.isEmpty) {
+    if (AUTO_PROCESS_QUEUE && !promptQueue.isEmpty) {
       setTimeout(() => processNextQueuedPrompt(), 0);
     }
   });
@@ -445,8 +457,8 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
 
     case "completed":
       // Record completion stats in SQLite session store
-      if (currentSessionId) {
-        sessionStore.recordCompletion(currentSessionId, (d.totalCostUsd as number) || 0);
+      if (getCurrentSessionId()) {
+        sessionStore.recordCompletion(getCurrentSessionId()!, (d.totalCostUsd as number) || 0);
       }
       // Track metrics
       metrics.incCounter(MetricNames.TOKENS_INPUT, undefined, (d.inputTokens as number) || 0);
@@ -503,8 +515,8 @@ function mapEventToAcp(type: string, data: unknown): { type: string; data: unkno
       if (d.mode === "plan" || d.mode === "default") {
         setSessionMode(d.mode);
         // Persist mode to SQLite session store
-        if (currentSessionId) {
-          sessionStore.setMode(currentSessionId, d.mode);
+        if (getCurrentSessionId()) {
+          sessionStore.setMode(getCurrentSessionId()!, d.mode);
         }
       }
       return {
@@ -537,8 +549,9 @@ function storeAndBroadcastOutput(
     debug("[OUTPUT_STORE] Skipping empty content", { outputType });
     return;
   }
-  if (currentSessionId) {
-    sessionOutputStore.append(currentSessionId, {
+  const sessionId = getCurrentSessionId();
+  if (sessionId) {
+    sessionOutputStore.append(sessionId, {
       type: outputType,
       content,
       color: extra?.color,
@@ -552,26 +565,27 @@ function sendSessionNotification(type: string, data: unknown): void {
   if (!mapped) return;
 
   const notification: SessionNotificationParams = {
-    sessionId: currentSessionId || "",
+    sessionId: getCurrentSessionId() || "",
     type: mapped.type as SessionNotificationParams["type"],
     data: mapped.data as SessionNotificationParams["data"],
   };
 
   // Store certain notification types as outputs for history sync
   const d = data as Record<string, unknown>;
-  debug("[OUTPUT_STORE] Event", { type, sessionId: currentSessionId, dataKeys: Object.keys(d) });
+  debug("[OUTPUT_STORE] Event", { type, sessionId: getCurrentSessionId(), dataKeys: Object.keys(d) });
 
-  if (currentSessionId) {
+  if (getCurrentSessionId()) {
     switch (type) {
       case "text_delta":
         // Accumulate streaming text
         const deltaText = (d.text as string) || "";
-        accumulatedAssistantText += deltaText;
+        appendAssistantText(deltaText);
         // If this is the final chunk, store the accumulated text
-        if (d.final === true && accumulatedAssistantText) {
-          debug("[OUTPUT_STORE] Storing accumulated text", { preview: accumulatedAssistantText.slice(0, 50), length: accumulatedAssistantText.length });
-          storeAndBroadcastOutput("text", accumulatedAssistantText);
-          accumulatedAssistantText = ""; // Reset buffer
+        const accumulated = getAccumulatedAssistantText();
+        if (d.final === true && accumulated) {
+          debug("[OUTPUT_STORE] Storing accumulated text", { preview: accumulated.slice(0, 50), length: accumulated.length });
+          storeAndBroadcastOutput("text", accumulated);
+          resetAccumulatedAssistantText();
         }
         break;
       case "assistant_message":
@@ -581,7 +595,7 @@ function sendSessionNotification(type: string, data: unknown): void {
         break;
       case "started":
         // Reset accumulator when a new task starts
-        accumulatedAssistantText = "";
+        resetAccumulatedAssistantText();
         break;
       case "tool_use":
         debug("[OUTPUT_STORE] Storing tool_use", { toolName: d.toolName });
@@ -610,16 +624,16 @@ function sendSessionNotification(type: string, data: unknown): void {
 // JSON-RPC method handlers
 async function handleInitialize(params: InitializeParams): Promise<InitializeResult> {
   info("Server initialized");
-  initialized = true;
+  setInitialized(true);
 
   // Initialize agent registry and set default agent from config
   await initializeRegistry();
   const config = getConfig();
-  if (config.defaultAgent && config.defaultAgent !== currentAgentId) {
+  if (config.defaultAgent && config.defaultAgent !== getCurrentAgentId()) {
     const agent = getAgent(config.defaultAgent);
     if (agent) {
-      currentAgentId = agent.identity;
-      info("Default agent loaded from config", { agentId: currentAgentId });
+      setCurrentAgentId(agent.identity);
+      info("Default agent loaded from config", { agentId: getCurrentAgentId() });
     }
   }
 
@@ -631,17 +645,17 @@ async function handleInitialize(params: InitializeParams): Promise<InitializeRes
 
 // Auto-initialize if needed (for resilience after server restart)
 async function ensureInitialized(): Promise<void> {
-  if (!initialized) {
+  if (!serverState.initialized) {
     info("Auto-initializing server (client reconnected after restart)");
-    initialized = true;
+    setInitialized(true);
     // Also load the agent registry
     await initializeRegistry();
     const config = getConfig();
-    if (config.defaultAgent && config.defaultAgent !== currentAgentId) {
+    if (config.defaultAgent && config.defaultAgent !== getCurrentAgentId()) {
       const agent = getAgent(config.defaultAgent);
       if (agent) {
-        currentAgentId = agent.identity;
-        info("Default agent loaded from config", { agentId: currentAgentId });
+        setCurrentAgentId(agent.identity);
+        info("Default agent loaded from config", { agentId: getCurrentAgentId() });
       }
     }
   }
@@ -661,7 +675,6 @@ async function handleAuthenticate(params: AuthenticateParams): Promise<Authentic
     }
   }
 
-  authenticated = true;
   return { success: true };
 }
 
@@ -703,32 +716,33 @@ async function handleSessionNew(params: NewSessionParams): Promise<NewSessionRes
   }
 
   // Use Claude's session ID (preferred) or fall back to agent's or random UUID
-  const previousSessionId = currentSessionId;
-  currentSessionId = claudeSessionId || getAgentSessionId() || randomUUID();
+  const previousSessionId = getCurrentSessionId();
+  const newSessionId = claudeSessionId || getAgentSessionId() || randomUUID();
+  setCurrentSessionId(newSessionId);
 
   info("handleSessionNew - Session ID details:", {
     previousSessionId,
     claudeSessionId,
     agentSessionId: getAgentSessionId(),
-    newCurrentSessionId: currentSessionId,
+    newCurrentSessionId: newSessionId,
     usingClaude: !!claudeSessionId,
   });
 
-  updateSession({ sessionId: currentSessionId });
+  // Note: setCurrentSessionId already calls updateSession internally
 
   // Register this session in SQLite storage with Claude's session ID
   // This is critical for resume - we need to store the ID Claude recognizes
   // Use getOrCreate in case we somehow get a duplicate ID
-  sessionStore.getOrCreate(currentSessionId);
+  sessionStore.getOrCreate(newSessionId);
 
   // Get the current mode (should be "default" after reset)
   const mode = getSessionMode();
-  info("New session created:", { sessionId: currentSessionId, mode });
+  info("New session created:", { sessionId: newSessionId, mode });
 
   // Broadcast mode update to ensure all clients know the mode
   sendSessionNotification("mode_update", { type: "mode_update", mode });
 
-  return { sessionId: currentSessionId, mode };
+  return { sessionId: newSessionId, mode };
 }
 
 async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSessionResult> {
@@ -782,8 +796,8 @@ async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSession
   // Use Claude's session ID (either resumed or new)
   const displaySessionId = claudeSessionId || params.sessionId;
 
-  currentSessionId = displaySessionId;
-  updateSession({ sessionId: displaySessionId });
+  setCurrentSessionId(displaySessionId);
+  // Note: setCurrentSessionId already calls updateSession internally
 
   info("handleSessionLoad - session loaded", {
     requestedSessionId: params.sessionId,
@@ -802,7 +816,7 @@ async function handleSessionLoad(params: LoadSessionParams): Promise<LoadSession
 async function handleSessionList(): Promise<ListSessionsResult> {
   const sessions = sessionStore.list(50);
 
-  info("handleSessionList - returning currentSessionId:", { currentSessionId, sessionCount: sessions.length });
+  info("handleSessionList - returning currentSessionId:", { currentSessionId: getCurrentSessionId(), sessionCount: sessions.length });
 
   return {
     sessions: sessions.map((s) => ({
@@ -814,7 +828,7 @@ async function handleSessionList(): Promise<ListSessionsResult> {
       totalCost: s.totalCost,
       mode: s.mode,
     })),
-    currentSessionId,
+    currentSessionId: getCurrentSessionId(),
   };
 }
 
@@ -822,7 +836,7 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
   metrics.incCounter(MetricNames.PROMPTS_TOTAL);
 
   // Auto-create session if needed
-  if (!currentSessionId) {
+  if (!getCurrentSessionId()) {
     info("Auto-creating session for incoming prompt");
     await handleSessionNew({});
   }
@@ -833,7 +847,7 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
   }
 
   // Store user message in output history
-  if (currentSessionId) {
+  if (getCurrentSessionId()) {
     const hasAttachments = params.attachments && params.attachments.length > 0;
     const displayText = hasAttachments
       ? `[${params.attachments!.length} attachment(s)]\n${params.text}`
@@ -842,7 +856,7 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
   }
 
   // If a task is already running, queue this prompt
-  if (runningTaskId) {
+  if (getRunningTaskId()) {
     const queued = promptQueue.enqueue(params.text, params.attachments);
     metrics.incCounter(MetricNames.PROMPTS_QUEUED);
     metrics.setGauge(MetricNames.QUEUE_LENGTH, promptQueue.length);
@@ -865,13 +879,14 @@ async function handleSessionPrompt(params: PromptParams): Promise<PromptResult &
 }
 
 async function handleSessionCancel(params: CancelParams): Promise<CancelResult> {
-  if (!runningTaskId) {
+  const taskId = getRunningTaskId();
+  if (!taskId) {
     return { cancelled: false };
   }
 
-  const cancelled = await cancelTask(runningTaskId);
+  const cancelled = await cancelTask(taskId);
   if (cancelled) {
-    runningTaskId = null;
+    setRunningTaskId(null);
   }
   return { cancelled };
 }
@@ -938,9 +953,7 @@ async function handleSkillInvoke(params: SkillInvokeParams): Promise<SkillInvoke
 // VM Management Handlers (orchestrator)
 // ============================================================
 
-// Track current VM connection
-let currentVmId: string | null = null;
-let currentVmAgentUrl: string | null = null;
+// VM connection state managed via ./server-state.ts
 
 async function handleVmList(): Promise<VmListResult> {
   try {
@@ -956,7 +969,7 @@ async function handleVmList(): Promise<VmListResult> {
         approach: vm.metadata?.approach,
         createdAt: vm.metadata?.createdAt || new Date().toISOString(),
       })),
-      currentVmId: currentVmId || undefined,
+      currentVmId: getCurrentVmId() || undefined,
     };
   } catch (err) {
     error("Failed to list VMs", { error: err instanceof Error ? err.message : String(err) });
@@ -1008,9 +1021,8 @@ async function handleVmDelete(params: VmDeleteParams): Promise<VmDeleteResult> {
     info("Deleted VM", { vmId: params.vmId });
 
     // Clear current VM if it was deleted
-    if (currentVmId === params.vmId) {
-      currentVmId = null;
-      currentVmAgentUrl = null;
+    if (getCurrentVmId() === params.vmId) {
+      clearVmConnection();
     }
 
     return { deleted: true };
@@ -1036,8 +1048,8 @@ async function handleVmConnect(params: VmConnectParams): Promise<VmConnectResult
     }
 
     const agentUrl = getAgentUrl(params.vmId);
-    currentVmId = params.vmId;
-    currentVmAgentUrl = agentUrl;
+    setCurrentVmId(params.vmId);
+    setCurrentVmAgentUrl(agentUrl);
 
     info("Connected to VM", { vmId: params.vmId, agentUrl });
 
@@ -1058,9 +1070,9 @@ async function handleVmConnect(params: VmConnectParams): Promise<VmConnectResult
 
 function handleVmStatus(): VmStatusResult {
   return {
-    currentVmId: currentVmId || undefined,
-    currentAgentUrl: currentVmAgentUrl || undefined,
-    isLocal: currentVmId === null,
+    currentVmId: getCurrentVmId() || undefined,
+    currentAgentUrl: getCurrentVmAgentUrl() || undefined,
+    isLocal: getCurrentVmId() === null,
   };
 }
 
@@ -1567,9 +1579,9 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
 
   // Context for agent handlers (provides access to module-level state)
   const agentHandlerContext: AgentHandlerContext = {
-    getCurrentAgentId: () => currentAgentId,
-    setCurrentAgentId: (id: string) => { currentAgentId = id; },
-    getRunningTaskId: () => runningTaskId,
+    getCurrentAgentId,
+    setCurrentAgentId,
+    getRunningTaskId,
   };
 
   try {
@@ -1603,7 +1615,7 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         await ensureInitialized();
         {
           const outputParams = params as GetSessionOutputsParams;
-          const sessionId = outputParams.sessionId || currentSessionId;
+          const sessionId = outputParams.sessionId || getCurrentSessionId();
           if (!sessionId) {
             throw new Error("No session active");
           }
@@ -1633,7 +1645,7 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         await ensureInitialized();
         {
           const syncParams = params as { sessionId?: string };
-          const sessionId = syncParams.sessionId || currentSessionId;
+          const sessionId = syncParams.sessionId || getCurrentSessionId();
           if (!sessionId) {
             throw new Error("No session active");
           }
@@ -1983,8 +1995,8 @@ async function handleRequest(req: Request): Promise<Response> {
     const claimState = authStore.getClaimState();
     return Response.json({
       status: "ok",
-      initialized,
-      sessionId: currentSessionId,
+      initialized: serverState.initialized,
+      sessionId: getCurrentSessionId(),
       claimed: claimState.isClaimed,
       claimedAt: claimState.claimedAt,
       metrics: {
@@ -2278,10 +2290,10 @@ export function createHttpServer(requestedPort: number, maxAttempts = 10): { clo
 
   // Set up callback for session ID updates - update currentSessionId when agent sends real session ID
   onAgentSessionIdUpdated((sessionId) => {
-    if (currentSessionId !== sessionId) {
-      info("Session ID updated from agent notification", { old: currentSessionId, new: sessionId });
-      currentSessionId = sessionId;
-      updateSession({ sessionId });
+    if (getCurrentSessionId() !== sessionId) {
+      info("Session ID updated from agent notification", { old: getCurrentSessionId(), new: sessionId });
+      setCurrentSessionId(sessionId);
+      // Note: setCurrentSessionId already calls updateSession internally
       // Broadcast session ID update to SSE clients
       broadcastEvent("notification", {
         type: "session_id_updated",

@@ -128,6 +128,13 @@ export function getCurrentAgentId(): string {
 }
 
 /**
+ * Set current agent ID
+ */
+export function setCurrentAgentId(id: string): void {
+  currentAgentId = id;
+}
+
+/**
  * Check if agent subprocess is started and alive
  */
 export function isAgentRunning(): boolean {

@@ -1,0 +1,27 @@
+[Unit]
+Description=Vers Agent Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/vers-agent
+ExecStart=/usr/local/bin/bun run index.ts --server
+Restart=always
+RestartSec=5
+Environment=PORT=9999
+Environment=HOME=/root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vers-agent
+
+# Security hardening (can be relaxed if needed)
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

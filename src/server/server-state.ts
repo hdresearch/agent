@@ -1,19 +1,17 @@
 // Server state management - single source of truth for HTTP server state
 
-import { randomUUID } from "crypto";
-import { sessionStore, sessionOutputStore, type StoredOutput } from "../utils/session-store";
-import { getSession, updateSession, setSessionMode, getSessionMode, resetSession } from "../utils/config";
-import { logStream } from "../utils/log-stream";
+import { updateSession, resetSession } from "../utils/config";
 
 // Server state - encapsulated in a class for better organization
 class ServerState {
   initialized = false;
-  authenticated = false;
   currentSessionId: string | null = null;
   runningTaskId: string | null = null;
-  autoProcessQueue = true;
-  currentAgentId = "claude.com";
   accumulatedAssistantText = "";
+
+  // VM connection state
+  currentVmId: string | null = null;
+  currentVmAgentUrl: string | null = null;
 
   // Reset state for new session
   resetForNewSession(): void {
@@ -38,8 +36,8 @@ export function setInitialized(value: boolean): void {
   serverState.initialized = value;
 }
 
-export function setAuthenticated(value: boolean): void {
-  serverState.authenticated = value;
+export function isInitialized(): boolean {
+  return serverState.initialized;
 }
 
 export function setCurrentSessionId(id: string | null): void {
@@ -65,22 +63,6 @@ export function isTaskRunning(): boolean {
   return serverState.runningTaskId !== null;
 }
 
-export function setAutoProcessQueue(value: boolean): void {
-  serverState.autoProcessQueue = value;
-}
-
-export function shouldAutoProcessQueue(): boolean {
-  return serverState.autoProcessQueue;
-}
-
-export function setCurrentAgentId(id: string): void {
-  serverState.currentAgentId = id;
-}
-
-export function getCurrentAgentIdFromState(): string {
-  return serverState.currentAgentId;
-}
-
 // Text accumulation for streaming responses
 export function appendAssistantText(text: string): void {
   serverState.accumulatedAssistantText += text;
@@ -99,4 +81,27 @@ export function flushAccumulatedText(sessionId: string, storeCallback: (type: st
     storeCallback("text", serverState.accumulatedAssistantText);
     serverState.accumulatedAssistantText = "";
   }
+}
+
+// VM connection state
+export function setCurrentVmId(id: string | null): void {
+  serverState.currentVmId = id;
+}
+
+export function getCurrentVmId(): string | null {
+  return serverState.currentVmId;
+}
+
+export function setCurrentVmAgentUrl(url: string | null): void {
+  serverState.currentVmAgentUrl = url;
+}
+
+export function getCurrentVmAgentUrl(): string | null {
+  return serverState.currentVmAgentUrl;
+}
+
+// Clear VM connection state
+export function clearVmConnection(): void {
+  serverState.currentVmId = null;
+  serverState.currentVmAgentUrl = null;
 }
