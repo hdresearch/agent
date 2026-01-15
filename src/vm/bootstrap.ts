@@ -32,6 +32,9 @@ export async function bootstrap(vmId: string): Promise<string> {
   // TODO: Remove once Node.js is pre-installed in VM image (see issue #16)
   await ensureNodeInstalled(vmId);
 
+  // Create working directory for vers-agent (systemd WorkingDirectory)
+  await execute(vmId, "mkdir -p /root/vers-agent");
+
   // Check if binary exists on VM
   const binaryExists = await checkBinaryExists(vmId);
 
@@ -40,6 +43,12 @@ export async function bootstrap(vmId: string): Promise<string> {
     console.log(`[${vmId}] Downloading vers-agent nightly binary...`);
     await execute(vmId, `curl -fsSL -o ${REMOTE_BINARY_PATH} "${NIGHTLY_RELEASE_URL}"`);
     await execute(vmId, `chmod +x ${REMOTE_BINARY_PATH}`);
+
+    // Verify download succeeded
+    const verifyResult = await execute(vmId, `test -s ${REMOTE_BINARY_PATH} && echo "ok"`);
+    if (!verifyResult.stdout.includes("ok")) {
+      throw new Error(`[${vmId}] Failed to download vers-agent binary`);
+    }
   }
 
   // Start vers-agent via systemd (preferred) or fallback to nohup
@@ -82,11 +91,11 @@ async function ensureNodeInstalled(vmId: string): Promise<void> {
     // Node not found, need to install
   }
 
-  console.log(`[${vmId}] Installing Node.js + Claude Code (this may take 30-60s)...`);
+  console.log(`[${vmId}] Installing Node.js + git + Claude Code (this may take 30-60s)...`);
 
-  // Install Node.js via NodeSource
+  // Install Node.js via NodeSource and git
   await execute(vmId, "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -");
-  await execute(vmId, "apt-get install -y nodejs");
+  await execute(vmId, "apt-get install -y nodejs git");
 
   // Install Claude Code CLI
   await execute(vmId, "npm install -g @anthropic-ai/claude-code");
