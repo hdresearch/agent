@@ -508,3 +508,63 @@ export function getSubprocessManager(): SubprocessManager {
   }
   return subprocessManager;
 }
+
+// ============================================================
+// Orphan Process Cleanup
+// ============================================================
+
+/**
+ * Clean up orphaned Claude/claude-code-acp processes from previous runs.
+ * This is called on startup to prevent resource leaks.
+ */
+export async function cleanupOrphanedProcesses(): Promise<number> {
+  let cleaned = 0;
+
+  try {
+    // Find orphaned processes (Claude Code subprocesses that aren't attached to us)
+    const result = Bun.spawnSync(["pgrep", "-f", "claude-code-acp|claude.*mcp"]);
+    if (result.exitCode !== 0) {
+      // No orphaned processes found
+      return 0;
+    }
+
+    const pids = result.stdout.toString().trim().split("\n").filter(Boolean);
+    const currentPid = process.pid;
+
+    for (const pidStr of pids) {
+      const pid = parseInt(pidStr, 10);
+      if (isNaN(pid) || pid === currentPid) continue;
+
+      // Check if this process is a child of ours (don't kill our own children)
+      const ppidResult = Bun.spawnSync(["ps", "-o", "ppid=", "-p", pidStr]);
+      const ppid = parseInt(ppidResult.stdout.toString().trim(), 10);
+
+      if (ppid === currentPid) {
+        // This is our child process, skip
+        continue;
+      }
+
+      // Check if the parent process is still alive
+      const parentAlive = Bun.spawnSync(["kill", "-0", ppid.toString()]);
+      if (parentAlive.exitCode !== 0) {
+        // Parent is dead, this is an orphan
+        logStream.info(`[subprocess] Killing orphaned process ${pid} (parent ${ppid} is dead)`);
+        try {
+          process.kill(pid, "SIGTERM");
+          cleaned++;
+        } catch {
+          // Process may have already exited
+        }
+      }
+    }
+
+    if (cleaned > 0) {
+      logStream.info(`[subprocess] Cleaned up ${cleaned} orphaned processes`);
+    }
+  } catch (error) {
+    // pgrep not available or other error - not critical
+    logStream.debug(`[subprocess] Orphan cleanup skipped: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return cleaned;
+}

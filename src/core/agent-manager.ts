@@ -3,6 +3,7 @@
 
 import { createAgentRunner, type SubprocessAgentRunner, type AgentRunnerOptions } from "../agents/agent-runner";
 import { initializeRegistry } from "../agents/registry";
+import { cleanupOrphanedProcesses } from "../agents/subprocess-manager";
 import type { AgentRunner, PromptEvent, RunPromptOptions } from "../agents/types";
 import type { AvailableCommandData } from "../protocol/acp-types";
 import { getConfig } from "../utils/config";
@@ -76,6 +77,9 @@ export async function initializeAgent(agentId?: string, cwd?: string, options?: 
     runnerOptions.resumeSessionId = options.resumeSessionId;
     info("Will resume session", { sessionId: options.resumeSessionId });
   }
+
+  // Clean up any orphaned processes before starting new agent (Issue #40)
+  await cleanupOrphanedProcesses();
 
   try {
     currentRunner = createAgentRunner(targetAgent, targetCwd, runnerOptions);
