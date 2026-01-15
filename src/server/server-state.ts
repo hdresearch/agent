@@ -1,11 +1,11 @@
 // Server state management - single source of truth for HTTP server state
+// Note: Session ID management has been moved to SessionManager (src/core/session-manager.ts)
 
-import { updateSession, resetSession } from "../utils/config";
+import { sessionManager } from "../core/session-manager";
 
 // Server state - encapsulated in a class for better organization
 class ServerState {
   initialized = false;
-  currentSessionId: string | null = null;
   runningTaskId: string | null = null;
   accumulatedAssistantText = "";
 
@@ -16,15 +16,12 @@ class ServerState {
   // Reset state for new session
   resetForNewSession(): void {
     this.accumulatedAssistantText = "";
-    resetSession();
+    sessionManager.resetForNewSession();
   }
 
-  // Get current session ID or throw
+  // Get current session ID or throw (delegates to sessionManager)
   requireSessionId(): string {
-    if (!this.currentSessionId) {
-      throw new Error("No session active");
-    }
-    return this.currentSessionId;
+    return sessionManager.requireSessionId();
   }
 }
 
@@ -40,15 +37,19 @@ export function isInitialized(): boolean {
   return serverState.initialized;
 }
 
+// Session ID functions - delegate to SessionManager for backward compatibility
+// New code should import from '../core/session-manager' directly
+
 export function setCurrentSessionId(id: string | null): void {
-  serverState.currentSessionId = id;
   if (id) {
-    updateSession({ sessionId: id });
+    sessionManager.setSession(id);
+  } else {
+    sessionManager.clearSession();
   }
 }
 
 export function getCurrentSessionId(): string | null {
-  return serverState.currentSessionId;
+  return sessionManager.getCurrentId();
 }
 
 export function setRunningTaskId(id: string | null): void {
@@ -74,13 +75,6 @@ export function getAccumulatedAssistantText(): string {
 
 export function resetAccumulatedAssistantText(): void {
   serverState.accumulatedAssistantText = "";
-}
-
-export function flushAccumulatedText(sessionId: string, storeCallback: (type: string, content: string) => void): void {
-  if (serverState.accumulatedAssistantText) {
-    storeCallback("text", serverState.accumulatedAssistantText);
-    serverState.accumulatedAssistantText = "";
-  }
 }
 
 // VM connection state
