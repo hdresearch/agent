@@ -1,15 +1,15 @@
 /**
  * Bootstrap vers-agent on a VM
  *
- * TODO: Once vers-agent is pre-installed in VM image, simplify this.
- * See: https://github.com/hdresearch/agent/issues/16
+ * Downloads the nightly binary from GitHub releases.
+ * See: https://github.com/hdresearch/agent/releases/tag/nightly
  */
 
-import { execute, upload, getAgentUrl } from "./index";
-import { resolve } from "path";
+import { execute, getAgentUrl } from "./index";
 import { readFileSync } from "fs";
+import { resolve } from "path";
 
-const LINUX_BINARY_PATH = resolve(import.meta.dir, "../../dist/vers-agent-linux");
+const NIGHTLY_RELEASE_URL = "https://github.com/hdresearch/agent/releases/download/nightly/vers-agent-linux-x64";
 const REMOTE_BINARY_PATH = "/usr/local/bin/vers-agent";
 const SYSTEMD_SERVICE_PATH = resolve(import.meta.dir, "vers-agent.service");
 // Agent listens on port 80 inside VM, vers proxy routes external :443 → VM :80
@@ -17,7 +17,7 @@ const AGENT_PORT = 80;
 
 /**
  * Bootstrap vers-agent on a VM.
- * Uploads binary if needed, starts server, waits for it to be healthy.
+ * Downloads nightly binary from GitHub if needed, starts server, waits for it to be healthy.
  *
  * @returns The agent URL (https://{vmId}.vm.vers.sh)
  */
@@ -36,9 +36,9 @@ export async function bootstrap(vmId: string): Promise<string> {
   const binaryExists = await checkBinaryExists(vmId);
 
   if (!binaryExists) {
-    // Upload the binary
-    console.log(`[${vmId}] Uploading vers-agent binary...`);
-    await upload(vmId, LINUX_BINARY_PATH, REMOTE_BINARY_PATH);
+    // Download the nightly binary from GitHub releases
+    console.log(`[${vmId}] Downloading vers-agent nightly binary...`);
+    await execute(vmId, `curl -fsSL -o ${REMOTE_BINARY_PATH} "${NIGHTLY_RELEASE_URL}"`);
     await execute(vmId, `chmod +x ${REMOTE_BINARY_PATH}`);
   }
 
