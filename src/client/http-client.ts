@@ -93,6 +93,19 @@ export class HttpAcpClient {
     this._authToken = tokenStore.getToken(baseUrl);
   }
 
+  /** Get the server URL */
+  get serverUrl(): string {
+    return this.baseUrl;
+  }
+
+  /**
+   * Make a generic RPC call to the server
+   * Useful for commands that don't have typed wrappers
+   */
+  async rpcCall<T = unknown>(method: string, params?: unknown): Promise<T> {
+    return this.request<T>(method, params);
+  }
+
   // Helper to get fetch options with TLS settings
   private getFetchOptions(options: RequestInit = {}): RequestInit {
     if (this.tlsOptions) {

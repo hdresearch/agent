@@ -1,6 +1,14 @@
 #!/bin/bash
 # vers-client.sh - CLI client for vers-agent HTTP API
 # Usage: ./scripts/vers-client.sh <command> [args]
+#
+# DEPRECATED: This shell script is deprecated.
+# Please use the built-in vers-agent commands instead:
+#   vers-agent run "prompt"    # instead of ./scripts/vers-client.sh run "prompt"
+#   vers-agent vms             # instead of ./scripts/vers-client.sh vms
+#   vers-agent vm create       # instead of ./scripts/vers-client.sh vm-create
+#   vers-agent help            # for full command list
+#
 
 set -e
 
@@ -113,8 +121,12 @@ case "${1:-help}" in
     echo -e "${BLUE}> ${text}${NC}\n"
     rpc "session/prompt" "{\"text\":${escaped}}" > /dev/null
 
+    # Start curl in background and capture its PID
+    exec 3< <(curl -sN "${BASE_URL}/events")
+    CURL_PID=$!
+
     # Stream events until completed/failed
-    curl -sN "${BASE_URL}/events" | while IFS= read -r line; do
+    while IFS= read -r line <&3; do
       if [[ "$line" == data:* ]]; then
         json="${line#data: }"
         type=$(echo "$json" | jq -r '.data.type // empty' 2>/dev/null)
@@ -132,19 +144,19 @@ case "${1:-help}" in
             ;;
           completed)
             echo -e "\n${GREEN}[Completed]${NC}\n"
-            # Kill the curl process to exit the pipe
-            pkill -P $$ curl 2>/dev/null
+            kill $CURL_PID 2>/dev/null
             break
             ;;
           failed)
             err=$(echo "$json" | jq -r '.data.error // empty' 2>/dev/null)
             echo -e "\n${RED}[Failed: ${err}]${NC}\n"
-            pkill -P $$ curl 2>/dev/null
+            kill $CURL_PID 2>/dev/null
             break
             ;;
         esac
       fi
     done
+    exec 3<&-
     ;;
 
   # Config
@@ -196,7 +208,8 @@ case "${1:-help}" in
 
   # Watch streaming response (pretty printed)
   watch|stream)
-    curl -sN "${BASE_URL}/events" | while IFS= read -r line; do
+    # Use process substitution to avoid subshell variable scoping issues
+    while IFS= read -r line; do
       # Skip empty lines and "event:" lines
       if [[ "$line" == data:* ]]; then
         json="${line#data: }"
@@ -224,7 +237,7 @@ case "${1:-help}" in
             ;;
         esac
       fi
-    done
+    done < <(curl -sN "${BASE_URL}/events")
     ;;
 
   # Logs
@@ -347,7 +360,9 @@ case "${1:-help}" in
     # Track current VM for streaming continuity
     CURRENT_VM=""
 
-    curl -sN "$url" | while IFS= read -r line; do
+    # Use process substitution to avoid subshell variable scoping issues
+    # Without this, CURRENT_VM changes are lost between iterations
+    while IFS= read -r line; do
       if [[ "$line" == data:* ]]; then
         json="${line#data: }"
         vmId=$(echo "$json" | jq -r '.vmId // empty' 2>/dev/null)
@@ -394,7 +409,7 @@ case "${1:-help}" in
             ;;
         esac
       fi
-    done
+    done < <(curl -sN "$url")
     ;;
 
   vm-outputs)
@@ -652,6 +667,9 @@ WantedBy=multi-user.target'
 
   # Help
   help|--help|-h|"")
+    echo -e "${YELLOW}DEPRECATED: Use 'vers-agent <command>' instead of this script.${NC}"
+    echo -e "${YELLOW}Run 'vers-agent help' for the new command syntax.${NC}"
+    echo ""
     echo "vers-client.sh - CLI client for vers-agent"
     echo ""
     echo "Environment:"

@@ -70,7 +70,7 @@ import { saveKeys, computeKeysHash, type KeysState } from "../utils/keys";
 import { expandPrompt, hasPathReferences } from "../utils/path-expansion";
 import { metrics, MetricNames } from "../utils/metrics";
 import { logStream, shouldIncludeLevel, type LogLevel } from "../utils/log-stream";
-import { authStore } from "../utils/auth-store";
+import { authStore, hasAuth, verifyApiKey, setVersApiKey, getVersApiKey } from "../utils/auth-store";
 import { cleanTitle } from "../utils/string-utils";
 import {
   serverState,
@@ -199,6 +199,25 @@ function getAuthToken(req: Request): string | null {
   }
 
   return null;
+}
+
+// Check if request is from localhost
+function isLocalhostRequest(req: Request): boolean {
+  // Check the Host header
+  const host = req.headers.get("Host") || "";
+  const hostLower = host.toLowerCase().split(":")[0]; // Remove port
+  if (hostLower === "localhost" || hostLower === "127.0.0.1" || hostLower === "::1") {
+    return true;
+  }
+
+  // Also check the URL
+  try {
+    const url = new URL(req.url);
+    const urlHost = url.hostname.toLowerCase();
+    return urlHost === "localhost" || urlHost === "127.0.0.1" || urlHost === "::1";
+  } catch {
+    return false;
+  }
 }
 
 const AGENT_CAPABILITIES: AgentCapabilities = {
@@ -1018,61 +1037,74 @@ async function handleRequest(req: Request): Promise<Response> {
     }, { headers: corsHeaders });
   }
 
-  // Claim endpoint - check/claim server
+  // Claim endpoint - set API key for authentication
   if (url.pathname === "/claim" && req.method === "POST") {
-    const clientId = req.headers.get("X-Client-Id") || "unknown-client";
-    const claimState = authStore.getClaimState();
+    const providedKey = getAuthToken(req);
+    const isLocal = isLocalhostRequest(req);
 
-    if (claimState.isClaimed) {
-      // Already claimed - check if this client has valid token
-      const token = getAuthToken(req);
-      if (token && authStore.verifyToken(token)) {
+    // If API key provided in auth header
+    if (providedKey) {
+      if (hasAuth()) {
+        // Already have a key - verify it matches
+        if (verifyApiKey(providedKey)) {
+          return Response.json({
+            authenticated: true,
+            message: "API key verified",
+          }, { headers: corsHeaders });
+        }
         return Response.json({
-          claimed: true,
-          isOwner: true,
-          claimedAt: claimState.claimedAt,
-        }, { headers: corsHeaders });
+          authenticated: false,
+          error: "Invalid API key",
+        }, { status: 403, headers: corsHeaders });
       }
+
+      // No key yet - store this one
+      await setVersApiKey(providedKey);
+      info("VERS API key set via /claim endpoint");
       return Response.json({
-        claimed: true,
-        isOwner: false,
-        error: "Server is already claimed by another client",
-      }, { status: 403, headers: corsHeaders });
+        authenticated: true,
+        message: "API key stored successfully",
+      }, { headers: corsHeaders });
     }
 
-    // Unclaimed - claim it
-    const result = authStore.claim(clientId);
-    if (result.success) {
-      info("Server claimed via /claim endpoint", { clientId });
+    // No key provided - check status
+    if (hasAuth()) {
       return Response.json({
-        claimed: true,
-        isOwner: true,
-        token: result.token,
-        message: "Server claimed successfully. Save this token!",
+        authenticated: false,
+        error: "API key required. Provide via Authorization: Bearer <key>",
+      }, { status: 401, headers: corsHeaders });
+    }
+
+    // No auth configured
+    if (isLocal) {
+      // Allow localhost without auth
+      return Response.json({
+        authenticated: true,
+        local: true,
+        message: "Localhost access allowed without API key",
       }, { headers: corsHeaders });
     }
 
     return Response.json({
-      claimed: true,
-      isOwner: false,
-      error: result.error,
-    }, { status: 403, headers: corsHeaders });
+      authenticated: false,
+      error: "API key required. Provide via Authorization: Bearer <key>",
+    }, { status: 401, headers: corsHeaders });
   }
 
-  // All other endpoints require auth (if server is claimed)
-  const claimState = authStore.getClaimState();
-  if (claimState.isClaimed) {
-    const token = getAuthToken(req);
-    if (!token) {
+  // All other endpoints require auth (if configured) unless localhost
+  const isLocal = isLocalhostRequest(req);
+  if (hasAuth() && !isLocal) {
+    const providedKey = getAuthToken(req);
+    if (!providedKey) {
       return Response.json({
         error: "Authentication required",
-        message: "Server is claimed. Provide token via Authorization header or ?token= parameter",
+        message: "Provide API key via Authorization: Bearer <key>",
       }, { status: 401, headers: corsHeaders });
     }
-    if (!authStore.verifyToken(token)) {
+    if (!verifyApiKey(providedKey)) {
       return Response.json({
-        error: "Invalid token",
-        message: "The provided authentication token is invalid",
+        error: "Invalid API key",
+        message: "The provided API key is invalid",
       }, { status: 403, headers: corsHeaders });
     }
   }

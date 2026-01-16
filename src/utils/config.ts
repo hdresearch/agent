@@ -38,6 +38,7 @@ export interface AgentConfig {
   lastServerUrl: string | null;  // Last remote server URL for auto-reconnect
   defaultAgent: string;          // Default agent identity (e.g., "claude-sdk", "claude.com")
   autoApprovePermissions: boolean; // Auto-approve all permission requests (yolo mode)
+  versApiKey: string | null;     // VERS API key for auth and SDK calls
 }
 
 export interface SessionStats {
@@ -75,6 +76,7 @@ const defaultConfig: AgentConfig = {
   lastServerUrl: null,
   defaultAgent: "claude.com",  // Default to Claude Code ACP subprocess mode
   autoApprovePermissions: true, // Auto-approve all permissions (yolo mode)
+  versApiKey: null,            // Set via /claim or environment
 };
 
 let config: AgentConfig = { ...defaultConfig };
@@ -178,6 +180,10 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
     config.autoApprovePermissions = updates.autoApprovePermissions;
   }
 
+  if (updates.versApiKey !== undefined) {
+    config.versApiKey = updates.versApiKey;
+  }
+
   // Persist changes
   await saveConfig();
 
@@ -208,6 +214,10 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
 
   if (updates.autoApprovePermissions !== undefined) {
     config.autoApprovePermissions = updates.autoApprovePermissions;
+  }
+
+  if (updates.versApiKey !== undefined) {
+    config.versApiKey = updates.versApiKey;
   }
 
   // Fire and forget save
