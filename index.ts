@@ -4,6 +4,7 @@ import { loadConfig, loadMcpServers, getConfig, setConfig } from "./src/utils/co
 import { loadDocsStore } from "./src/utils/docs-store";
 import { authStore } from "./src/utils/auth-store";
 import { initializeAgent } from "./src/core/agent-manager";
+import { executeCommand, isSubcommand } from "./src/cli/commands";
 
 // Import embedded skills to ensure they're bundled
 import { embeddedSkills } from "./src/skills/embedded";
@@ -117,53 +118,82 @@ async function findClaudeCode(): Promise<string | null> {
 const PORT = parseInt(process.env.PORT || "9999", 10);
 const args = process.argv.slice(2);
 
-const showHelp = args.includes("--help") || args.includes("-h");
-const installSkills = args.includes("--install-skills");
-const cliOnly = args.includes("--cli");
-const serverOnly = args.includes("--server");
-const forceNewSession = args.includes("--new") || args.includes("-n");
-const continueSession = !forceNewSession; // Continue is now the default
-const forceLocal = args.includes("--local");
-
-// Parse --url option
-const urlIndex = args.indexOf("--url");
-const explicitServerUrl = urlIndex !== -1 && args[urlIndex + 1] ? args[urlIndex + 1] : undefined;
-
-// Install embedded skills to ~/.claude/skills/
-if (installSkills) {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-  const skillsDir = `${homeDir}/.claude/skills`;
-
-  console.log("Installing embedded skills to ~/.claude/skills/\n");
-
-  for (const skill of embeddedSkills) {
-    const skillPath = `${skillsDir}/${skill.name}`;
-    const filePath = `${skillPath}/SKILL.md`;
-
-    try {
-      // Create directory
-      await Bun.$`mkdir -p ${skillPath}`.quiet();
-
-      // Write skill file
-      await Bun.write(filePath, skill.content);
-
-      console.log(`  ✓ Installed: ${skill.name}`);
-      console.log(`    ${filePath}\n`);
-    } catch (err) {
-      console.error(`  ✗ Failed to install ${skill.name}:`, err);
-    }
-  }
-
-  console.log("Done! Skills are now available in Claude Code.");
-  console.log("Try: /orchestrate");
-  process.exit(0);
+// Check for subcommand mode (first arg is a known command, not a flag)
+// Subcommands run immediately and exit, bypassing the rest of the startup logic
+const firstArg = args[0];
+if (firstArg && !firstArg.startsWith("-") && isSubcommand(firstArg)) {
+  executeCommand(args)
+    .then((exitCode) => process.exit(exitCode))
+    .catch((err) => {
+      console.error("Error:", err);
+      process.exit(1);
+    });
+} else {
+  // Flag-based mode - run the full initialization
+  runFlagMode();
 }
 
-if (showHelp) {
-  console.log(`vers-agent - ACP-compliant agent harness with CLI
+function runFlagMode() {
+  const showHelp = args.includes("--help") || args.includes("-h");
+  const installSkills = args.includes("--install-skills");
+  const cliOnly = args.includes("--cli");
+  const serverOnly = args.includes("--server");
+  const forceNewSession = args.includes("--new") || args.includes("-n");
+  const continueSession = !forceNewSession; // Continue is now the default
+  const forceLocal = args.includes("--local");
+
+  // Parse --url option
+  const urlIndex = args.indexOf("--url");
+  const explicitServerUrl = urlIndex !== -1 && args[urlIndex + 1] ? args[urlIndex + 1] : undefined;
+
+  // Install embedded skills to ~/.claude/skills/
+  if (installSkills) {
+    (async () => {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+      const skillsDir = `${homeDir}/.claude/skills`;
+
+      console.log("Installing embedded skills to ~/.claude/skills/\n");
+
+      for (const skill of embeddedSkills) {
+        const skillPath = `${skillsDir}/${skill.name}`;
+        const filePath = `${skillPath}/SKILL.md`;
+
+        try {
+          // Create directory
+          await Bun.$`mkdir -p ${skillPath}`.quiet();
+
+          // Write skill file
+          await Bun.write(filePath, skill.content);
+
+          console.log(`  ✓ Installed: ${skill.name}`);
+          console.log(`    ${filePath}\n`);
+        } catch (err) {
+          console.error(`  ✗ Failed to install ${skill.name}:`, err);
+        }
+      }
+
+      console.log("Done! Skills are now available in Claude Code.");
+      console.log("Try: /orchestrate");
+      process.exit(0);
+    })();
+    return;
+  }
+
+  if (showHelp) {
+    console.log(`vers-agent - ACP-compliant agent harness with CLI
 
 Usage:
   vers-agent [options]
+  vers-agent <command> [args]
+
+Commands:
+  run <prompt>      Send prompt and stream response
+  watch             Watch SSE event stream
+  health            Check server health
+  vms               List VMs
+  vm <subcommand>   VM operations (create, run, watch, exec, sync, eval)
+  config            Show/set configuration
+  help              Show detailed command help
 
 Options:
   --cli             Run interactive CLI only (connects to HTTP server)
@@ -188,66 +218,68 @@ Examples:
   vers-agent                        # Continue last session (or start new if none)
   vers-agent --new                  # Force a fresh session
   vers-agent --server               # HTTP ACP server only
-  vers-agent --cli                  # Interactive terminal only
+  vers-agent run "fix the bug"      # Send prompt and stream response
+  vers-agent vms                    # List VMs
+  vers-agent vm create "task"       # Create a new VM
   vers-agent --url http://vm:9999   # Connect to remote ACP server
 `);
-  process.exit(0);
-}
-
-async function main() {
-  // Load persistent config from ~/.vers/agent_config.json
-  await loadConfig();
-  // Load MCP server configuration
-  await loadMcpServers();
-  // Load persisted docs store
-  await loadDocsStore();
-
-  // Helper to check if URL is a remote server (not localhost)
-  const isRemoteUrl = (url: string): boolean => {
-    try {
-      const parsed = new URL(url);
-      const host = parsed.hostname.toLowerCase();
-      return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
-    } catch {
-      return false;
-    }
-  };
-
-  // Determine server URL: explicit > saved > local
-  const savedConfig = getConfig();
-  let serverUrl: string | undefined;
-  let remoteMode = false;
-
-  if (forceLocal) {
-    // Clear saved server URL when forcing local mode
-    if (savedConfig.lastServerUrl) {
-      await setConfig({ lastServerUrl: null });
-      console.log("Cleared saved remote server. Running locally.");
-    }
-  } else if (explicitServerUrl) {
-    // Explicit --url takes precedence
-    serverUrl = explicitServerUrl;
-    remoteMode = true;
-    // Save for auto-reconnect (explicit --url always saves)
-    await setConfig({ lastServerUrl: serverUrl });
-  } else if (savedConfig.lastServerUrl && !serverOnly) {
-    // Use saved URL (set via /connect or --url)
-    // Works for both --cli mode and default mode
-    serverUrl = savedConfig.lastServerUrl;
-    remoteMode = true;
-    console.log(`Reconnecting to saved server: ${serverUrl}`);
+    process.exit(0);
   }
 
-  if (remoteMode && serverUrl) {
-    // Remote mode: connect to existing server (no local Claude Code needed)
-    console.log(`Connecting to ${serverUrl}...`);
-    await runCli({ continueSession, serverUrl });
-  } else {
-    // Local mode: check for Claude Code executable (unless server-only mode which defers to auto-install)
-    if (!serverOnly) {
-      const claudePath = await findClaudeCode();
-      if (!claudePath) {
-        console.error(`Error: Claude Code executable not found.
+  async function main() {
+    // Load persistent config from ~/.vers/agent_config.json
+    await loadConfig();
+    // Load MCP server configuration
+    await loadMcpServers();
+    // Load persisted docs store
+    await loadDocsStore();
+
+    // Helper to check if URL is a remote server (not localhost)
+    const isRemoteUrl = (url: string): boolean => {
+      try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
+      } catch {
+        return false;
+      }
+    };
+
+    // Determine server URL: explicit > saved > local
+    const savedConfig = getConfig();
+    let serverUrl: string | undefined;
+    let remoteMode = false;
+
+    if (forceLocal) {
+      // Clear saved server URL when forcing local mode
+      if (savedConfig.lastServerUrl) {
+        await setConfig({ lastServerUrl: null });
+        console.log("Cleared saved remote server. Running locally.");
+      }
+    } else if (explicitServerUrl) {
+      // Explicit --url takes precedence
+      serverUrl = explicitServerUrl;
+      remoteMode = true;
+      // Save for auto-reconnect (explicit --url always saves)
+      await setConfig({ lastServerUrl: serverUrl });
+    } else if (savedConfig.lastServerUrl && !serverOnly) {
+      // Use saved URL (set via /connect or --url)
+      // Works for both --cli mode and default mode
+      serverUrl = savedConfig.lastServerUrl;
+      remoteMode = true;
+      console.log(`Reconnecting to saved server: ${serverUrl}`);
+    }
+
+    if (remoteMode && serverUrl) {
+      // Remote mode: connect to existing server (no local Claude Code needed)
+      console.log(`Connecting to ${serverUrl}...`);
+      await runCli({ continueSession, serverUrl });
+    } else {
+      // Local mode: check for Claude Code executable (unless server-only mode which defers to auto-install)
+      if (!serverOnly) {
+        const claudePath = await findClaudeCode();
+        if (!claudePath) {
+          console.error(`Error: Claude Code executable not found.
 
 Please either:
   1. Install Claude Code: npm install -g @anthropic-ai/claude-code
@@ -258,70 +290,63 @@ Example:
   export CLAUDE_CODE_EXECUTABLE=/path/to/claude
   vers-agent
 `);
-        process.exit(1);
+          process.exit(1);
+        }
+        console.log(`Using Claude Code: ${claudePath}`);
       }
-      console.log(`Using Claude Code: ${claudePath}`);
-    }
 
-    if (cliOnly) {
-      // CLI only (connects to local HTTP server)
-      await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
-    } else if (serverOnly) {
-      // HTTP server only (daemon mode)
-      // Only reset claim for local access if not on a VM (VMs use auto-claim with derived tokens)
-      if (!process.env.VERS_ORCHESTRATOR_SECRET && !process.env.VERS_VM_ID) {
-        authStore.resetClaim();
+      if (cliOnly) {
+        // CLI only (connects to local HTTP server)
+        await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
+      } else if (serverOnly) {
+        // HTTP server only (daemon mode)
+        const server = createHttpServer(PORT);
+
+        // Initialize agent eagerly so commands are available immediately
+        await initializeAgent();
+
+        console.log(`\n  vers-agent server running on http://localhost:${server.port}\n`);
+        console.log("  Press Ctrl+C to stop.\n");
+
+        // Handle shutdown
+        process.on("SIGINT", () => {
+          server.close();
+          process.exit(0);
+        });
+        process.on("SIGTERM", () => {
+          server.close();
+          process.exit(0);
+        });
+
+        // Keep process alive
+        await new Promise(() => {});
+      } else {
+        // Both: start HTTP server, then CLI
+        const server = createHttpServer(PORT);
+        const actualPort = server.port;
+
+        // Initialize agent eagerly so commands are available immediately
+        await initializeAgent();
+
+        // Handle shutdown
+        process.on("SIGINT", () => {
+          server.close();
+          process.exit(0);
+        });
+        process.on("SIGTERM", () => {
+          server.close();
+          process.exit(0);
+        });
+
+        console.log(`  Server: http://localhost:${actualPort}`);
+        console.log(""); // blank line before CLI prompt
+        await runCli({ continueSession, serverUrl: `http://localhost:${actualPort}` });
       }
-      const server = createHttpServer(PORT);
-
-      // Initialize agent eagerly so commands are available immediately
-      await initializeAgent();
-
-      console.log(`\n  vers-agent server running on http://localhost:${server.port}\n`);
-      console.log("  Press Ctrl+C to stop.\n");
-
-      // Handle shutdown
-      process.on("SIGINT", () => {
-        server.close();
-        process.exit(0);
-      });
-      process.on("SIGTERM", () => {
-        server.close();
-        process.exit(0);
-      });
-
-      // Keep process alive
-      await new Promise(() => {});
-    } else {
-      // Both: start HTTP server, then CLI
-      // Only reset claim for local mode if not on a VM (VMs use auto-claim with derived tokens)
-      if (!process.env.VERS_ORCHESTRATOR_SECRET && !process.env.VERS_VM_ID) {
-        authStore.resetClaim();
-      }
-      const server = createHttpServer(PORT);
-      const actualPort = server.port;
-
-      // Initialize agent eagerly so commands are available immediately
-      await initializeAgent();
-
-      // Handle shutdown
-      process.on("SIGINT", () => {
-        server.close();
-        process.exit(0);
-      });
-      process.on("SIGTERM", () => {
-        server.close();
-        process.exit(0);
-      });
-
-      console.log(`  Server: http://localhost:${actualPort}`);
-      console.log(""); // blank line before CLI prompt
-      await runCli({ continueSession, serverUrl: `http://localhost:${actualPort}` });
     }
   }
-}
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

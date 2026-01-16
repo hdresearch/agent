@@ -9,7 +9,7 @@
 import { createVm, branch, deleteVm, listVms, getAgentUrl, restore, execute, type VmConfig } from "../vm/index";
 import { bootstrap } from "../vm/bootstrap";
 import { registerVm, receiveVmEvent, removeVmConnection } from "../server/vm-event-aggregator";
-import { deriveToken } from "../utils/auth-store";
+// Auth is now simple: just use VERS_API_KEY directly
 
 // Golden image commit ID (pre-installed Node.js, Claude Code, vers-agent)
 const GOLDEN_COMMIT_ID = process.env.VERS_GOLDEN_COMMIT_ID;
@@ -102,48 +102,41 @@ export function removeVmMetadata(vmId: string): void {
 // Auth Helpers
 // ============================================================
 
-const ORCHESTRATOR_SECRET = process.env.VERS_ORCHESTRATOR_SECRET;
+const VERS_API_KEY = process.env.VERS_API_KEY;
 
 /**
- * Get the derived auth token for a VM.
- * Returns null if VERS_ORCHESTRATOR_SECRET is not set.
- */
-function getVmToken(vmId: string): string | null {
-  if (!ORCHESTRATOR_SECRET) return null;
-  return deriveToken(ORCHESTRATOR_SECRET, vmId);
-}
-
-/**
- * Create an HttpAcpClient for a VM with the derived token pre-set.
+ * Create an HttpAcpClient for a VM with the API key set.
  */
 function createVmClient(vmId: string): HttpAcpClient {
   const agentUrl = getAgentUrl(vmId);
   const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
 
-  const token = getVmToken(vmId);
-  if (token) {
-    client.setToken(token);
+  // Use the API key directly for authentication
+  if (VERS_API_KEY) {
+    client.setToken(VERS_API_KEY);
   }
 
   return client;
 }
 
 /**
- * Inject VERS_VM_ID into the VM's systemd env file and restart vers-agent.
- * This enables auto-claim with derived tokens.
+ * Inject VERS_API_KEY and VERS_VM_ID into the VM's config and restart vers-agent.
+ * The API key enables SDK calls and authentication.
  */
 async function injectVmIdAndRestart(vmId: string): Promise<void> {
-  if (!ORCHESTRATOR_SECRET) return; // No secret, skip injection
+  if (!VERS_API_KEY) return; // No API key, skip injection
 
-  // Update VERS_VM_ID in systemd EnvironmentFile and restart via systemd
+  // Update env file with VERS_VM_ID and VERS_API_KEY, then restart
   const commands = [
-    // Ensure env file exists with required vars
+    // Ensure env file exists
     `mkdir -p /etc/vers-agent`,
-    // Update or add VERS_VM_ID in the systemd env file
+    // Update or add VERS_VM_ID
     `grep -q "^VERS_VM_ID=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_VM_ID=.*/VERS_VM_ID=${vmId}/" /etc/vers-agent/env || echo "VERS_VM_ID=${vmId}" >> /etc/vers-agent/env`,
-    // Also clear any stale auth.db so auto-claim runs fresh
+    // Update or add VERS_API_KEY (so VM can use SDK)
+    `grep -q "^VERS_API_KEY=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_API_KEY=.*/VERS_API_KEY=${VERS_API_KEY}/" /etc/vers-agent/env || echo "VERS_API_KEY=${VERS_API_KEY}" >> /etc/vers-agent/env`,
+    // Clear stale auth.db
     `rm -f /root/.vers-agent/auth.db`,
-    // Restart vers-agent via systemd to pick up the new env
+    // Restart vers-agent via systemd
     `systemctl restart vers-agent`,
   ].join(" && ");
 
@@ -194,7 +187,7 @@ export async function createManagedVm(
   // Inject VM ID so agent can auto-claim with derived token
   await injectVmIdAndRestart(vmId);
 
-  // Connect client (with derived token if VERS_ORCHESTRATOR_SECRET is set)
+  // Connect client (with derived token if VERS_API_KEY is set)
   const client = createVmClient(vmId);
   const agentUrl = getAgentUrl(vmId);
   await client.connect();
@@ -238,7 +231,7 @@ export async function branchVm(
   await injectVmIdAndRestart(vmId);
 
   // Agent should already be running on branched VM
-  // Just need to connect (with derived token if VERS_ORCHESTRATOR_SECRET is set)
+  // Just need to connect (with derived token if VERS_API_KEY is set)
   const client = createVmClient(vmId);
   const agentUrl = getAgentUrl(vmId);
   await client.connect();
@@ -292,7 +285,7 @@ export async function getManagedVm(vmId: string): Promise<ManagedVm | null> {
     return null;
   }
 
-  // Reconnect (with derived token if VERS_ORCHESTRATOR_SECRET is set)
+  // Reconnect (with derived token if VERS_API_KEY is set)
   const client = createVmClient(vmId);
   const agentUrl = getAgentUrl(vmId);
   try {
