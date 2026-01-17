@@ -3,6 +3,7 @@
 
 import { homedir } from "os";
 import { join } from "path";
+import { mkdirSync, existsSync } from "fs";
 import { logStream } from "./log-stream";
 
 const CONFIG_DIR = join(homedir(), ".vers");
@@ -39,6 +40,7 @@ export interface AgentConfig {
   defaultAgent: string;          // Default agent identity (e.g., "claude-sdk", "claude.com")
   autoApprovePermissions: boolean; // Auto-approve all permission requests (yolo mode)
   versApiKey: string | null;     // VERS API key for auth and SDK calls
+  cwd: string | null;            // Working directory (null = use process.cwd() at startup)
 }
 
 export interface SessionStats {
@@ -77,6 +79,7 @@ const defaultConfig: AgentConfig = {
   defaultAgent: "claude.com",  // Default to Claude Code ACP subprocess mode
   autoApprovePermissions: true, // Auto-approve all permissions (yolo mode)
   versApiKey: null,            // Set via /claim or environment
+  cwd: null,                   // null = use directory where server was launched
 };
 
 let config: AgentConfig = { ...defaultConfig };
@@ -106,6 +109,25 @@ async function ensureConfigDir(): Promise<void> {
   await proc.exited;
 }
 
+/**
+ * Ensure the configured cwd directory exists, creating it if necessary.
+ */
+function ensureCwdExists(cwd: string | null): void {
+  if (!cwd) return;
+
+  try {
+    if (!existsSync(cwd)) {
+      mkdirSync(cwd, { recursive: true });
+      logStream.info("[config] Created cwd directory", { cwd });
+    }
+  } catch (err) {
+    logStream.error("[config] Failed to create cwd directory", {
+      cwd,
+      error: err instanceof Error ? err.message : String(err)
+    });
+  }
+}
+
 export async function loadConfig(): Promise<AgentConfig> {
   try {
     const file = Bun.file(CONFIG_FILE);
@@ -124,6 +146,9 @@ export async function loadConfig(): Promise<AgentConfig> {
       if (!validModels.includes(config.model)) {
         config.model = defaultConfig.model;
       }
+
+      // Ensure cwd exists if configured
+      ensureCwdExists(config.cwd);
     } else {
       // No config file exists, create one with defaults
       config = { ...defaultConfig };
@@ -155,6 +180,14 @@ export function getConfig(): AgentConfig {
   return { ...config };
 }
 
+/**
+ * Get the effective working directory.
+ * Uses config.cwd if set, otherwise falls back to process.cwd().
+ */
+export function getEffectiveCwd(): string {
+  return config.cwd || process.cwd();
+}
+
 export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentConfig> {
   if (updates.model !== undefined) {
     const validModels = ["sonnet", "opus", "haiku"];
@@ -182,6 +215,11 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
 
   if (updates.versApiKey !== undefined) {
     config.versApiKey = updates.versApiKey;
+  }
+
+  if (updates.cwd !== undefined) {
+    config.cwd = updates.cwd;
+    ensureCwdExists(config.cwd);
   }
 
   // Persist changes
@@ -218,6 +256,11 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
 
   if (updates.versApiKey !== undefined) {
     config.versApiKey = updates.versApiKey;
+  }
+
+  if (updates.cwd !== undefined) {
+    config.cwd = updates.cwd;
+    ensureCwdExists(config.cwd);
   }
 
   // Fire and forget save
