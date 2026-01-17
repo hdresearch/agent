@@ -5,7 +5,7 @@ import { createAgentRunner, type SubprocessAgentRunner, type AgentRunnerOptions 
 import { initializeRegistry } from "../agents/registry";
 import type { AgentRunner, PromptEvent, RunPromptOptions } from "../agents/types";
 import type { AvailableCommandData } from "../protocol/acp-types";
-import { getConfig } from "../utils/config";
+import { getConfig, getEffectiveCwd } from "../utils/config";
 import { taskStore } from "./tasks";
 import { logStream } from "../utils/log-stream";
 import { snapshotBaseline, resetBaseline } from "../utils/claude-usage";
@@ -48,7 +48,7 @@ export interface InitializeAgentOptions {
  */
 export async function initializeAgent(agentId?: string, cwd?: string, options?: InitializeAgentOptions): Promise<void> {
   const targetAgent = agentId || currentAgentId;
-  const targetCwd = cwd || process.cwd();
+  const targetCwd = cwd || getEffectiveCwd();
 
   info("Initializing agent", { agentId: targetAgent, cwd: targetCwd, resumeSessionId: options?.resumeSessionId });
 
@@ -177,7 +177,7 @@ export async function runTask(taskId: string): Promise<void> {
   }
 
   // Ensure agent is initialized
-  const cwd = task.config.cwd || process.cwd();
+  const cwd = task.config.cwd || getEffectiveCwd();
   if (!currentRunner) {
     await initializeAgent(currentAgentId, cwd);
   }

@@ -7,6 +7,7 @@
  */
 
 import { createVm, branch, deleteVm, listVms, getAgentUrl, restore, execute, type VmConfig } from "../vm/index";
+import { VM_VERS_AGENT_CONFIG_DIR } from "../vm/constants";
 import { bootstrap } from "../vm/bootstrap";
 import { registerVm, receiveVmEvent, removeVmConnection } from "../server/vm-event-aggregator";
 // Auth is now simple: just use VERS_API_KEY directly
@@ -135,7 +136,7 @@ async function injectVmIdAndRestart(vmId: string): Promise<void> {
     // Update or add VERS_API_KEY (so VM can use SDK)
     `grep -q "^VERS_API_KEY=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_API_KEY=.*/VERS_API_KEY=${VERS_API_KEY}/" /etc/vers-agent/env || echo "VERS_API_KEY=${VERS_API_KEY}" >> /etc/vers-agent/env`,
     // Clear stale auth.db
-    `rm -f /root/.vers-agent/auth.db`,
+    `rm -f ${VM_VERS_AGENT_CONFIG_DIR}/auth.db`,
     // Restart vers-agent via systemd
     `systemctl restart vers-agent`,
   ].join(" && ");

@@ -35,6 +35,7 @@ import {
   getConnectionStatusObject,
 } from "../vm-event-aggregator";
 import { logStream } from "../../utils/log-stream";
+import { VM_AGENT_DIR } from "../../vm/constants";
 
 // Logging helpers
 function info(message: string, data?: unknown): void {
@@ -559,7 +560,7 @@ export async function handleVmEval(params: VmEvalParams): Promise<VmEvalResult> 
     else echo "unknown"; fi
   `.trim().replace(/\n\s*/g, ' ');
 
-  const workDir = cwd ?? "/root/vers-agent";
+  const workDir = cwd ?? VM_AGENT_DIR;
   const { execute: executeOnVm } = await import("../../vm");
 
   const detectResult = await executeOnVm(vmId, `cd ${workDir} && ${detectCmd}`);

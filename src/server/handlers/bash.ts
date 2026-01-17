@@ -1,5 +1,7 @@
 // Bash execution handlers for remote CLI
 
+import { getEffectiveCwd } from "../../utils/config";
+
 export interface BashExecuteParams {
   command: string;
   cwd?: string;
@@ -20,7 +22,7 @@ export async function handleBashExecute(params: BashExecuteParams): Promise<Bash
   if (!params.command) {
     throw new Error("Missing command parameter");
   }
-  const cwd = params.cwd || process.cwd();
+  const cwd = params.cwd || getEffectiveCwd();
   const timeout = params.timeout || 30000;
 
   try {
@@ -62,5 +64,5 @@ export async function handleBashExecute(params: BashExecuteParams): Promise<Bash
 }
 
 export function handleGetCwd(): GetCwdResult {
-  return { cwd: process.cwd() };
+  return { cwd: getEffectiveCwd() };
 }

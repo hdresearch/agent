@@ -2,6 +2,7 @@
 
 import { resolve, isAbsolute, join } from "path";
 import { readdirSync, statSync } from "fs";
+import { getEffectiveCwd } from "../../utils/config";
 
 export interface FsReadResult {
   content: string | null;
@@ -24,7 +25,7 @@ export async function handleFsReadTextFile(
   filePath: string,
   cwd?: string
 ): Promise<FsReadResult> {
-  const absolutePath = isAbsolute(filePath) ? filePath : resolve(cwd || process.cwd(), filePath);
+  const absolutePath = isAbsolute(filePath) ? filePath : resolve(cwd || getEffectiveCwd(), filePath);
 
   try {
     const file = Bun.file(absolutePath);
@@ -54,7 +55,7 @@ export async function handleFsListDirectory(
   dirPath: string,
   cwd?: string
 ): Promise<FsListResult> {
-  const absolutePath = isAbsolute(dirPath) ? dirPath : resolve(cwd || process.cwd(), dirPath);
+  const absolutePath = isAbsolute(dirPath) ? dirPath : resolve(cwd || getEffectiveCwd(), dirPath);
 
   try {
     const entries = readdirSync(absolutePath);

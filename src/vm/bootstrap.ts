@@ -6,6 +6,7 @@
  */
 
 import { execute, getAgentUrl } from "./index";
+import { VM_AGENT_DIR, VM_HOME_DIR } from "./constants";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -33,7 +34,7 @@ export async function bootstrap(vmId: string): Promise<string> {
   await ensureNodeInstalled(vmId);
 
   // Create working directory for vers-agent (systemd WorkingDirectory)
-  await execute(vmId, "mkdir -p /root/vers-agent");
+  await execute(vmId, `mkdir -p ${VM_AGENT_DIR}`);
 
   // Check if binary exists on VM
   const binaryExists = await checkBinaryExists(vmId);
@@ -195,12 +196,12 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/vers-agent
+WorkingDirectory=${VM_AGENT_DIR}
 ExecStart=${REMOTE_BINARY_PATH} --server
 Restart=always
 RestartSec=5
 Environment=PORT=${AGENT_PORT}
-Environment=HOME=/root
+Environment=HOME=${VM_HOME_DIR}
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 StandardOutput=journal

@@ -6,6 +6,9 @@
 import Vers, { withSSH, type VmResourceWithSSH, type ExecuteResult } from "vers";
 import type { Vm, VmCreateRootParams } from "vers/resources/vm";
 
+// Re-export VM path constants for convenience
+export { VM_HOME_DIR, VM_AGENT_DIR, VM_VERS_AGENT_CONFIG_DIR } from "./constants";
+
 // Initialize client once
 const client = new Vers();
 const vm: VmResourceWithSSH = withSSH(client.vm);
