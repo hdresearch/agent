@@ -435,20 +435,78 @@ case "${1:-help}" in
     ;;
 
   vm-sync)
-    # Sync local changes to VM using git bundle
+    # Sync local changes to VM using git bundle or full upload
     vmId="${2:-}"
     baseCommit="${3:-${VERS_GOLDEN_COMMIT_ID:-}}"
+    fullSync=false
+
+    # Check for --full flag
+    for arg in "$@"; do
+      if [ "$arg" = "--full" ]; then
+        fullSync=true
+      fi
+    done
 
     if [ -z "$vmId" ]; then
-      echo -e "${RED}Usage: vers-client.sh vm-sync <vmId> [baseCommit]${NC}"
+      echo -e "${RED}Usage: vers-client.sh vm-sync <vmId> [baseCommit] [--full]${NC}"
       echo -e "  baseCommit: defaults to VERS_GOLDEN_COMMIT_ID env var"
+      echo -e "  --full: force full sync (upload entire codebase instead of bundle)"
       exit 1
     fi
 
-    if [ -z "$baseCommit" ]; then
-      echo -e "${RED}Error: No base commit specified and VERS_GOLDEN_COMMIT_ID not set${NC}"
-      echo -e "Provide a base commit or set VERS_GOLDEN_COMMIT_ID"
-      exit 1
+    escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+    shortId="${vmId:0:8}"
+
+    # If --full flag is set or no base commit, use full sync
+    if [ "$fullSync" = true ] || [ -z "$baseCommit" ]; then
+      echo -e "${BLUE}[${shortId}] Using full sync mode...${NC}"
+
+      # Create tarball of current directory (excluding .git, node_modules)
+      tarPath="/tmp/vers-sync-full-${vmId}.tar.gz"
+      echo -e "${BLUE}Creating tarball...${NC}"
+      tar -czf "$tarPath" --exclude='.git' --exclude='node_modules' --exclude='dist' --exclude='*.bundle' -C . . 2>/dev/null
+      tarSize=$(du -h "$tarPath" | cut -f1)
+      echo -e "${GREEN}Tarball created: ${tarSize}${NC}"
+
+      # Upload tarball
+      echo -e "${BLUE}[${shortId}] Uploading tarball...${NC}"
+      rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":\"${tarPath}\",\"remotePath\":\"/tmp/vers-sync.tar.gz\"}" > /dev/null
+
+      # Extract on VM
+      echo -e "${BLUE}[${shortId}] Extracting on VM...${NC}"
+      extractCmd='rm -rf /root/vers-agent.bak 2>/dev/null; mv /root/vers-agent /root/vers-agent.bak 2>/dev/null || true; mkdir -p /root/vers-agent && tar -xzf /tmp/vers-sync.tar.gz -C /root/vers-agent && rm /tmp/vers-sync.tar.gz && cd /root/vers-agent && (which bun >/dev/null && bun install 2>/dev/null || npm install 2>/dev/null || true)'
+      escaped_cmd=$(printf '%s' "$extractCmd" | jq -Rs .)
+      result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}")
+
+      exitCode=$(echo "$result" | jq -r '.result.exitCode // 1')
+      if [ "$exitCode" = "0" ]; then
+        echo -e "${GREEN}[${shortId}] Full sync complete!${NC}"
+      else
+        echo -e "${RED}[${shortId}] Full sync failed:${NC}"
+        echo "$result" | jq -r '.result.stderr // .result.stdout // "Unknown error"'
+        exit 1
+      fi
+
+      rm -f "$tarPath"
+      exit 0
+    fi
+
+    # Check if baseCommit is a valid git commit
+    if ! git rev-parse --verify "${baseCommit}^{commit}" >/dev/null 2>&1; then
+      echo -e "${YELLOW}Warning: ${baseCommit:0:8} is not a valid git commit${NC}"
+      echo -e "${YELLOW}This may be a Vers snapshot ID, not a git commit hash.${NC}"
+      echo -e "${BLUE}Falling back to full sync mode...${NC}"
+      echo ""
+      # Recursive call with --full flag
+      exec "$0" vm-sync "$vmId" "" --full
+    fi
+
+    # Check if baseCommit is an ancestor of HEAD
+    if ! git merge-base --is-ancestor "${baseCommit}" HEAD 2>/dev/null; then
+      echo -e "${YELLOW}Warning: ${baseCommit:0:8} is not an ancestor of HEAD${NC}"
+      echo -e "${BLUE}Falling back to full sync mode...${NC}"
+      echo ""
+      exec "$0" vm-sync "$vmId" "" --full
     fi
 
     # Create bundle from base commit to HEAD
@@ -456,8 +514,8 @@ case "${1:-help}" in
     echo -e "${BLUE}Creating git bundle from ${baseCommit:0:8}..HEAD${NC}"
 
     if ! git bundle create "$bundlePath" "${baseCommit}..HEAD" 2>/dev/null; then
-      echo -e "${RED}Failed to create bundle. Is ${baseCommit:0:8} an ancestor of HEAD?${NC}"
-      exit 1
+      echo -e "${YELLOW}Failed to create bundle, falling back to full sync...${NC}"
+      exec "$0" vm-sync "$vmId" "" --full
     fi
 
     bundleSize=$(du -h "$bundlePath" | cut -f1)
@@ -489,13 +547,30 @@ case "${1:-help}" in
     ;;
 
   vm-sync-all)
-    # Sync local changes to ALL VMs using git bundle
+    # Sync local changes to ALL VMs using git bundle or full upload
     baseCommit="${2:-${VERS_GOLDEN_COMMIT_ID:-}}"
+    fullSync=false
 
-    if [ -z "$baseCommit" ]; then
-      echo -e "${RED}Error: No base commit specified and VERS_GOLDEN_COMMIT_ID not set${NC}"
-      echo -e "Usage: vers-client.sh vm-sync-all [baseCommit]"
-      exit 1
+    # Check for --full flag
+    for arg in "$@"; do
+      if [ "$arg" = "--full" ]; then
+        fullSync=true
+      fi
+    done
+
+    # Determine if we need full sync mode
+    useFullSync=false
+    if [ "$fullSync" = true ]; then
+      useFullSync=true
+    elif [ -z "$baseCommit" ]; then
+      useFullSync=true
+    elif ! git rev-parse --verify "${baseCommit}^{commit}" >/dev/null 2>&1; then
+      echo -e "${YELLOW}Warning: ${baseCommit:0:8} is not a valid git commit${NC}"
+      echo -e "${YELLOW}This may be a Vers snapshot ID, not a git commit hash.${NC}"
+      useFullSync=true
+    elif ! git merge-base --is-ancestor "${baseCommit}" HEAD 2>/dev/null; then
+      echo -e "${YELLOW}Warning: ${baseCommit:0:8} is not an ancestor of HEAD${NC}"
+      useFullSync=true
     fi
 
     # Get list of VM IDs
@@ -506,6 +581,48 @@ case "${1:-help}" in
     fi
 
     vmCount=$(echo "$vmIds" | wc -l | tr -d ' ')
+
+    if [ "$useFullSync" = true ]; then
+      echo -e "${BLUE}Using full sync mode for ${vmCount} VMs...${NC}"
+
+      # Create tarball once
+      tarPath="/tmp/vers-sync-all.tar.gz"
+      echo -e "${BLUE}Creating tarball...${NC}"
+      tar -czf "$tarPath" --exclude='.git' --exclude='node_modules' --exclude='dist' --exclude='*.bundle' -C . . 2>/dev/null
+      tarSize=$(du -h "$tarPath" | cut -f1)
+      echo -e "${GREEN}Tarball created: ${tarSize}${NC}"
+
+      # Sync to each VM
+      success=0
+      failed=0
+      for vmId in $vmIds; do
+        shortId="${vmId:0:8}"
+        escaped_vmId=$(printf '%s' "$vmId" | jq -Rs .)
+
+        echo -e "${BLUE}[${shortId}] Uploading...${NC}"
+        rpc "vm/upload" "{\"vmId\":${escaped_vmId},\"localPath\":\"${tarPath}\",\"remotePath\":\"/tmp/vers-sync.tar.gz\"}" > /dev/null
+
+        extractCmd='rm -rf /root/vers-agent.bak 2>/dev/null; mv /root/vers-agent /root/vers-agent.bak 2>/dev/null || true; mkdir -p /root/vers-agent && tar -xzf /tmp/vers-sync.tar.gz -C /root/vers-agent && rm /tmp/vers-sync.tar.gz && cd /root/vers-agent && (which bun >/dev/null && bun install 2>/dev/null || npm install 2>/dev/null || true)'
+        escaped_cmd=$(printf '%s' "$extractCmd" | jq -Rs .)
+        result=$(rpc "vm/execute" "{\"vmId\":${escaped_vmId},\"command\":${escaped_cmd}}")
+        exitCode=$(echo "$result" | jq -r '.result.exitCode // 1')
+
+        if [ "$exitCode" = "0" ]; then
+          echo -e "${GREEN}[${shortId}] Synced${NC}"
+          success=$((success + 1))
+        else
+          echo -e "${RED}[${shortId}] Failed${NC}"
+          failed=$((failed + 1))
+        fi
+      done
+
+      rm -f "$tarPath"
+      echo ""
+      echo -e "${GREEN}Done: ${success} synced${NC}${failed:+, ${RED}${failed} failed${NC}}"
+      exit 0
+    fi
+
+    # Git bundle mode
     echo -e "${BLUE}Syncing to ${vmCount} VMs...${NC}"
 
     # Create bundle once
@@ -513,8 +630,8 @@ case "${1:-help}" in
     echo -e "${BLUE}Creating git bundle from ${baseCommit:0:8}..HEAD${NC}"
 
     if ! git bundle create "$bundlePath" "${baseCommit}..HEAD" 2>/dev/null; then
-      echo -e "${RED}Failed to create bundle. Is ${baseCommit:0:8} an ancestor of HEAD?${NC}"
-      exit 1
+      echo -e "${YELLOW}Failed to create bundle, falling back to full sync...${NC}"
+      exec "$0" vm-sync-all --full
     fi
 
     bundleSize=$(du -h "$bundlePath" | cut -f1)
@@ -716,8 +833,8 @@ WantedBy=multi-user.target'
     echo "  vm-watch [vmIds]    Watch multiplexed VM event stream (SSE)"
     echo "  vm-outputs <vmId> [limit]  Get outputs from a VM"
     echo "  vm-status [limit]          Get status + last message from all VMs"
-    echo "  vm-sync <vmId> [base]      Sync local git changes to VM via bundle"
-    echo "  vm-sync-all [base]         Sync local git changes to ALL VMs"
+    echo "  vm-sync <vmId> [base] [--full]  Sync local changes to VM (bundle or full)"
+    echo "  vm-sync-all [base] [--full]     Sync local changes to ALL VMs"
     echo "  vm-eval <vmId> [skip...]   Evaluate VM (build, test, lint, typecheck)"
     echo "  vm-wait <vmId> [timeout]   Wait for VM to complete task"
     echo "  vm-systemd <vmId> [action] Manage systemd service (install|status|restart|logs)"
