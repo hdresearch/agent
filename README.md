@@ -76,11 +76,28 @@ The CLI remembers your last server and auto-reconnects on restart.
 
 | Command | Description |
 |---------|-------------|
-| `./vers-agent` | Server + CLI (default) |
-| `./vers-agent --server` | HTTP server only |
-| `./vers-agent --cli` | CLI only, connects to localhost:9999 |
+| `./vers-agent` | HTTP server only (default) |
+| `./vers-agent --cli` | Interactive CLI, connects to localhost:9999 |
+| `./vers-agent --mcp` | MCP server for Claude integration (stdio) |
 | `./vers-agent --url http://host:9999` | CLI connecting to remote server |
-| `./vers-agent --local` | Local mode with debug logging |
+| `./vers-agent --local` | Clear saved remote server, use local |
+
+### MCP Server
+
+Run `vers --mcp` to expose VM orchestration tools to Claude via MCP:
+
+```json
+{
+  "mcpServers": {
+    "vers": {
+      "command": "vers",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+Available tools: `vers_vms`, `vers_vm_create`, `vers_vm_run`, `vers_exec`, `vers_vm_sync`, `vers_vm_eval`, `vers_vm_status`, `vers_vm_wait`, `vers_run`, `vers_health`, `vers_config_get`, `vers_config_set`, `vers_cancel`
 
 ## CLI Features
 
