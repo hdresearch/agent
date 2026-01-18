@@ -139,14 +139,14 @@ export class AcpClient {
    * @param resumeSessionId - Optional session ID to resume (for Claude Code)
    */
   async sessionNew(
-    cwd: string,
-    mcpServers?: AcpMcpServer[],
-    resumeSessionId?: string
+   cwd: string,
+   mcpServers?: AcpMcpServer[],
+   resumeSessionId?: string
   ): Promise<AcpSessionNewResult> {
-    const params: AcpSessionNewParams & { _meta?: unknown } = {
-      cwd,
-      mcpServers: mcpServers ?? [],
-    };
+   const params: AcpSessionNewParams & { _meta?: unknown } = {
+     cwd,
+     mcpServers: mcpServers ?? [],
+   };
 
     // Pass resume session ID to Claude Code via _meta
     // - `resume`: Tells claude-code-acp to use this session ID (and not set --session-id)

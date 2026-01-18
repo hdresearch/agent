@@ -221,6 +221,9 @@ export class SubprocessManager {
     // Create the request
     const request = createRequest(id, method, params);
     const requestJson = JSON.stringify(request) + "\n";
+    
+    // Debug log the request being sent
+    logStream.debug(`[subprocess] Sending request to ${agentId}`, { method, requestJson: requestJson.trim() });
 
     // Set up response tracking with activity-based timeout
     const responsePromise = new Promise<T>((resolve, reject) => {

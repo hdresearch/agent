@@ -1,21 +1,57 @@
-// ACP (Agent Client Protocol) type definitions
-// Based on https://agentclientprotocol.com/
+/**
+ * ACP (Agent Client Protocol) type definitions
+ * 
+ * Based on the protocol specification at https://agentclientprotocol.com/
+ * 
+ * ACP is a JSON-RPC 2.0 protocol for bidirectional communication between:
+ * - **Client**: The CLI or HTTP server (vers-agent)
+ * - **Agent**: The subprocess running AI agent code (Claude Code, OpenAI, etc.)
+ * 
+ * Key concepts:
+ * - **Session**: Persistent conversation with history
+ * - **Capability negotiation**: Client and agent exchange supported features
+ * - **Streaming events**: Real-time text generation and tool calls
+ * - **Permission system**: User approval for sensitive operations
+ */
 
 // ============================================================
 // Client/Agent Configuration
 // ============================================================
 
+/**
+ * Client identification sent during initialization.
+ */
 export interface AcpClientInfo {
+  /** Client name (e.g., "vers-agent") */
   name: string;
+  
+  /** Semantic version string (e.g., "0.1.0") */
   version: string;
 }
 
+/**
+ * Agent configuration including capabilities and filters.
+ * 
+ * Used to customize agent behavior and stderr handling.
+ */
 export interface AcpAgentConfig {
+  /** Client identification for the initialize handshake */
   clientInfo: AcpClientInfo;
+  
+  /** Capabilities this client supports */
   capabilities: ClientCapabilities;
+  
+  /** Default model to use if not specified per-session */
   defaultModel?: string;
+  
+  /** Supported authentication methods (e.g., ["api_key", "token"]) */
   authMethods?: string[];
-  /** Filter function for stderr - return true to suppress the message */
+  
+  /** 
+   * Filter function for stderr output.
+   * Return `true` to suppress a message from being displayed.
+   * Useful for hiding agent-internal logging.
+   */
   stderrFilter?: (text: string) => boolean;
 }
 

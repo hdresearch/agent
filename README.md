@@ -6,366 +6,274 @@ ACP-compliant agent harness with dual CLI/HTTP interface. Run AI coding agents l
 
 ## Quick Start
 
-```bash
-git clone https://github.com/hdresearch/agent.git && cd agent
-bun install && bun run build
-export ANTHROPIC_API_KEY=sk-ant-...
-./vers-agent
-```
+    git clone https://github.com/hdresearch/agent.git && cd agent
+    bun install && bun run build
+    export ANTHROPIC_API_KEY=sk-ant-...
+    ./vers-agent
 
 ## What is ACP?
 
 [Agent Client Protocol](https://agentclientprotocol.com/) is a JSON-RPC 2.0 based protocol for controlling AI agents.
 
-**LLM-friendly docs:** [`docs/acp-llms.txt`](docs/acp-llms.txt) | [`docs/acp-llms-full.txt`](docs/acp-llms-full.txt)
-
 vers-agent implements ACP to provide:
 
 - **Session management** - Create, load, list, and persist sessions with SQLite storage
-- **Streaming notifications** - Real-time tool use, text deltas, thinking, and completion events via SSE
-- **Capability negotiation** - Clients declare what they support (filesystem, terminal, MCP)
-- **Multi-agent support** - Switch between different ACP-compatible agents (Claude Code, Codex, etc.)
-- **Permission handling** - Interactive approval for file writes, command execution, etc.
+- **Streaming notifications** - Real-time tool use, text deltas, thinking events via SSE
+- **Multi-agent support** - Switch between agents (Claude Code, Codex, etc.)
+- **Permission handling** - Interactive approval for file writes, command execution
 - **Plan mode** - Toggle between planning and execution modes
-
-## Architecture
-
-```mermaid
-flowchart TB
-    subgraph Client["CLI / External Client"]
-        A[Terminal UI]
-        B[HTTP Client]
-    end
-
-    subgraph Server["ACP Server :9999"]
-        C[JSON-RPC Handler]
-        D[Session Store]
-        E[SSE Stream]
-    end
-
-    subgraph Agent["Agent Subprocess"]
-        F[Claude Code]
-        G[Tool Execution]
-    end
-
-    A --> B
-    B -->|initialize| C
-    B -->|session/new| C
-    B -->|session/prompt| C
-    C --> D
-    C --> F
-    F --> G
-    G -->|events| E
-    E -->|SSE| B
-
-    style C fill:#c778ea,color:#000
-    style D fill:#98c379,color:#000
-    style F fill:#61afef,color:#000
-```
 
 ## Modes
 
 | Command | Description |
 |---------|-------------|
-| `./vers-agent` | Server + CLI (default) |
-| `./vers-agent --server` | HTTP server only |
-| `./vers-agent --cli` | CLI only, connects to localhost:9999 |
-| `./vers-agent --url http://host:9999` | CLI connecting to remote server |
-| `./vers-agent --local` | Local mode with debug logging |
+| ./vers-agent | Server + CLI (default) |
+| ./vers-agent --server | HTTP server only |
+| ./vers-agent --cli | CLI only |
+| ./vers-agent --url URL | Remote server |
+| ./vers-agent --local | Local debug mode |
+
+---
+
+## VERS VM Fleet System
+
+**VERS** (Virtual Environment Runtime System) is a multi-VM agent infrastructure with **GF(3) trit-based load balancing**.
+
+### Fleet Configuration
+
+Configure in fleet-config.json with triadic VMs:
+
+| VM | Name | Color | Trit | Role |
+|------|--------|---------|------|-------------|
+| alpha | crimson | #DC143C | -1 | Validator |
+| bravo | indigo | #4B0082 | 0 | Coordinator |
+| charlie | azure | #007FFF | +1 | Generator |
+
+**GF(3) Balance Property:** Sum of trits ≡ 0 (mod 3)
+
+### Triadic VM Roles
+
+| Trit | Role | Function |
+|------|------|----------|
+| -1 (MINUS) | Validator | Verification, validation, security |
+| 0 (ERGODIC) | Coordinator | Load balancing, orchestration |
+| +1 (PLUS) | Generator | Content creation, code generation |
+
+### Fleet Manager
+
+The fleet-manager.ts provides:
+- Docker container discovery via labels
+- Health monitoring with configurable intervals
+- Automatic failover when VMs become unhealthy
+- ngrok tunnel management for remote access
+
+### VM Provisioning
+
+VMs are provisioned with:
+- Base image from Chelsea (see below)
+- CPU/memory limits per role
+- WireGuard networking for secure inter-VM communication
+- Automatic registration with fleet coordinator
+
+---
+
+## Chelsea Image Creation Architecture
+
+VERS integrates with [Chelsea](https://github.com/hdresearch/chelsea) for Firecracker microVM orchestration.
+
+### Image Sources
+
+| Source | Description | Use Case |
+|--------|-------------|----------|
+| **Docker** | Pull from registry, merge onto Ubuntu base | Standard containers |
+| **S3** | Download complete rootfs tarball | Pre-built images |
+| **Upload** | Use locally uploaded tarball | Custom filesystems |
+
+**Docker Image Flow:**
+1. Download pre-configured Ubuntu 24.04 base squashfs
+2. Export Docker image layers to tarball
+3. Extract and merge onto base (preserving boot files)
+4. Configure with Chelsea network scripts and services
+
+### Image Creation Pipeline
+
+Pipeline stages:
+- **Pending** - Request queued
+- **Downloading** - Fetching source (Docker/S3/Upload)
+- **Extracting** - Unpacking tarball to rootfs
+- **Configuring** - Adding Chelsea scripts, systemd units
+- **CreatingRbd** - Creating Ceph RBD image + ext4 format
+- **CreatingSnapshot** - Protecting snapshot for cloning
+- **Completed** - Ready for VM creation
+
+### DeferAsync Pattern
+
+Chelsea uses DeferAsync for robust error handling:
+- Resources automatically cleaned up on failure
+- Cleanup skipped on success via defer.commit()
+- Each resource (network, volume, process) gets its own deferred cleanup
+
+### Key VmManager Operations
+
+| Operation | Description |
+|-----------|-------------|
+| create_new_vm() | Full VM creation: network + volume + process + boot wait |
+| create_vm_from_commit() | Restore from snapshot: download state, recreate VM |
+| commit_vm() | Pause, snapshot volume/process, upload to S3 |
+| pause_vm() / resume_vm() | Firecracker state transitions |
+| delete_vm() | Kill process, delete volume, release network |
+
+### Storage Architecture
+
+**Layers:**
+1. **Application** - VmManager, BaseImageBuilder, CommitStore
+2. **Ceph RBD** - image_create, snap_create, snap_protect, snap_clone
+3. **Block Device** - /dev/rbd{N} mapped devices, ext4 filesystem
+4. **Ceph Cluster** - Distributed object storage with replication
+
+### RBD Operations Flow
+
+**1. Base Image Creation:**
+
+    image_create(name, 512M) -> device_map -> mkfs.ext4 -> mount
+    -> cp rootfs/* -> umount -> device_unmap
+    -> snap_create(@chelsea_base_image) -> snap_protect
+
+**2. VM Volume Creation (Clone from Base):**
+
+    snap_clone(base@chelsea_base_image, vm_uuid)
+    -> resize(fs_size_mib) -> device_map -> mount for Firecracker
+
+**3. Commit (Snapshot + Upload):**
+
+    pause_vm -> snap_create(volume@commit_id)
+    -> upload_to_s3 -> snap_protect -> resume_vm (optional)
+
+### VERS to Chelsea Integration
+
+| VERS Component | Chelsea Integration |
+|----------------|---------------------|
+| fleet-manager.ts | Discovers VMs via Docker labels, monitors health |
+| multi-vm-manager.ts | Provisions VMs with GF(3) balanced distribution |
+| Fleet Config | Specifies base images, resource limits per trit role |
+
+**VM Creation Flow Example:**
+1. VERS requests VM creation via Chelsea API
+2. Chelsea clones base image snapshot
+3. Resizes volume to requested size
+4. Reserves network namespace + TAP device
+5. Spawns Firecracker with CPU/memory limits
+6. Waits for boot (ReadyService health check)
+7. Returns success, VERS assigns trit role
+
+### Filesystem Configuration
+
+The configure-image.sh script injects:
+- Network configuration scripts for VM networking
+- Systemd service units for Chelsea agent
+- Serial console configuration for Firecracker
+- SSH host key generation on first boot
+- Chelsea metadata endpoint integration
+
+---
 
 ## CLI Features
-
-### Terminal UI
-
-Built with [Ink](https://github.com/vadimdemedes/ink) (React for terminals):
-
-- **Top status bar** - Model, connection status, session ID, agent name
-- **Output area** - Windowed rendering with scroll support, tool collapsing
-- **Input bar** - Multiline input with command/path suggestions
-- **Permission dialog** - Interactive approval with keyboard navigation
 
 ### Keybindings
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Submit message |
-| `Shift+Enter` | Newline in multiline mode |
-| `Tab` | Autocomplete command or path |
-| `Up/Down` | Navigate suggestions or history |
-| `Ctrl+C` | Cancel running query / Clear input / Exit |
-| `ESC` | Cancel running query |
-| `Page Up/Down` | Scroll output |
-| `Ctrl+A/E` | Beginning/end of line |
-| `Ctrl+K/U` | Kill to end/beginning of line |
-| `Ctrl+W` | Kill word backward |
+| Enter | Submit message |
+| Shift+Enter | Newline |
+| Tab | Autocomplete |
+| Ctrl+C | Cancel/Exit |
+| Page Up/Down | Scroll output |
 
 ### Commands
 
-**Session Management:**
-- `/new`, `/n` - Start new conversation
-- `/continue`, `/c` - Continue last conversation
-- `/sessions`, `/s` - List sessions
-- `/session <id>` - Switch session (supports prefix matching)
+**Session:** /new, /sessions, /session ID
 
-**Configuration:**
-- `/model`, `/m` - Change model (sonnet/opus/haiku)
-- `/agent`, `/a` - List/select/check agent status
-- `/mcp` - Manage MCP servers (list/add/remove)
-- `/keys`, `/k` - Show/sync API keys
-- `/reload`, `/r` - Re-inject CLAUDE.md/AGENT.md
+**Config:** /model, /agent, /mcp, /keys
 
-**Other:**
-- `/help`, `/h` - Show available commands
-- `/clear` - Clear output
-- `/plan`, `/p` - Toggle plan mode
-- `/usage`, `/u` - Show token usage stats
-- `/docs`, `/d` - Show loaded project docs
-- `!<command>` - Execute bash command
+**Other:** /help, /clear, /plan, !cmd
 
-### Path Completion
+---
 
-Type `@` followed by a path to get file/directory suggestions:
-- `@src/` - Lists files in src directory
-- `@./` - Lists files in current directory
-- `@~/` - Lists files in home directory
-
-## ACP Methods
-
-### Core Protocol
+## ACP Protocol
 
 | Method | Description |
 |--------|-------------|
-| `initialize` | Negotiate capabilities, exchange client/agent info |
-| `authenticate` | Token-based auth (first client claims server) |
+| session/new | Create session |
+| session/prompt | Send message |
+| session/cancel | Cancel request |
+| fs/read_text_file | Read file |
+| fs/write_text_file | Write file |
+| terminal/create | Create subprocess |
+| terminal/kill | Kill process |
 
-### Session Management
+---
 
-| Method | Description |
-|--------|-------------|
-| `session/new` | Create a new conversation session |
-| `session/load` | Resume an existing session |
-| `session/list` | List all sessions |
-| `session/prompt` | Send a message, receive streaming response |
-| `session/cancel` | Cancel an in-progress request |
-| `session/set_mode` | Switch between default/plan modes |
-| `session/outputs` | Get session output history |
-| `session/sync` | Sync session state |
-
-### Agent Management
-
-| Method | Description |
-|--------|-------------|
-| `agent/list` | List available agents |
-| `agent/select` | Switch to a different agent |
-| `agent/status` | Get current agent status |
-
-### File System (Bidirectional)
-
-| Method | Description |
-|--------|-------------|
-| `fs/read_text_file` | Read file contents |
-| `fs/write_text_file` | Write file contents |
-| `fs/list_directory` | List directory contents |
-
-### Terminal
-
-| Method | Description |
-|--------|-------------|
-| `terminal/create` | Create a terminal subprocess |
-| `terminal/output` | Get terminal output |
-| `terminal/wait_for_exit` | Wait for terminal to exit |
-| `terminal/kill` | Kill terminal subprocess |
-
-### Permissions
-
-| Method | Description |
-|--------|-------------|
-| `session/request_permission` | Request user permission for an action |
-| `permission/respond` | Respond to a permission request |
-| `permission/cancel` | Cancel a permission request |
-
-## Streaming Notifications
-
-Events sent via SSE (`GET /events`):
+## Streaming Events (SSE)
 
 | Event | Description |
 |-------|-------------|
-| `content_chunk` | Streaming text with `final` flag |
-| `tool_call` | Tool execution started |
-| `tool_result` | Tool execution completed |
-| `thinking` | Agent reasoning/planning |
-| `permission_request` | Permission needed from user |
-| `available_commands` | Agent command updates |
-| `mode_update` | Session mode changed |
-| `cost_update` | Token/cost metrics |
-| `completed` | Task completed |
-| `failed` | Task failed |
-| `cancelled` | Task cancelled |
+| content_chunk | Streaming text |
+| tool_call | Tool started |
+| tool_result | Tool completed |
+| thinking | Agent reasoning |
+| completed | Task done |
+| failed | Task failed |
 
-## Agent System
-
-### Agent Registry
-
-Agents are discovered from JSON files in `src/data/agents/`:
-
-```json
-{
-  "identity": "claude.com",
-  "name": "Claude Code",
-  "shortName": "claude",
-  "protocol": "acp",
-  "type": "coding",
-  "runCommand": { "*": "claude-code-acp" }
-}
-```
-
-### Subprocess Management
-
-- Agents run as subprocesses communicating via JSON-RPC over stdin/stdout
-- Activity-based timeouts (resets on any message, allowing long tasks)
-- Automatic agent installation if not present
-
-### Permission Flow
-
-1. Agent requests permission via `session/request_permission`
-2. CLI displays interactive permission dialog
-3. User selects: allow_once, allow_always, reject_once, reject_always
-4. Response sent back to agent
+---
 
 ## Development
 
-```bash
-bun install         # Install dependencies
-bun run dev         # Run with hot reload
-bun run typecheck   # Type check
-bun test            # Run all tests
-bun run build       # Compile to ./vers-agent
-```
-
-## Testing
-
-### Unit Tests
-
-```bash
-bun test                              # Run all 456 tests
-bun test tests/core/tasks.test.ts    # Run specific file
-```
-
-**Coverage areas:**
-- Protocol: JSON-RPC 2.0 validation, request tracking, error codes
-- Core: Task management, state transitions, event handling
-- CLI: Input handling, command matching, path expansion
-- Agents: ACP client/server, subprocess management, registry
-- Utils: Config persistence, session storage, authentication
-
-### Integration Tests
-
-```bash
-./vers-agent --server &   # Start server
-bun test tests/integration/  # Run integration tests
-```
-
-Tests session persistence, resume behavior, output sync, and multi-agent scenarios.
-
-### VT Sequence Tests
-
-Interactive terminal parsing tests:
-
-```bash
-bun scripts/vt-spam.ts       # 146+ VT sequences (SGR, CSI, OSC, ESC, DCS)
-bun scripts/vt-fuzz.ts       # Random/malformed sequence fuzzer
-bun scripts/vt-live-parse.ts # Parser state machine visualization
-bun scripts/vt-pty-test.ts   # PTY-based testing
-```
+    bun install         # Install dependencies
+    bun run dev         # Run with hot reload
+    bun test            # Run tests
+    bun run build       # Compile to ./vers-agent
 
 ## Project Structure
 
-```
-src/
-├── protocol/           # ACP type definitions
-│   ├── acp-types.ts    # Session, capabilities, methods (50+ types)
-│   └── jsonrpc.ts      # JSON-RPC 2.0 message types
-├── server/             # ACP HTTP server (Bun.serve)
-│   ├── http-server.ts  # Main server and RPC router
-│   ├── sse-manager.ts  # SSE client management
-│   └── handlers/       # RPC method handlers
-│       ├── queue.ts    # Queue management
-│       ├── filesystem.ts # File system operations
-│       ├── permission.ts # Permission handling
-│       ├── bash.ts     # Bash execution
-│       └── agent.ts    # Agent management
-├── agents/             # Agent implementations
-│   ├── agent-runner.ts # Subprocess agent orchestration
-│   ├── acp-client.ts   # ACP client for subprocess communication
-│   ├── acp-server.ts   # ACP server for handling agent requests
-│   ├── subprocess-manager.ts # Process lifecycle and I/O
-│   ├── event-mapper.ts # ACP event to PromptEvent mapping
-│   ├── content-builder.ts # Content block construction
-│   ├── registry.ts     # Agent registry and discovery
-│   └── configs/        # Agent-specific configurations
-├── client/             # HTTP client for ACP
-│   └── http-client.ts  # ACP HTTP client with SSE support
-├── cli/                # Terminal UI (Ink/React)
-│   ├── app.tsx         # Main app component
-│   ├── cli.tsx         # Entry point
-│   ├── components/     # UI components
-│   │   ├── input-bar.tsx
-│   │   ├── output-area.tsx
-│   │   ├── permission-dialog.tsx
-│   │   └── ...
-│   ├── handlers/       # Command handlers
-│   └── hooks/          # React hooks (useAcpClient, etc.)
-├── core/               # Agent orchestration
-│   └── agent-manager.ts # High-level agent control
-└── utils/              # Shared utilities
-    ├── config.ts       # Application configuration
-    ├── session-store.ts # SQLite session persistence
-    ├── log-stream.ts   # Rotating file logger
-    └── string-utils.ts # String helpers
-```
+    src/
+    ├── protocol/       # ACP type definitions
+    ├── server/         # HTTP server (Bun.serve)
+    ├── agents/         # Agent implementations
+    ├── fleet/          # Multi-VM fleet management
+    │   ├── fleet-manager.ts    # Health monitoring
+    │   └── multi-vm-manager.ts # GF(3) balancing
+    ├── cli/            # Terminal UI (Ink/React)
+    ├── core/           # Agent orchestration
+    └── utils/          # Shared utilities
+
+---
 
 ## HTTP Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/rpc` | POST | JSON-RPC request handler |
-| `/events` | GET | SSE notification stream |
-| `/health` | GET | Server health check |
-| `/metrics` | GET | Prometheus metrics |
-| `/commands` | GET | Available agent commands |
-| `/claim` | POST | Server claiming |
-| `/logs` | GET | Log streaming with level filter |
+| /rpc | POST | JSON-RPC handler |
+| /events | GET | SSE stream |
+| /health | GET | Health check |
+| /metrics | GET | Prometheus metrics |
 
 ## Environment
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | - | API key for Claude |
-| `PORT` | No | 9999 | Server port |
-| `VERS_DEBUG` | No | false | Enable debug logging to console |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| ANTHROPIC_API_KEY | Yes | Claude API key |
+| PORT | No | Server port (default: 9999) |
+| VERS_DEBUG | No | Enable debug logging |
+| NGROK_AUTHTOKEN | No | ngrok auth for VM tunnels |
 
 ## Data Storage
 
-All data stored in `~/.vers-agent/`:
+All data stored in ~/.vers-agent/:
 
-| File | Purpose |
-|------|---------|
-| `sessions.db` | SQLite database for sessions and outputs |
-| `tokens.json` | Authentication tokens |
-| `config.json` | User configuration |
-| `logs/vers-agent.log` | Rotating log files (5MB, 5 backups) |
-
-## Auth Model
-
-First client to connect claims the server and receives a token. Subsequent clients must provide this token.
-
-```bash
-# View stored tokens
-cat ~/.vers-agent/tokens.json
-
-# Reset server claim (requires server restart)
-rm ~/.vers-agent/tokens.json
-```
+- sessions.db - SQLite database
+- tokens.json - Authentication tokens
+- config.json - User configuration
+- logs/ - Rotating log files
 
 ## License
 

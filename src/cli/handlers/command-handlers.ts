@@ -10,6 +10,7 @@ import { createHistory, saveHistory, type ConversationHistory } from "../../util
 import { isAgentCommand } from "../utils/command-matching";
 import { getSessionUsage, formatTokens as formatTokensUsage } from "../../utils/claude-usage";
 import { fleetManager } from "../../fleet";
+import { getMultiVmManager } from "../../fleet/multi-vm-manager";
 
 export interface CommandHandlerContext {
   client: HttpAcpClient | null;
@@ -122,6 +123,15 @@ export function handleSlashCommand(
     case "usage":
     case "u":
       handleUsage(ctx);
+      return { handled: true };
+
+    case "fleet":
+    case "f":
+      handleFleet(parts, ctx);
+      return { handled: true };
+
+    case "vm":
+      handleVm(parts, ctx);
       return { handled: true };
 
     case "token":
@@ -1021,5 +1031,193 @@ async function handleFleet(parts: string[], ctx: CommandHandlerContext): Promise
   ctx.addOutput({ type: "system", content: "  refresh, r       - Refresh VM discovery and health" });
   ctx.addOutput({ type: "system", content: "  connect, c <id>  - Connect to a specific VM" });
   ctx.addOutput({ type: "system", content: "  health, h [id]   - Check health of VMs" });
+  ctx.addOutput({ type: "system", content: "" });
+}
+
+/**
+ * Handle /vm command for multi-VM interactions with Gay.jl color coding
+ */
+async function handleVm(parts: string[], ctx: CommandHandlerContext) {
+  const multiVm = getMultiVmManager();
+  const subCmd = parts[1]?.toLowerCase();
+
+  if (!subCmd || subCmd === "status" || subCmd === "list") {
+    // Show current VM and available VMs with colors
+    const current = multiVm.getCurrentVm();
+    const vms = multiVm.getVms();
+    
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "🌈 Multi-VM Fleet (Gay.jl Color Coding)" });
+    ctx.addOutput({ type: "system", content: "═".repeat(50) });
+    
+    if (current) {
+      ctx.addOutput({ 
+        type: "system", 
+        content: `Current: ${multiVm.formatColoredName(current)} (trit: ${current.trit})` 
+      });
+    }
+    
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "Available VMs:" });
+    
+    for (const vm of vms) {
+      const isCurrent = current?.id === vm.id;
+      const marker = isCurrent ? "→" : " ";
+      const status = vm.status ? `[${vm.status}]` : "[unknown]";
+      const info = `${marker} ${multiVm.formatColoredName(vm)} (${vm.id}) ${status} - trit:${vm.trit} - ${vm.url}`;
+      ctx.addOutput({ type: "system", content: info });
+    }
+    
+    ctx.addOutput({ type: "system", content: "" });
+    const stats = multiVm.getFleetStatus();
+    ctx.addOutput({ 
+      type: "system", 
+      content: `Fleet: ${stats.online}/${stats.total} online | RAM: ${stats.totalRam}MiB | CPU: ${stats.totalCpu} vCPU` 
+    });
+    ctx.addOutput({ type: "system", content: "" });
+    return;
+  }
+
+  if (subCmd === "switch" || subCmd === "next") {
+    // Switch to next VM
+    const nextVm = multiVm.switchToNextVm();
+    if (nextVm) {
+      ctx.addOutput({ 
+        type: "system", 
+        content: `Switched to ${multiVm.formatColoredName(nextVm)} (${nextVm.id})` 
+      });
+      ctx.addOutput({ type: "system", content: `URL: ${nextVm.url}` });
+      ctx.addOutput({ type: "system", content: `Trit: ${nextVm.trit} | Color: ${nextVm.color}` });
+      
+      // Reconnect to new VM
+      if (nextVm.url !== ctx.currentServerUrl) {
+        ctx.reconnect(nextVm.url);
+      }
+    } else {
+      ctx.addOutput({ type: "error", content: "No VMs available" });
+    }
+    return;
+  }
+
+  if (subCmd === "select") {
+    // Switch to specific VM by ID
+    const vmId = parts[2];
+    if (!vmId) {
+      ctx.addOutput({ type: "error", content: "Usage: /vm select <id>" });
+      return;
+    }
+    
+    const vm = multiVm.switchToVm(vmId);
+    if (vm) {
+      ctx.addOutput({ 
+        type: "system", 
+        content: `Switched to ${multiVm.formatColoredName(vm)} (${vm.id})` 
+      });
+      ctx.addOutput({ type: "system", content: `URL: ${vm.url}` });
+      
+      // Reconnect to new VM
+      if (vm.url !== ctx.currentServerUrl) {
+        ctx.reconnect(vm.url);
+      }
+    } else {
+      ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+    }
+    return;
+  }
+
+  if (subCmd === "health" || subCmd === "check") {
+    // Check health of all VMs
+    ctx.addOutput({ type: "system", content: "Checking VM health..." });
+    const healthMap = await multiVm.checkHealth();
+    
+    ctx.addOutput({ type: "system", content: "" });
+    for (const [id, vm] of healthMap) {
+      const statusIcon = vm.status === "online" ? "✓" : "✗";
+      const latency = vm.responseTime ? `${vm.responseTime}ms` : "N/A";
+      ctx.addOutput({ 
+        type: "system", 
+        content: `${statusIcon} ${multiVm.formatColoredName(vm)} - ${vm.status} (${latency})` 
+      });
+    }
+    ctx.addOutput({ type: "system", content: "" });
+    return;
+  }
+
+  if (subCmd === "info") {
+    // Show detailed info about a VM
+    const vmId = parts[2];
+    if (!vmId) {
+      ctx.addOutput({ type: "error", content: "Usage: /vm info <id>" });
+      return;
+    }
+    
+    const vm = multiVm.getVm(vmId);
+    if (!vm) {
+      ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
+      return;
+    }
+    
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: `VM: ${multiVm.formatColoredName(vm)} (${vm.id})` });
+    ctx.addOutput({ type: "system", content: "─".repeat(50) });
+    ctx.addOutput({ type: "system", content: `URL:       ${vm.url}` });
+    ctx.addOutput({ type: "system", content: `Container: ${vm.container}` });
+    ctx.addOutput({ type: "system", content: `Status:    ${vm.status || "unknown"}` });
+    ctx.addOutput({ type: "system", content: `Trit:      ${vm.trit} (GF(3) field)` });
+    ctx.addOutput({ type: "system", content: `Color:     ${vm.color}` });
+    ctx.addOutput({ type: "system", content: `RAM:       ${vm.ram} MiB` });
+    ctx.addOutput({ type: "system", content: `CPU:       ${vm.vcpu} vCPU` });
+    
+    if (vm.lastCheck) {
+      const ago = Math.floor((Date.now() - vm.lastCheck) / 1000);
+      ctx.addOutput({ type: "system", content: `Last check: ${ago}s ago` });
+    }
+    if (vm.responseTime) {
+      ctx.addOutput({ type: "system", content: `Latency:   ${vm.responseTime}ms` });
+    }
+    
+    const session = multiVm.getSession(vm.id);
+    ctx.addOutput({ type: "system", content: `Messages:  ${session.messageCount}` });
+    ctx.addOutput({ type: "system", content: "" });
+    return;
+  }
+
+  if (subCmd === "sessions") {
+    // Show session statistics
+    const sessions = multiVm.getSessionStats();
+    ctx.addOutput({ type: "system", content: "" });
+    ctx.addOutput({ type: "system", content: "VM Sessions:" });
+    ctx.addOutput({ type: "system", content: "─".repeat(50) });
+    
+    for (const [vmId, session] of sessions) {
+      const vm = multiVm.getVm(vmId);
+      if (!vm) continue;
+      
+      const ago = Math.floor((Date.now() - session.lastUsed) / 1000);
+      ctx.addOutput({ 
+        type: "system", 
+        content: `${multiVm.formatColoredName(vm)}: ${session.messageCount} msgs, ${ago}s ago` 
+      });
+    }
+    ctx.addOutput({ type: "system", content: "" });
+    return;
+  }
+
+  // Help
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "Usage: /vm <command>" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "Commands:" });
+  ctx.addOutput({ type: "system", content: "  status, list     - Show VMs with Gay.jl colors (default)" });
+  ctx.addOutput({ type: "system", content: "  switch, next     - Switch to next VM (round-robin)" });
+  ctx.addOutput({ type: "system", content: "  select <id>      - Switch to specific VM" });
+  ctx.addOutput({ type: "system", content: "  health, check    - Check health of all VMs" });
+  ctx.addOutput({ type: "system", content: "  info <id>        - Show detailed VM info" });
+  ctx.addOutput({ type: "system", content: "  sessions         - Show session statistics" });
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "GF(3) Trit Assignments:" });
+  ctx.addOutput({ type: "system", content: "  -1 (MINUS)   - Verification/Analysis" });
+  ctx.addOutput({ type: "system", content: "   0 (ERGODIC) - Coordination/Balance" });
+  ctx.addOutput({ type: "system", content: "  +1 (PLUS)    - Generation/Synthesis" });
   ctx.addOutput({ type: "system", content: "" });
 }

@@ -46,88 +46,155 @@ docker-up:
 docker-down:
     docker compose down
 
-# ── Lean VM Deployment ────────────────────────────────────────────────────────
-# Build lean Docker image (~165MB vs ~800MB+ standard image)
-docker-build-lean:
+# ── Chelsea Fleet (flox containerize) ─────────────────────────────────────────
+
+# Build chelsea-compatible image via flox containerize (no custom Dockerfile)
+chelsea image="vers-agent:chelsea":
+    ./scripts/build-chelsea-image.sh {{image}}
+
+# ── Security Image (Trail of Bits skills) ─────────────────────────────────────
+
+# Build security image with Trail of Bits tooling
+security image="vers-agent:security":
+    docker build -f Dockerfile.security -t {{image}} .
+
+# Push security image to registry
+security-push image="vers-agent:security" registry="ghcr.io/bmorphism":
+    #!/usr/bin/env bash
+    set -e
+    REMOTE_TAG="{{registry}}/{{image}}"
+    echo "Tagging and pushing: $REMOTE_TAG"
+    docker tag {{image}} "$REMOTE_TAG"
+    docker push "$REMOTE_TAG"
+    echo "✓ Pushed: $REMOTE_TAG"
+
+# Build AND push security image (one command)
+security-ship image="vers-agent:security" registry="ghcr.io/bmorphism":
+    #!/usr/bin/env bash
+    set -e
+    echo "━━━ Building security image with Trail of Bits stack ━━━"
+    just security {{image}}
+    echo ""
+    echo "━━━ Pushing to registry ━━━"
+    just security-push {{image}} {{registry}}
+    echo ""
+    echo "✓ Security image shipped: {{registry}}/{{image}}"
+
+# Run chelsea image locally
+chelsea-run image="vers-agent:chelsea":
+    docker run --rm -it -p 9999:9999 \
+      -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+      -e VERS_VM_ID=local -e VERS_VM_NAME=local -e VERS_VM_TRIT=0 \
+      {{image}}
+
+# Deploy fleet (3 VMs with GF(3) trit balancing)
+chelsea-fleet:
+    docker compose -f docker-compose.fleet.yml up -d
+
+chelsea-fleet-down:
+    docker compose -f docker-compose.fleet.yml down -v
+
+# Push chelsea image to ghcr.io
+chelsea-push image="vers-agent:chelsea" registry="ghcr.io/bmorphism":
+    #!/usr/bin/env bash
+    set -e
+    REMOTE_TAG="{{registry}}/{{image}}"
+    echo "Tagging and pushing: $REMOTE_TAG"
+    docker tag {{image}} "$REMOTE_TAG"
+    docker push "$REMOTE_TAG"
+    echo "✓ Pushed: $REMOTE_TAG"
+
+# Build AND push chelsea image (one command)
+chelsea-ship image="vers-agent:chelsea" registry="ghcr.io/bmorphism":
+    #!/usr/bin/env bash
+    set -e
+    echo "━━━ Building chelsea image ━━━"
+    just chelsea {{image}}
+    echo ""
+    echo "━━━ Pushing to registry ━━━"
+    just chelsea-push {{image}} {{registry}}
+    echo ""
+    echo "✓ Image shipped: {{registry}}/{{image}}"
+
+# ── Remote VMs ────────────────────────────────────────────────────────────────
+
+# Build lean image (~165MB)
+vers-vm-lean:
     docker build -f Dockerfile.lean -t vers-agent:lean .
 
-# Provision a new VM with ngrok tunnel (reads ~/.topos/.env)
-provision-vm name="vers-acp" domain="":
+# Provision VM with ngrok tunnel
+vers-vm name="vers-acp" domain="":
     ./scripts/provision-vers-vm.sh {{name}} {{domain}}
 
-# Quick: build lean image and provision VM
-deploy-lean name="vers-acp":
-    just docker-build-lean
-    just provision-vm {{name}}
+# Deploy = lean build + provision
+vers-vm-deploy name="vers-acp": vers-vm-lean
+    just vers-vm {{name}}
+
+# VM management: just vers-vm-ctl <name> <url|logs|shell|stop|rm>
+vers-vm-ctl name cmd:
+    #!/usr/bin/env bash
+    case "{{cmd}}" in
+      url)   docker exec {{name}} sh -c "curl -s localhost:4040/api/tunnels | grep -o 'https://[^\"]*ngrok[^\"]*' | head -1" ;;
+      logs)  docker logs -f {{name}} ;;
+      shell) docker exec -it {{name}} sh ;;
+      stop)  docker stop {{name}} ;;
+      rm)    docker rm -f {{name}}; docker volume rm "vers-agent-data-{{name}}" 2>/dev/null || true ;;
+      *)     echo "Unknown: {{cmd}}. Use: url|logs|shell|stop|rm" ;;
+    esac
 
 # List running vers VMs
-vm-list:
-    @docker ps --filter "name=vers-" --format "table {{{{.Names}}\t{{{{.Status}}\t{{{{.Ports}}}}"
+vers-vms:
+    @docker ps --filter "name=vers" --format "table {{{{.Names}}\t{{{{.Status}}\t{{{{.Ports}}}}"
 
-# Get ngrok URL for a running VM
-vm-url name:
-    @docker exec {{name}} sh -c "curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o 'https://[^\"]*ngrok[^\"]*' | head -1" || echo "No tunnel found"
+# Smart ngrok: check fleet ports, VM tunnels, or start local
+ngrok port="9999":
+    #!/usr/bin/env bash
+    # Check fleet ngrok containers (host ports 4041-4043)
+    for p in 4041 4042 4043; do
+      URL=$(curl -s localhost:$p/api/tunnels 2>/dev/null | grep -o 'https://[^"]*' | head -1)
+      [ -n "$URL" ] && echo "✓ :$p → $URL" && FOUND=1
+    done
+    [ -n "$FOUND" ] && exit 0
+    # Check lean VM internal tunnel
+    VM=$(docker ps --filter "name=vers" --format "{{{{.Names}}" | head -1)
+    if [ -n "$VM" ]; then
+      URL=$(docker exec "$VM" curl -s localhost:4040/api/tunnels 2>/dev/null | grep -o 'https://[^"]*' | head -1)
+      [ -n "$URL" ] && echo "✓ $VM: $URL" && exit 0
+    fi
+    bun src/tunnel/index.ts {{port}}
 
-# View VM logs
-vm-logs name:
-    docker logs -f {{name}}
+# ngrok MCP edge management (for remote VMs)
+ngrok-edge cmd id_or_domain="":
+    #!/usr/bin/env bash
+    case "{{cmd}}" in
+      create) bun src/tunnel/mcp-integration.ts create "{{id_or_domain}}" ;;
+      get)    bun src/tunnel/mcp-integration.ts get "{{id_or_domain}}" ;;
+      delete) bun src/tunnel/mcp-integration.ts delete "{{id_or_domain}}" ;;
+      *)      echo "Usage: just ngrok-edge <create|get|delete> <domain|id>" ;;
+    esac
 
-# Stop a VM
-vm-stop name:
-    docker stop {{name}}
-
-# Remove a VM and its data volume
-vm-remove name:
-    @docker rm -f {{name}} || true
-    @docker volume rm "vers-agent-data-{{name}}" || true
-    @echo "Removed {{name}} and its data volume"
-
-# Connect to a VM's shell
-vm-shell name:
-    docker exec -it {{name}} sh
-
-# ── ngrok MCP Integration ────────────────────────────────────────────────────
-# Create an HTTPS edge via MCP (requires NGROK_API_KEY in ~/.topos/.env)
-ngrok-mcp-create domain:
-    bun src/tunnel/mcp-integration.ts create {{domain}}
-
-# Get HTTPS edge details via MCP
-ngrok-mcp-get id:
-    bun src/tunnel/mcp-integration.ts get {{id}}
-
-# Delete an HTTPS edge via MCP
-ngrok-mcp-delete id:
-    bun src/tunnel/mcp-integration.ts delete {{id}}
-
-# ── Fleet Control ─────────────────────────────────────────────────────────────
-# List all VMs in control plane
-fleet-list:
-    bun src/control/vm-registry.ts list
-
-# Show fleet status summary
-fleet-status:
-    bun src/control/vm-registry.ts status
-
-# Deploy a VM (requires NGROK_API_KEY)
-fleet-deploy id domain:
-    @echo "Deploying VM: {{id}} at {{domain}}"
-    @echo "This will:"
-    @echo "  1. Create ngrok edge via MCP"
-    @echo "  2. Start Docker container"
-    @echo "  3. Register in control plane"
-    @echo ""
-    @echo "Not yet fully implemented - see docs/CONTROL-PLANE.md"
-    @echo "Use: just provision-vm {{id}} {{domain}}"
-
-# Send prompt to remote VM
-fleet-prompt id prompt:
-    @echo "Sending prompt to {{id}}: {{prompt}}"
-    @echo "Not yet implemented - see docs/CONTROL-PLANE.md"
-
-# Destroy a VM
-fleet-destroy id:
-    @echo "Destroying VM: {{id}}"
-    @echo "Not yet implemented - see docs/CONTROL-PLANE.md"
+# Attach ngrok tunnel to existing running VM (reads ~/.topos/.env)
+tunnel-attach name:
+    #!/usr/bin/env bash
+    set -e
+    if ! docker ps --format '{{{{.Names}}' | grep -q "^{{name}}$"; then
+        echo "Error: Container {{name}} not found"
+        just vers-vms
+        exit 1
+    fi
+    if [[ ! -f "$HOME/.topos/.env" ]]; then
+        echo "Error: ~/.topos/.env not found. Add NGROK_AUTHTOKEN=xxx"
+        exit 1
+    fi
+    TOKEN=$(grep -E '^NGROK_AUTHTOKEN=' "$HOME/.topos/.env" | cut -d= -f2 | tr -d '"' | tr -d "'")
+    if [[ -z "$TOKEN" ]]; then
+        echo "Error: NGROK_AUTHTOKEN not in ~/.topos/.env"
+        exit 1
+    fi
+    echo "Attaching ngrok to {{name}}..."
+    docker exec -d {{name}} sh -c "NGROK_AUTHTOKEN=$TOKEN ngrok http 9999 --traffic-policy-file /app/src/tunnel/policy.yml --log stdout"
+    sleep 3
+    just vers {{name}} url
 
 # ── Docker Testing ────────────────────────────────────────────────────────────
 docker-test:
