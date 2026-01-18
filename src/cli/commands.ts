@@ -67,6 +67,7 @@ export const SUBCOMMANDS = [
   "no-yolo",
   "vms",
   "vm",
+  "exec",
   "agents",
   "skills",
   "queue",
@@ -283,9 +284,9 @@ ${blue("Commands:")}
   ${green("vm create")} [task]     Create a new VM
   ${green("vm run")} <prompt>      Run prompt on all VMs
   ${green("vm watch")} [vmIds]     Watch VM event stream
-  ${green("vm exec")} <id> <cmd>   Execute command on VM
   ${green("vm sync")} <id>         Sync local git to VM
   ${green("vm eval")} <id>         Evaluate VM (build/test/lint)
+  ${green("exec")} <id> <cmd>      Execute command on VM (shortcut)
 
   ${green("agents")}               List available agents
   ${green("skills")}               List skills
@@ -298,6 +299,7 @@ ${blue("Options:")}
   --url <url>           Connect to remote server
   --server              Run ACP server only
   --cli                 Run interactive CLI only
+  --mcp                 Run as MCP server (for Claude integration)
   --new, -n             Start fresh session
   --help, -h            Show this help
 
@@ -965,6 +967,30 @@ async function queueCommand(ctx: CommandContext): Promise<number> {
   }
 }
 
+async function execCommand(ctx: CommandContext): Promise<number> {
+  const vmId = ctx.args[1];
+  const cmd = ctx.args.slice(2).join(" ");
+  if (!vmId || !cmd) {
+    console.error(red("Usage: vers exec <vmId> <command>"));
+    return 1;
+  }
+  try {
+    const result = await ctx.client.rpcCall("vm/execute", { vmId, command: cmd });
+    // If result has stdout/stderr, print them directly
+    const res = result as { stdout?: string; stderr?: string; exitCode?: number };
+    if (res.stdout) {
+      process.stdout.write(res.stdout);
+    }
+    if (res.stderr) {
+      process.stderr.write(res.stderr);
+    }
+    return res.exitCode ?? 0;
+  } catch (err) {
+    console.error(red(`Error: ${err}`));
+    return 1;
+  }
+}
+
 // ============================================================
 // Main Command Router
 // ============================================================
@@ -1018,6 +1044,8 @@ export async function executeCommand(args: string[]): Promise<number> {
       return vmsCommand(ctx);
     case "vm":
       return vmCommand(ctx);
+    case "exec":
+      return execCommand(ctx);
     case "agents":
       return agentsCommand(ctx);
     case "skills":

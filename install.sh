@@ -1,44 +1,98 @@
 #!/bin/bash
-# Install vers-agent globally
+# Install vers globally from GitHub releases
 
 set -e
 
-# Check for Bun
-if ! command -v bun &> /dev/null; then
-    echo "Error: Bun is required but not installed."
-    echo "Install Bun: curl -fsSL https://bun.sh/install | bash"
-    exit 1
-fi
+REPO="hdresearch/agent"
+RELEASE_TAG="nightly"
+INSTALL_DIR="${HOME}/.local/bin"
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Detect OS and architecture
+detect_platform() {
+    local os arch
 
-echo "Installing vers-agent..."
+    case "$(uname -s)" in
+        Darwin) os="darwin" ;;
+        Linux) os="linux" ;;
+        MINGW*|MSYS*|CYGWIN*) os="windows" ;;
+        *) echo "Unsupported OS: $(uname -s)"; exit 1 ;;
+    esac
 
-# Install dependencies
-cd "$SCRIPT_DIR"
-bun install
+    case "$(uname -m)" in
+        x86_64|amd64) arch="x64" ;;
+        arm64|aarch64) arch="arm64" ;;
+        *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;;
+    esac
 
-# Build the bundle
-bun run build:bundle
+    # Windows only has x64 build
+    if [ "$os" = "windows" ]; then
+        echo "vers-agent-windows-x64.exe"
+    else
+        echo "vers-agent-${os}-${arch}"
+    fi
+}
 
-# Create symlink in bun's bin directory
-BUN_BIN="${HOME}/.bun/bin"
-mkdir -p "$BUN_BIN"
+# Get download URL for the asset
+get_download_url() {
+    local asset_name="$1"
+    echo "https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${asset_name}"
+}
 
-# Remove old symlink if exists
-rm -f "$BUN_BIN/vers"
+main() {
+    echo "Installing vers..."
 
-# Create new symlink
-ln -s "$SCRIPT_DIR/bin/vers.js" "$BUN_BIN/vers"
+    # Detect platform
+    local asset_name
+    asset_name=$(detect_platform)
+    echo "Detected platform: ${asset_name}"
 
-echo ""
-echo "Installed! You can now run 'vers' from anywhere."
-echo ""
-echo "Make sure ~/.bun/bin is in your PATH:"
-echo '  export PATH="$HOME/.bun/bin:$PATH"'
-echo ""
-echo "Quick start:"
-echo "  vers              # Start server + CLI"
-echo "  vers --server     # Server only (daemon mode)"
-echo "  vers --help       # Show all options"
+    # Create install directory
+    mkdir -p "$INSTALL_DIR"
+
+    # Download binary
+    local download_url binary_path
+    download_url=$(get_download_url "$asset_name")
+
+    if [ "$(uname -s)" = "MINGW"* ] || [ "$(uname -s)" = "MSYS"* ]; then
+        binary_path="${INSTALL_DIR}/vers.exe"
+    else
+        binary_path="${INSTALL_DIR}/vers"
+    fi
+
+    echo "Downloading from: ${download_url}"
+
+    if command -v curl &> /dev/null; then
+        curl -fsSL -o "$binary_path" "$download_url"
+    elif command -v wget &> /dev/null; then
+        wget -q -O "$binary_path" "$download_url"
+    else
+        echo "Error: curl or wget required"
+        exit 1
+    fi
+
+    # Make executable
+    chmod +x "$binary_path"
+
+    echo ""
+    echo "Installed vers to: ${binary_path}"
+    echo ""
+
+    # Check if install dir is in PATH
+    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+        echo "Add to your shell profile:"
+        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo ""
+    fi
+
+    # Install bundled skills
+    echo "Installing skills..."
+    "$binary_path" --install-skills
+
+    echo ""
+    echo "Quick start:"
+    echo "  vers              # Start HTTP server"
+    echo "  vers --help       # Show all options"
+    echo ""
+}
+
+main "$@"

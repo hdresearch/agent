@@ -5,6 +5,7 @@ import { loadDocsStore } from "./src/utils/docs-store";
 import { authStore } from "./src/utils/auth-store";
 import { initializeAgent } from "./src/core/agent-manager";
 import { executeCommand, isSubcommand } from "./src/cli/commands";
+import { startMcpServer } from "./src/mcp/server";
 
 // Import embedded skills to ensure they're bundled
 import { embeddedSkills } from "./src/skills/embedded";
@@ -136,8 +137,10 @@ if (firstArg && !firstArg.startsWith("-") && isSubcommand(firstArg)) {
 function runFlagMode() {
   const showHelp = args.includes("--help") || args.includes("-h");
   const installSkills = args.includes("--install-skills");
+  const mcpMode = args.includes("--mcp");
   const cliOnly = args.includes("--cli");
-  const serverOnly = args.includes("--server");
+  // Default to server-only mode (no interactive CLI)
+  const serverOnly = !cliOnly;
   const forceNewSession = args.includes("--new") || args.includes("-n");
   const continueSession = !forceNewSession; // Continue is now the default
   const forceLocal = args.includes("--local");
@@ -179,6 +182,15 @@ function runFlagMode() {
     return;
   }
 
+  // MCP server mode - expose CLI commands as MCP tools
+  if (mcpMode) {
+    startMcpServer().catch((err) => {
+      console.error("MCP server error:", err);
+      process.exit(1);
+    });
+    return;
+  }
+
   if (showHelp) {
     console.log(`vers-agent - ACP-compliant agent harness with CLI
 
@@ -191,18 +203,19 @@ Commands:
   watch             Watch SSE event stream
   health            Check server health
   vms               List VMs
-  vm <subcommand>   VM operations (create, run, watch, exec, sync, eval)
+  vm <subcommand>   VM operations (create, run, watch, sync, eval)
+  exec <id> <cmd>   Execute command on VM
   config            Show/set configuration
   help              Show detailed command help
 
 Options:
-  --cli             Run interactive CLI only (connects to HTTP server)
-  --server          Run ACP server only (HTTP, no CLI)
+  --cli             Run interactive CLI (connects to HTTP server)
+  --mcp             Run as MCP server (stdio transport for Claude integration)
   --url <url>       Connect CLI to remote server (e.g., --url http://192.168.1.100:9999)
   --local           Force local mode (clears saved remote server)
   --new, -n         Start a fresh session (default: continue last session)
   --install-skills  Install bundled skills to ~/.claude/skills/
-  (default)         Run both HTTP server and CLI, continuing the last session if one exists
+  (default)         Run HTTP server only (no interactive CLI)
 
 Environment:
   PORT              HTTP server port (default: 9999)
@@ -215,12 +228,12 @@ Protocol:
   - GET /events     SSE stream for notifications
 
 Examples:
-  vers-agent                        # Continue last session (or start new if none)
-  vers-agent --new                  # Force a fresh session
-  vers-agent --server               # HTTP ACP server only
+  vers-agent                        # Start HTTP server (default)
+  vers-agent --cli                  # Start interactive CLI
   vers-agent run "fix the bug"      # Send prompt and stream response
   vers-agent vms                    # List VMs
   vers-agent vm create "task"       # Create a new VM
+  vers-agent exec <vmId> "ls -la"   # Execute command on VM
   vers-agent --url http://vm:9999   # Connect to remote ACP server
 `);
     process.exit(0);

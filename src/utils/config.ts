@@ -41,6 +41,7 @@ export interface AgentConfig {
   autoApprovePermissions: boolean; // Auto-approve all permission requests (yolo mode)
   versApiKey: string | null;     // VERS API key for auth and SDK calls
   cwd: string | null;            // Working directory (null = use process.cwd() at startup)
+  llmGatewayUrl: string | null;  // LLM gateway URL (e.g., http://litellm.llmgateway.internal:4000/anthropic)
 }
 
 export interface SessionStats {
@@ -80,6 +81,7 @@ const defaultConfig: AgentConfig = {
   autoApprovePermissions: true, // Auto-approve all permissions (yolo mode)
   versApiKey: null,            // Set via /claim or environment
   cwd: null,                   // null = use directory where server was launched
+  llmGatewayUrl: null,         // null = use default Anthropic API
 };
 
 let config: AgentConfig = { ...defaultConfig };
@@ -222,6 +224,10 @@ export async function setConfig(updates: Partial<AgentConfig>): Promise<AgentCon
     ensureCwdExists(config.cwd);
   }
 
+  if (updates.llmGatewayUrl !== undefined) {
+    config.llmGatewayUrl = updates.llmGatewayUrl;
+  }
+
   // Persist changes
   await saveConfig();
 
@@ -261,6 +267,10 @@ export function setConfigSync(updates: Partial<AgentConfig>): AgentConfig {
   if (updates.cwd !== undefined) {
     config.cwd = updates.cwd;
     ensureCwdExists(config.cwd);
+  }
+
+  if (updates.llmGatewayUrl !== undefined) {
+    config.llmGatewayUrl = updates.llmGatewayUrl;
   }
 
   // Fire and forget save

@@ -6,6 +6,7 @@ import { join, basename, extname } from "node:path";
 import type { AgentDefinition } from "./types";
 import { getCurrentOS, getOSValue } from "./types";
 import { logStream } from "../utils/log-stream";
+import { getConfig } from "../utils/config";
 
 // ============================================================
 // Registry State
@@ -300,6 +301,13 @@ export function getAgentEnv(
         env[key] = value;
       }
     }
+  }
+
+  // Inject LLM gateway URL if configured (for Claude Code to use LiteLLM proxy)
+  const config = getConfig();
+  if (config.llmGatewayUrl) {
+    env["ANTHROPIC_BASE_URL"] = config.llmGatewayUrl;
+    logStream.debug(`[registry] Using LLM gateway: ${config.llmGatewayUrl}`);
   }
 
   return env;

@@ -9,6 +9,7 @@ import { execute, getAgentUrl } from "./index";
 import { VM_AGENT_DIR, VM_HOME_DIR } from "./constants";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { getConfig } from "../utils/config";
 
 const NIGHTLY_RELEASE_URL = "https://github.com/hdresearch/agent/releases/download/nightly/vers-agent-linux-x64";
 const REMOTE_BINARY_PATH = "/usr/local/bin/vers-agent";
@@ -67,7 +68,9 @@ export async function bootstrap(vmId: string): Promise<string> {
   } else {
     // Fallback to nohup for systems without systemd
     console.log(`[${vmId}] Starting vers-agent server on port ${AGENT_PORT} (nohup)...`);
-    await execute(vmId, `ANTHROPIC_API_KEY=${apiKey} PORT=${AGENT_PORT} nohup ${REMOTE_BINARY_PATH} --server > /var/log/vers-agent.log 2>&1 &`);
+    const config = getConfig();
+    const gatewayEnv = config.llmGatewayUrl ? `ANTHROPIC_BASE_URL=${config.llmGatewayUrl} ` : "";
+    await execute(vmId, `${gatewayEnv}ANTHROPIC_API_KEY=${apiKey} PORT=${AGENT_PORT} nohup ${REMOTE_BINARY_PATH} --server > /var/log/vers-agent.log 2>&1 &`);
   }
 
   // Wait for it to be healthy (checks via SSH)
@@ -223,6 +226,16 @@ WantedBy=multi-user.target
     /\[Service\]/,
     `[Service]\nEnvironment=ANTHROPIC_API_KEY=${apiKey}`
   );
+
+  // Add LLM gateway URL if configured
+  const config = getConfig();
+  if (config.llmGatewayUrl) {
+    serviceContent = serviceContent.replace(
+      /\[Service\]/,
+      `[Service]\nEnvironment=ANTHROPIC_BASE_URL=${config.llmGatewayUrl}`
+    );
+    console.log(`[${vmId}] Using LLM gateway: ${config.llmGatewayUrl}`);
+  }
 
   // Write service file to VM
   const escapedContent = serviceContent.replace(/'/g, "'\\''");
