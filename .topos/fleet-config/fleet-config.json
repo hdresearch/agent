@@ -1,0 +1,38 @@
+{
+  "fleet": [
+    {
+      "id": "alpha",
+      "name": "crimson",
+      "color": "#DC143C",
+      "trit": -1,
+      "url": "http://localhost:9001",
+      "container": "vers-fleet-alpha",
+      "ram": 1024,
+      "vcpu": 2
+    },
+    {
+      "id": "bravo",
+      "name": "indigo",
+      "color": "#4B0082",
+      "trit": 0,
+      "url": "http://localhost:9002",
+      "container": "vers-fleet-bravo",
+      "ram": 1024,
+      "vcpu": 2
+    },
+    {
+      "id": "charlie",
+      "name": "azure",
+      "color": "#007FFF",
+      "trit": 1,
+      "url": "http://localhost:9003",
+      "container": "vers-fleet-charlie",
+      "ram": 1024,
+      "vcpu": 2
+    }
+  ],
+  "balancing": {
+    "strategy": "gf3-trit",
+    "description": "GF(3) field-based load balancing using trit sum ≡ 0 (mod 3)"
+  }
+}

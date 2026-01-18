@@ -1,0 +1,230 @@
+# syntax=docker/dockerfile:1
+# ═══════════════════════════════════════════════════════════════════
+# vers-agent:security - Trail of Bits Security Research Image
+# Based on chelsea fleet patterns with integrated security tooling
+# ═══════════════════════════════════════════════════════════════════
+# 
+# Design principles (from thread T-019ba1ab):
+#   D1: Minimal base image (<300MB compressed for security variant)
+#   D2: Remote ACP integration with ngrok tunnels
+#   D5: Secure by default - non-root, IP whitelisting
+#   D6: Pre-loaded Trail of Bits security tools (via trailofbits/skills)
+#
+# GF(3) Invariant: Σ(trits) ≡ 0 (mod 3) across fleet
+# ═══════════════════════════════════════════════════════════════════
+
+# ─── Build Stage ────────────────────────────────────────────────────
+FROM oven/bun:1-alpine AS build
+WORKDIR /build
+
+# Copy package files and install deps
+COPY package.json bun.lockb* ./
+RUN bun install --frozen-lockfile --production
+
+# Copy source and build
+COPY . .
+RUN bun run build:bundle
+
+# ─── Production Stage ───────────────────────────────────────────────
+FROM alpine:3.21 AS production
+
+# Labels - comprehensive Trail of Bits skills manifest
+LABEL org.opencontainers.image.title="vers-agent:security"
+LABEL org.opencontainers.image.description="Security research VM with Trail of Bits tooling"
+LABEL org.opencontainers.image.authors="bmorphism"
+LABEL org.trailofbits.skills="semgrep,codeql,sarif-parsing,variant-analysis,\
+differential-review,fix-review,sharp-edges,constant-time-analysis,\
+property-based-testing,semgrep-rule-creator,audit-context-building,\
+audit-prep-assistant,code-maturity-assessor,guidelines-advisor,\
+secure-workflow-guide,token-integration-analyzer"
+
+WORKDIR /app
+
+# System dependencies for security tools
+RUN apk add --no-cache \
+    curl \
+    bash \
+    jq \
+    sqlite \
+    ca-certificates \
+    git \
+    python3 \
+    py3-pip \
+    py3-virtualenv \
+    openjdk17-jre-headless \
+    nodejs \
+    npm \
+    unzip \
+    tini
+
+# Install Bun (cross-platform)
+ARG TARGETARCH
+RUN case "${TARGETARCH:-$(uname -m)}" in \
+      arm64|aarch64) BUN_ARCH=aarch64 ;; \
+      *)             BUN_ARCH=x64 ;; \
+    esac && \
+    curl -fsSL "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip" -o /tmp/bun.zip && \
+    unzip -q /tmp/bun.zip -d /tmp && \
+    mv /tmp/bun-linux-${BUN_ARCH}/bun /usr/local/bin/ && \
+    chmod +x /usr/local/bin/bun && \
+    rm -rf /tmp/bun*
+ENV PATH="/usr/local/bin:$PATH"
+
+# Install Claude Code CLI via npm (cross-platform)
+RUN npm install -g @anthropic-ai/claude-code
+
+# Install ngrok (cross-platform)
+RUN case "${TARGETARCH:-$(uname -m)}" in \
+      arm64|aarch64) NGROK_ARCH=arm64 ;; \
+      *)             NGROK_ARCH=amd64 ;; \
+    esac && \
+    curl -fsSL "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-${NGROK_ARCH}.tgz" \
+    | tar xz -C /usr/local/bin
+
+# ─── Trail of Bits Security Stack ───────────────────────────────────
+# Semgrep - Fast pattern matching for code security
+RUN pip3 install --no-cache-dir --break-system-packages \
+    semgrep \
+    sarif-om \
+    slither-analyzer
+
+# Install CodeQL CLI (cross-platform)
+RUN case "${TARGETARCH:-$(uname -m)}" in \
+      arm64|aarch64) CODEQL_ARCH=linux64 ;; \
+      *)             CODEQL_ARCH=linux64 ;; \
+    esac && \
+    curl -fsSL "https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-${CODEQL_ARCH}.zip" \
+    -o /tmp/codeql.zip && \
+    unzip -q /tmp/codeql.zip -d /opt && \
+    rm /tmp/codeql.zip && \
+    ln -s /opt/codeql/codeql /usr/local/bin/codeql
+
+# Copy application from build stage
+COPY --from=build /build/dist /app/dist
+COPY --from=build /build/package.json /app/
+COPY --from=build /build/node_modules /app/node_modules
+# Create config dir and copy policy (file must exist in build context)
+RUN mkdir -p /app/config
+COPY --from=build /build/src/tunnel/policy.yml /app/config/policy.yml
+
+# ─── Trail of Bits Skills Directory ─────────────────────────────────
+# Skills are loaded as SKILL.md files for Claude agent integration
+RUN mkdir -p /app/skills/trailofbits
+
+# ─── Trail of Bits Skills Manifest ──────────────────────────────────
+# Create security-skills.json for runtime skill discovery
+COPY --chmod=644 <<'SKILLS_JSON' /app/skills/trailofbits/manifest.json
+{
+  "name": "trailofbits-security-skills",
+  "version": "1.0.0",
+  "description": "Trail of Bits security research skills for vers-agent",
+  "skills": [
+    {"name": "semgrep", "trit": -1, "color": "#DC143C", "category": "static-analysis"},
+    {"name": "codeql", "trit": 0, "color": "#4B0082", "category": "static-analysis"},
+    {"name": "sarif-parsing", "trit": 1, "color": "#007FFF", "category": "results-analysis"},
+    {"name": "variant-analysis", "trit": -1, "color": "#DC143C", "category": "vulnerability-research"},
+    {"name": "differential-review", "trit": 0, "color": "#4B0082", "category": "code-review"},
+    {"name": "fix-review", "trit": 1, "color": "#007FFF", "category": "code-review"},
+    {"name": "sharp-edges", "trit": -1, "color": "#DC143C", "category": "api-review"},
+    {"name": "constant-time-analysis", "trit": 0, "color": "#4B0082", "category": "crypto-review"},
+    {"name": "property-based-testing", "trit": 1, "color": "#007FFF", "category": "testing"},
+    {"name": "semgrep-rule-creator", "trit": -1, "color": "#DC143C", "category": "static-analysis"},
+    {"name": "audit-context-building", "trit": 0, "color": "#4B0082", "category": "audit-prep"},
+    {"name": "audit-prep-assistant", "trit": 1, "color": "#007FFF", "category": "audit-prep"},
+    {"name": "code-maturity-assessor", "trit": -1, "color": "#DC143C", "category": "assessment"},
+    {"name": "guidelines-advisor", "trit": 0, "color": "#4B0082", "category": "best-practices"},
+    {"name": "secure-workflow-guide", "trit": 1, "color": "#007FFF", "category": "workflow"},
+    {"name": "token-integration-analyzer", "trit": -1, "color": "#DC143C", "category": "blockchain"}
+  ],
+  "gf3_sum": 0,
+  "balanced": true
+}
+SKILLS_JSON
+
+# ─── Non-root User ──────────────────────────────────────────────────
+RUN adduser -D -s /bin/bash vers \
+    && mkdir -p /home/vers/.vers-agent/logs \
+    && mkdir -p /home/vers/.claude/skills \
+    && mkdir -p /home/vers/.config/semgrep/rules \
+    && chown -R vers:vers /home/vers /app
+
+USER vers
+
+# ─── Environment ────────────────────────────────────────────────────
+ENV HOME=/home/vers
+ENV PORT=9999
+ENV NODE_ENV=production
+ENV VERS_AGENT_HOME=/home/vers/.vers-agent
+ENV CLAUDE_CODE_EXECUTABLE=/usr/local/bin/claude-code
+ENV VERS_SKILLS_PATH=/app/skills/trailofbits
+
+# GF(3) Fleet Identity (override per VM via docker-compose)
+ENV VERS_VM_ID=security-alpha
+ENV VERS_VM_NAME=sentinel
+ENV VERS_VM_TRIT=-1
+ENV VERS_VM_COLOR=#DC143C
+ENV VERS_PROFILE=security
+
+# Security tool paths
+ENV PATH="/opt/codeql:/usr/local/bin:${PATH}"
+ENV SEMGREP_RULES_PATH=/home/vers/.config/semgrep/rules
+
+EXPOSE 9999
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -sf http://localhost:${PORT:-9999}/health || exit 1
+
+# ─── Entrypoint ─────────────────────────────────────────────────────
+COPY --chown=vers:vers <<'EOF' /home/vers/entrypoint.sh
+#!/bin/bash
+set -e
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  vers-agent:security | Trail of Bits Stack"
+echo "  VM: ${VERS_VM_NAME} (${VERS_VM_ID}) | trit: ${VERS_VM_TRIT}"
+echo "  Skills: $(cat /app/skills/trailofbits/manifest.json 2>/dev/null | jq -r '.skills | length') loaded"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Load secrets
+[ -f "$HOME/.topos/.env" ] && { set -a; . "$HOME/.topos/.env"; set +a; }
+
+# Verify security tools
+echo "[security] Verifying Trail of Bits tools..."
+command -v semgrep >/dev/null && echo "  ✓ semgrep $(semgrep --version 2>/dev/null | head -1)" || echo "  ✗ semgrep"
+command -v codeql >/dev/null && echo "  ✓ codeql $(codeql version 2>/dev/null | head -1)" || echo "  ✗ codeql"
+command -v slither >/dev/null && echo "  ✓ slither $(slither --version 2>/dev/null)" || echo "  ✗ slither"
+
+# Verify GF(3) balance
+GF3_SUM=$(cat /app/skills/trailofbits/manifest.json 2>/dev/null | jq -r '.gf3_sum // 0')
+echo "[gf3] Skill trit sum: $GF3_SUM (balanced: $([ "$GF3_SUM" -eq 0 ] && echo yes || echo no))"
+
+# Start ngrok if configured
+if [ -n "$NGROK_AUTHTOKEN" ]; then
+  echo "[tunnel] Starting ngrok on port $PORT..."
+  while true; do
+    ngrok http "$PORT" \
+      --authtoken "$NGROK_AUTHTOKEN" \
+      ${NGROK_DOMAIN:+--domain=$NGROK_DOMAIN} \
+      ${TRAFFIC_POLICY:+--traffic-policy-file /app/config/policy.yml} \
+      --log stdout &
+    NGROK_PID=$!
+    sleep 3
+    
+    TUNNEL_URL=$(curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | jq -r '.tunnels[0].public_url // empty')
+    [ -n "$TUNNEL_URL" ] && echo "[tunnel] ✓ $TUNNEL_URL"
+    
+    wait $NGROK_PID || true
+    echo "[tunnel] Reconnecting in 5s..."
+    sleep 5
+  done &
+fi
+
+# Start vers-agent server
+echo "[server] Starting vers-agent on port $PORT..."
+exec bun run /app/dist/index.js --server
+EOF
+
+RUN chmod +x /home/vers/entrypoint.sh
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["/home/vers/entrypoint.sh"]

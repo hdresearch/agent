@@ -1,0 +1,158 @@
+# syntax=docker/dockerfile:1
+# hdresearch/chelsea base image for vers-agent fleet
+# Minimal ACP-ready runtime with remote ngrok integration
+
+# ─── Base Stage: Minimal Alpine + Bun ───────────────────────────
+FROM alpine:3.19 AS base
+WORKDIR /app
+
+# Essential system packages only
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    jq \
+    sqlite-libs \
+    tini
+
+# Install Bun runtime
+ARG BUN_VERSION=1.1.42
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v${BUN_VERSION}"
+ENV PATH="/usr/local/bin:$PATH"
+
+# ─── Build Stage ────────────────────────────────────────────────
+FROM base AS build
+WORKDIR /app
+COPY package.json bun.lockb* ./
+RUN bun install --frozen-lockfile --production
+COPY . .
+RUN bun run build:bundle
+
+# ─── Production Stage ───────────────────────────────────────────
+FROM base AS production
+WORKDIR /app
+
+# Install Claude Code standalone binary
+ARG CLAUDE_CODE_URL=https://storage.googleapis.com/anthropic-releases/claude-code/latest/claude-code-linux-x64
+RUN curl -fsSL ${CLAUDE_CODE_URL} -o /usr/local/bin/claude-code \
+    && chmod +x /usr/local/bin/claude-code
+
+# Install ngrok for remote tunnel capability
+ARG NGROK_VERSION=3
+RUN curl -fsSL https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v${NGROK_VERSION}-stable-linux-amd64.tgz \
+    | tar xz -C /usr/local/bin
+
+# Create non-root vers user (Claude Code refuses root)
+RUN adduser -D -s /bin/sh -h /home/vers vers \
+    && mkdir -p /home/vers/.vers-agent/logs \
+    && mkdir -p /home/vers/.claude \
+    && chown -R vers:vers /home/vers
+
+# Copy application artifacts
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+
+# Copy tunnel policy configuration
+COPY --from=build /app/src/tunnel/policy.yml ./config/policy.yml
+
+# Ownership fix
+RUN chown -R vers:vers /app
+
+# Switch to non-root user
+USER vers
+
+# ─── Environment Configuration ──────────────────────────────────
+ENV HOME=/home/vers
+ENV CLAUDE_CODE_EXECUTABLE=/usr/local/bin/claude-code
+ENV PORT=9999
+ENV NODE_ENV=production
+ENV VERS_AGENT_HOME=/home/vers/.vers-agent
+
+# VM identity (injected at runtime)
+ENV VERS_VM_ID=alpha
+ENV VERS_VM_TRIT=-1
+ENV VERS_VM_COLOR="#DC143C"
+ENV VERS_VM_NAME=crimson
+
+# Expose ACP port
+EXPOSE 9999
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -sf http://localhost:${PORT}/health || exit 1
+
+# ─── Fleet Entrypoint Script ────────────────────────────────────
+COPY --chown=vers:vers <<'ENTRYPOINT' /home/vers/entrypoint.sh
+#!/bin/sh
+set -e
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  vers-agent fleet node: ${VERS_VM_NAME} (${VERS_VM_ID})"
+echo "  trit: ${VERS_VM_TRIT} | color: ${VERS_VM_COLOR}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Load external environment if mounted
+if [ -f "$HOME/.topos/.env" ]; then
+  echo "[init] Loading environment from ~/.topos/.env"
+  set -a
+  . "$HOME/.topos/.env"
+  set +a
+fi
+
+# Start ngrok tunnel if authtoken available
+if [ -n "$NGROK_AUTHTOKEN" ]; then
+  echo "[ngrok] Starting tunnel on port $PORT..."
+  
+  NGROK_CMD="ngrok http $PORT --authtoken $NGROK_AUTHTOKEN --log stdout --log-level info"
+  
+  # Use reserved domain if specified
+  if [ -n "$NGROK_DOMAIN" ]; then
+    NGROK_CMD="$NGROK_CMD --url $NGROK_DOMAIN"
+  fi
+  
+  # Apply traffic policy if exists
+  if [ -f "/app/config/policy.yml" ]; then
+    NGROK_CMD="$NGROK_CMD --traffic-policy-file /app/config/policy.yml"
+  fi
+  
+  # Run ngrok in background with auto-restart
+  while true; do
+    $NGROK_CMD &
+    NGROK_PID=$!
+    
+    # Wait for tunnel to establish
+    sleep 3
+    
+    # Report tunnel URL
+    TUNNEL_URL=$(curl -sf http://127.0.0.1:4040/api/tunnels 2>/dev/null | jq -r '.tunnels[0].public_url // empty' || echo "")
+    if [ -n "$TUNNEL_URL" ]; then
+      echo "[ngrok] ✓ Tunnel active: $TUNNEL_URL"
+      echo "$TUNNEL_URL" > "$VERS_AGENT_HOME/tunnel_url"
+    fi
+    
+    # Wait for ngrok to exit (reconnect loop)
+    wait $NGROK_PID || true
+    echo "[ngrok] Tunnel disconnected, reconnecting in 5s..."
+    sleep 5
+  done &
+  
+else
+  echo "[ngrok] Warning: NGROK_AUTHTOKEN not set, running local-only"
+fi
+
+# Start vers-agent ACP server
+echo "[vers] Starting ACP server on port $PORT..."
+exec bun run /app/dist/index.js --server
+ENTRYPOINT
+
+RUN chmod +x /home/vers/entrypoint.sh
+
+# Use tini for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["/home/vers/entrypoint.sh"]
+
+# ─── Labels ─────────────────────────────────────────────────────
+LABEL org.opencontainers.image.title="hdresearch/chelsea"
+LABEL org.opencontainers.image.description="Minimal ACP-ready vers-agent for remote fleet deployment"
+LABEL org.opencontainers.image.source="https://github.com/hdresearch/agent"
+LABEL org.opencontainers.image.vendor="High Dimensional Research"

@@ -1,0 +1,114 @@
+# Docker Compose for remote fleet deployment via ngrok
+# Local TUI manages 3 remote VMs with GF(3) trit balancing
+
+services:
+  # ─── crimson (alpha) - MINUS trit: -1 ─────────────────────────
+  vers-alpha:
+    build:
+      context: .
+      dockerfile: Dockerfile.chelsea
+    container_name: vers-fleet-alpha
+    ports:
+      - "9001:9999"
+    environment:
+      - PORT=9999
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN_ALPHA:-}
+      - VERS_VM_ID=alpha
+      - VERS_VM_NAME=crimson
+      - VERS_VM_TRIT=-1
+      - VERS_VM_COLOR=#DC143C
+      - FLEET_CONTROLLER_WEBHOOK=${FLEET_CONTROLLER_WEBHOOK:-}
+    volumes:
+      - alpha-data:/home/vers/.vers-agent
+      - alpha-claude:/home/vers/.claude
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    labels:
+      - "vers.fleet.id=alpha"
+      - "vers.fleet.trit=-1"
+      - "vers.fleet.color=#DC143C"
+
+  # ─── indigo (bravo) - ERGODIC trit: 0 ─────────────────────────
+  vers-bravo:
+    build:
+      context: .
+      dockerfile: Dockerfile.chelsea
+    container_name: vers-fleet-bravo
+    ports:
+      - "9002:9999"
+    environment:
+      - PORT=9999
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN_BRAVO:-}
+      - VERS_VM_ID=bravo
+      - VERS_VM_NAME=indigo
+      - VERS_VM_TRIT=0
+      - VERS_VM_COLOR=#4B0082
+      - FLEET_CONTROLLER_WEBHOOK=${FLEET_CONTROLLER_WEBHOOK:-}
+    volumes:
+      - bravo-data:/home/vers/.vers-agent
+      - bravo-claude:/home/vers/.claude
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    labels:
+      - "vers.fleet.id=bravo"
+      - "vers.fleet.trit=0"
+      - "vers.fleet.color=#4B0082"
+
+  # ─── azure (charlie) - PLUS trit: +1 ──────────────────────────
+  vers-charlie:
+    build:
+      context: .
+      dockerfile: Dockerfile.chelsea
+    container_name: vers-fleet-charlie
+    ports:
+      - "9003:9999"
+    environment:
+      - PORT=9999
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN_CHARLIE:-}
+      - VERS_VM_ID=charlie
+      - VERS_VM_NAME=azure
+      - VERS_VM_TRIT=1
+      - VERS_VM_COLOR=#007FFF
+      - FLEET_CONTROLLER_WEBHOOK=${FLEET_CONTROLLER_WEBHOOK:-}
+    volumes:
+      - charlie-data:/home/vers/.vers-agent
+      - charlie-claude:/home/vers/.claude
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    labels:
+      - "vers.fleet.id=charlie"
+      - "vers.fleet.trit=1"
+      - "vers.fleet.color=#007FFF"
+
+volumes:
+  alpha-data:
+  alpha-claude:
+  bravo-data:
+  bravo-claude:
+  charlie-data:
+  charlie-claude:
+
+networks:
+  default:
+    name: vers-fleet

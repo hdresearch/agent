@@ -1,0 +1,322 @@
+DIGEST b497ca2a650140ee51ee816155804a4d
+FGF3.Spec.GF3Spec
+R330:346 Coq.ZArith.ZArith <> <> lib
+R364:377 Coq.Lists.List <> <> lib
+R395:411 Coq.micromega.Lia <> <> lib
+R421:433 Coq.Lists.List ListNotations <> mod
+ind 555:558 <> Trit
+constr 574:578 <> Minus
+constr 602:605 <> Zero
+constr 630:633 <> Plus
+R582:585 GF3.Spec.GF3Spec <> Trit:1 ind
+R610:613 GF3.Spec.GF3Spec <> Trit:1 ind
+R638:641 GF3.Spec.GF3Spec <> Trit:1 ind
+scheme 555:558 <> Trit_rect
+scheme 555:558 <> Trit_ind
+scheme 555:558 <> Trit_rec
+scheme 555:558 <> Trit_sind
+def 731:740 <> trit_value
+R747:750 GF3.Spec.GF3Spec <> Trit ind
+binder 743:743 <> t:3
+R755:755 Coq.Numbers.BinNums <> Z ind
+R768:768 GF3.Spec.GF3Spec <> t:3 var
+R779:783 GF3.Spec.GF3Spec <> Minus constr
+R795:798 GF3.Spec.GF3Spec <> Zero constr
+R810:813 GF3.Spec.GF3Spec <> Plus constr
+def 901:913 <> trit_from_int
+R920:920 Coq.Numbers.BinNums <> Z ind
+binder 916:916 <> n:5
+R925:928 GF3.Spec.GF3Spec <> Trit ind
+R938:942 Coq.ZArith.BinInt Z eqb def
+R944:944 GF3.Spec.GF3Spec <> n:5 var
+R972:976 Coq.ZArith.BinInt Z eqb def
+R978:978 GF3.Spec.GF3Spec <> n:5 var
+R999:1002 GF3.Spec.GF3Spec <> Plus constr
+R987:990 GF3.Spec.GF3Spec <> Zero constr
+R956:960 GF3.Spec.GF3Spec <> Minus constr
+def 1104:1112 <> normalize
+R1119:1119 Coq.Numbers.BinNums <> Z ind
+binder 1115:1115 <> n:6
+R1124:1124 Coq.Numbers.BinNums <> Z ind
+R1143:1150 Coq.ZArith.BinInt Z modulo def
+R1165:1167 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1153:1160 Coq.ZArith.BinInt Z modulo def
+R1162:1162 GF3.Spec.GF3Spec <> n:6 var
+binder 1135:1138 <> mod3:7
+R1181:1185 Coq.ZArith.BinInt Z eqb def
+R1187:1190 GF3.Spec.GF3Spec <> mod3:7 var
+R1211:1215 Coq.ZArith.BinInt Z eqb def
+R1217:1220 GF3.Spec.GF3Spec <> mod3:7 var
+def 1304:1310 <> add_gf3
+R1319:1322 GF3.Spec.GF3Spec <> Trit ind
+binder 1313:1313 <> a:8
+binder 1315:1315 <> b:9
+R1327:1330 GF3.Spec.GF3Spec <> Trit ind
+R1337:1349 GF3.Spec.GF3Spec <> trit_from_int def
+R1352:1360 GF3.Spec.GF3Spec <> normalize def
+R1375:1377 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1363:1372 GF3.Spec.GF3Spec <> trit_value def
+R1374:1374 GF3.Spec.GF3Spec <> a:8 var
+R1378:1387 GF3.Spec.GF3Spec <> trit_value def
+R1389:1389 GF3.Spec.GF3Spec <> b:9 var
+def 1459:1468 <> negate_gf3
+R1475:1478 GF3.Spec.GF3Spec <> Trit ind
+binder 1471:1471 <> t:10
+R1483:1486 GF3.Spec.GF3Spec <> Trit ind
+R1499:1499 GF3.Spec.GF3Spec <> t:10 var
+R1510:1514 GF3.Spec.GF3Spec <> Minus constr
+R1519:1522 GF3.Spec.GF3Spec <> Plus constr
+R1528:1531 GF3.Spec.GF3Spec <> Zero constr
+R1537:1540 GF3.Spec.GF3Spec <> Zero constr
+R1546:1549 GF3.Spec.GF3Spec <> Plus constr
+R1555:1559 GF3.Spec.GF3Spec <> Minus constr
+def 1654:1660 <> gf3_sum
+R1671:1674 Coq.Init.Datatypes <> list ind
+R1676:1679 GF3.Spec.GF3Spec <> Trit ind
+binder 1663:1667 <> trits:12
+R1684:1684 Coq.Numbers.BinNums <> Z ind
+R1697:1701 GF3.Spec.GF3Spec <> trits:12 var
+R1712:1713 Coq.Lists.List ListNotations ::list_scope:'['_']' not
+R1725:1728 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R1749:1751 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1737:1746 GF3.Spec.GF3Spec <> trit_value def
+R1752:1758 GF3.Spec.GF3Spec <> gf3_sum:13 def
+def 1895:1905 <> is_balanced
+R1916:1919 Coq.Init.Datatypes <> list ind
+R1921:1924 GF3.Spec.GF3Spec <> Trit ind
+binder 1908:1912 <> trits:15
+R1965:1967 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1939:1946 Coq.ZArith.BinInt Z modulo def
+R1949:1955 GF3.Spec.GF3Spec <> gf3_sum def
+R1957:1961 GF3.Spec.GF3Spec <> trits:15 var
+def 2050:2062 <> gf3_conserved
+R2073:2076 Coq.Init.Datatypes <> list ind
+R2078:2081 GF3.Spec.GF3Spec <> Trit ind
+binder 2065:2069 <> trits:16
+R2118:2121 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2109:2111 Coq.Init.Peano <> ::nat_scope:x_'>'_x not
+R2097:2102 Coq.Init.Datatypes <> length def
+R2104:2108 GF3.Spec.GF3Spec <> trits:16 var
+R2122:2132 GF3.Spec.GF3Spec <> is_balanced def
+R2134:2138 GF3.Spec.GF3Spec <> trits:16 var
+def 2257:2269 <> balance_triad
+R2283:2286 GF3.Spec.GF3Spec <> Trit ind
+binder 2272:2273 <> t1:17
+binder 2275:2276 <> t2:18
+binder 2278:2279 <> t3:19
+R2291:2294 GF3.Spec.GF3Spec <> Trit ind
+R2341:2343 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R2325:2327 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R2312:2321 GF3.Spec.GF3Spec <> trit_value def
+R2323:2324 GF3.Spec.GF3Spec <> t1:17 var
+R2328:2337 GF3.Spec.GF3Spec <> trit_value def
+R2339:2340 GF3.Spec.GF3Spec <> t2:18 var
+R2344:2353 GF3.Spec.GF3Spec <> trit_value def
+R2355:2356 GF3.Spec.GF3Spec <> t3:19 var
+binder 2305:2307 <> sum:20
+R2375:2382 Coq.ZArith.BinInt Z modulo def
+R2402:2404 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R2385:2392 Coq.ZArith.BinInt Z modulo def
+R2395:2395 Coq.ZArith.BinInt <> ::Z_scope:'-'_x not
+R2396:2398 GF3.Spec.GF3Spec <> sum:20 var
+binder 2367:2370 <> mod3:21
+R2418:2422 Coq.ZArith.BinInt Z eqb def
+R2424:2427 GF3.Spec.GF3Spec <> mod3:21 var
+R2451:2455 Coq.ZArith.BinInt Z eqb def
+R2457:2460 GF3.Spec.GF3Spec <> mod3:21 var
+R2481:2485 GF3.Spec.GF3Spec <> Minus constr
+R2469:2472 GF3.Spec.GF3Spec <> Plus constr
+R2436:2439 GF3.Spec.GF3Spec <> Zero constr
+prf 2611:2629 <> gf3_sum_associative
+R2649:2652 Coq.Init.Datatypes <> list ind
+R2654:2657 GF3.Spec.GF3Spec <> Trit ind
+binder 2641:2642 <> l1:22
+binder 2644:2645 <> l2:23
+R2681:2683 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2663:2669 GF3.Spec.GF3Spec <> gf3_sum def
+R2674:2677 Coq.Init.Datatypes <> ::list_scope:x_'++'_x not
+R2672:2673 GF3.Spec.GF3Spec <> l1:22 var
+R2678:2679 GF3.Spec.GF3Spec <> l2:23 var
+R2694:2696 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R2684:2690 GF3.Spec.GF3Spec <> gf3_sum def
+R2692:2693 GF3.Spec.GF3Spec <> l1:22 var
+R2697:2703 GF3.Spec.GF3Spec <> gf3_sum def
+R2705:2706 GF3.Spec.GF3Spec <> l2:23 var
+prf 2876:2897 <> balanced_concatenation
+R2917:2920 Coq.Init.Datatypes <> list ind
+R2922:2925 GF3.Spec.GF3Spec <> Trit ind
+binder 2909:2910 <> l1:24
+binder 2912:2913 <> l2:25
+R2945:2948 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2931:2941 GF3.Spec.GF3Spec <> is_balanced def
+R2943:2944 GF3.Spec.GF3Spec <> l1:24 var
+R2963:2966 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2949:2959 GF3.Spec.GF3Spec <> is_balanced def
+R2961:2962 GF3.Spec.GF3Spec <> l2:25 var
+R2967:2977 GF3.Spec.GF3Spec <> is_balanced def
+R2982:2985 Coq.Init.Datatypes <> ::list_scope:x_'++'_x not
+R2980:2981 GF3.Spec.GF3Spec <> l1:24 var
+R2986:2987 GF3.Spec.GF3Spec <> l2:25 var
+R3007:3017 GF3.Spec.GF3Spec <> is_balanced def
+R3050:3068 GF3.Spec.GF3Spec <> gf3_sum_associative thm
+R3050:3068 GF3.Spec.GF3Spec <> gf3_sum_associative thm
+R3050:3068 GF3.Spec.GF3Spec <> gf3_sum_associative thm
+R3139:3147 Coq.ZArith.BinInt Z add_mod thm
+R3139:3147 Coq.ZArith.BinInt Z add_mod thm
+R3139:3147 Coq.ZArith.BinInt Z add_mod thm
+R3139:3147 Coq.ZArith.BinInt Z add_mod thm
+prf 3231:3247 <> trit_value_bounds
+binder 3258:3258 <> t:26
+R3263:3266 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<='_x not
+R3279:3282 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<='_x not
+R3267:3276 GF3.Spec.GF3Spec <> trit_value def
+R3278:3278 GF3.Spec.GF3Spec <> t:26 var
+R3267:3276 GF3.Spec.GF3Spec <> trit_value def
+R3278:3278 GF3.Spec.GF3Spec <> t:26 var
+prf 3375:3390 <> normalize_bounds
+binder 3401:3401 <> n:27
+R3406:3409 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<='_x not
+R3421:3424 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<='_x not
+R3410:3418 GF3.Spec.GF3Spec <> normalize def
+R3420:3420 GF3.Spec.GF3Spec <> n:27 var
+R3410:3418 GF3.Spec.GF3Spec <> normalize def
+R3420:3420 GF3.Spec.GF3Spec <> n:27 var
+R3453:3461 GF3.Spec.GF3Spec <> normalize def
+R3476:3480 Coq.ZArith.BinInt Z eqb def
+R3476:3480 Coq.ZArith.BinInt Z eqb def
+R3518:3522 Coq.ZArith.BinInt Z eqb def
+R3518:3522 Coq.ZArith.BinInt Z eqb def
+prf 3648:3668 <> balance_triad_correct
+binder 3679:3680 <> t1:28
+binder 3682:3683 <> t2:29
+binder 3685:3686 <> t3:30
+R3691:3701 GF3.Spec.GF3Spec <> is_balanced def
+R3703:3703 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3706:3707 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3710:3711 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3714:3715 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3738:3738 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3704:3705 GF3.Spec.GF3Spec <> t1:28 var
+R3708:3709 GF3.Spec.GF3Spec <> t2:29 var
+R3712:3713 GF3.Spec.GF3Spec <> t3:30 var
+R3716:3728 GF3.Spec.GF3Spec <> balance_triad def
+R3730:3731 GF3.Spec.GF3Spec <> t1:28 var
+R3733:3734 GF3.Spec.GF3Spec <> t2:29 var
+R3736:3737 GF3.Spec.GF3Spec <> t3:30 var
+R3776:3786 GF3.Spec.GF3Spec <> is_balanced def
+R3789:3801 GF3.Spec.GF3Spec <> balance_triad def
+def 3942:3957 <> is_quad_balanced
+R3974:3977 GF3.Spec.GF3Spec <> Trit ind
+binder 3960:3961 <> t1:31
+binder 3963:3964 <> t2:32
+binder 3966:3967 <> t3:33
+binder 3969:3970 <> t4:34
+R3992:4002 GF3.Spec.GF3Spec <> is_balanced def
+R4004:4004 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4007:4008 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4011:4012 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4015:4016 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4019:4019 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4005:4006 GF3.Spec.GF3Spec <> t1:31 var
+R4009:4010 GF3.Spec.GF3Spec <> t2:32 var
+R4013:4014 GF3.Spec.GF3Spec <> t3:33 var
+R4017:4018 GF3.Spec.GF3Spec <> t4:34 var
+prf 4096:4115 <> quad_balancing_works
+binder 4126:4127 <> t1:35
+binder 4129:4130 <> t2:36
+binder 4132:4133 <> t3:37
+R4138:4144 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R4147:4148 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+binder 4145:4146 <> t4:38
+R4149:4164 GF3.Spec.GF3Spec <> is_quad_balanced def
+R4166:4167 GF3.Spec.GF3Spec <> t1:35 var
+R4169:4170 GF3.Spec.GF3Spec <> t2:36 var
+R4172:4173 GF3.Spec.GF3Spec <> t3:37 var
+R4175:4176 GF3.Spec.GF3Spec <> t4:38 var
+R4215:4227 GF3.Spec.GF3Spec <> balance_triad def
+R4215:4227 GF3.Spec.GF3Spec <> balance_triad def
+R4248:4268 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R4248:4268 GF3.Spec.GF3Spec <> balance_triad_correct thm
+prf 4321:4341 <> balancing_trit_unique
+binder 4352:4353 <> t1:39
+binder 4355:4356 <> t2:40
+binder 4358:4359 <> t3:41
+binder 4361:4362 <> t4:42
+binder 4364:4366 <> t4':43
+R4399:4404 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4371:4386 GF3.Spec.GF3Spec <> is_quad_balanced def
+R4388:4389 GF3.Spec.GF3Spec <> t1:39 var
+R4391:4392 GF3.Spec.GF3Spec <> t2:40 var
+R4394:4395 GF3.Spec.GF3Spec <> t3:41 var
+R4397:4398 GF3.Spec.GF3Spec <> t4:42 var
+R4434:4439 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4405:4420 GF3.Spec.GF3Spec <> is_quad_balanced def
+R4422:4423 GF3.Spec.GF3Spec <> t1:39 var
+R4425:4426 GF3.Spec.GF3Spec <> t2:40 var
+R4428:4429 GF3.Spec.GF3Spec <> t3:41 var
+R4431:4433 GF3.Spec.GF3Spec <> t4':43 var
+R4442:4444 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4440:4441 GF3.Spec.GF3Spec <> t4:42 var
+R4445:4447 GF3.Spec.GF3Spec <> t4':43 var
+R4466:4481 GF3.Spec.GF3Spec <> is_quad_balanced def
+R4484:4494 GF3.Spec.GF3Spec <> is_balanced def
+def 4780:4786 <> chunks4
+R4793:4796 Coq.Init.Datatypes <> list ind
+R4798:4801 GF3.Spec.GF3Spec <> Trit ind
+binder 4789:4789 <> l:44
+R4806:4809 Coq.Init.Datatypes <> list ind
+R4812:4815 Coq.Init.Datatypes <> list ind
+R4817:4820 GF3.Spec.GF3Spec <> Trit ind
+R4834:4834 GF3.Spec.GF3Spec <> l:44 var
+R4847:4850 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R4853:4856 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R4859:4862 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R4865:4868 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R4893:4896 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R4877:4877 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4880:4881 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4884:4885 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4888:4889 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4892:4892 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R4897:4903 GF3.Spec.GF3Spec <> chunks4:45 def
+R4919:4920 Coq.Lists.List ListNotations ::list_scope:'['_']' not
+prf 5042:5065 <> gf3_conservation_theorem
+R5085:5088 Coq.Init.Datatypes <> list ind
+R5090:5093 GF3.Spec.GF3Spec <> Trit ind
+binder 5077:5081 <> trits:47
+R5136:5141 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R5127:5129 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5100:5109 Coq.Arith.PeanoNat Nat modulo def
+R5112:5117 Coq.Init.Datatypes <> length def
+R5119:5123 GF3.Spec.GF3Spec <> trits:47 var
+R5176:5181 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R5142:5147 Coq.Lists.List <> Forall ind
+R5162:5168 GF3.Spec.GF3Spec <> chunks4 def
+R5170:5174 GF3.Spec.GF3Spec <> trits:47 var
+R5149:5159 GF3.Spec.GF3Spec <> is_balanced def
+R5182:5192 GF3.Spec.GF3Spec <> is_balanced def
+R5194:5198 GF3.Spec.GF3Spec <> trits:47 var
+R5393:5403 GF3.Spec.GF3Spec <> is_balanced def
+def 5576:5590 <> is_balanced_dec
+R5601:5604 Coq.Init.Datatypes <> list ind
+R5606:5609 GF3.Spec.GF3Spec <> Trit ind
+binder 5593:5597 <> trits:48
+R5614:5617 Coq.Init.Datatypes <> bool ind
+R5624:5628 Coq.ZArith.BinInt Z eqb def
+R5631:5638 Coq.ZArith.BinInt Z modulo def
+R5641:5647 GF3.Spec.GF3Spec <> gf3_sum def
+R5649:5653 GF3.Spec.GF3Spec <> trits:48 var
+prf 5669:5691 <> is_balanced_dec_correct
+binder 5702:5706 <> trits:49
+R5739:5743 Coq.Init.Logic <> ::type_scope:x_'<->'_x not
+R5732:5734 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5711:5725 GF3.Spec.GF3Spec <> is_balanced_dec def
+R5727:5731 GF3.Spec.GF3Spec <> trits:49 var
+R5735:5738 Coq.Init.Datatypes <> true constr
+R5744:5754 GF3.Spec.GF3Spec <> is_balanced def
+R5756:5760 GF3.Spec.GF3Spec <> trits:49 var
+R5792:5806 GF3.Spec.GF3Spec <> is_balanced_dec def
+R5809:5819 GF3.Spec.GF3Spec <> is_balanced def
+R5832:5839 Coq.ZArith.BinInt Z eqb_eq thm
+R5832:5839 Coq.ZArith.BinInt Z eqb_eq thm
+R5832:5839 Coq.ZArith.BinInt Z eqb_eq thm

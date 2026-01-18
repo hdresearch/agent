@@ -1,0 +1,21 @@
+[package]
+name = "gf3_native"
+version = "0.1.0"
+edition = "2021"
+description = "GF(3) Conservation - Native Rust for rocq-of-rust extraction"
+
+[lib]
+path = "src/lib.rs"
+
+# rocq-of-rust configuration
+[package.metadata.rocq-of-rust]
+# Output directory for extracted Rocq files
+output_dir = "../extracted"
+# Skip extracting test modules
+skip_tests = true
+# Generate simulation proof stubs
+generate_proofs = true
+
+[dev-dependencies]
+# For property-based testing that mirrors Rocq QuickChick
+proptest = "1.4"

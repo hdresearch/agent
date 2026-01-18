@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+# ═══════════════════════════════════════════════════════════════════
+# hdresearch/chelsea:vers-agent
+# Flox-based containerized vers-agent for remote ACP fleet
+# ═══════════════════════════════════════════════════════════════════
+
+# ─── Build Stage ────────────────────────────────────────────────────
+FROM oven/bun:1-alpine AS build
+WORKDIR /build
+COPY package.json bun.lockb* ./
+RUN bun install --frozen-lockfile --production
+COPY . .
+RUN bun run build:bundle
+
+# ─── Flox Base ──────────────────────────────────────────────────────
+FROM agent:latest AS flox-base
+
+# ─── Production Stage ───────────────────────────────────────────────
+FROM flox-base AS production
+
+# Copy built application
+COPY --from=build /build/dist /app/dist
+COPY --from=build /build/package.json /app/
+COPY --from=build /build/node_modules /app/node_modules
+COPY --from=build /build/src/tunnel/policy.yml /app/config/policy.yml
+
+# Copy entrypoint script
+COPY --from=build /build/scripts/fleet-entrypoint.sh /entrypoint.sh
+
+# Fix permissions
+USER root
+RUN chmod +x /entrypoint.sh
+
+# Environment defaults
+ENV PORT=9999
+ENV NODE_ENV=production
+ENV VERS_VM_ID=alpha
+ENV VERS_VM_NAME=crimson
+ENV VERS_VM_TRIT=-1
+ENV VERS_VM_COLOR=#DC143C
+
+EXPOSE 9999
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD /activate -- curl -sf http://localhost:${PORT:-9999}/health || exit 1
+
+# Use activate with explicit shell and command
+ENTRYPOINT ["/activate", "--shell", "bash", "-c", "/entrypoint.sh"]

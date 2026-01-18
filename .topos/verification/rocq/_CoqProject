@@ -1,0 +1,18 @@
+# GF(3) Conservation Verification Project
+# Connects Dafny proofs with rocq-of-rust extraction
+
+-R spec GF3.Spec
+-R extracted GF3.Extracted  
+-R linking GF3.Linking
+-R proofs GF3.Proofs
+
+# Specification (hand-written, matches Dafny)
+spec/GF3Spec.v
+
+# Linking proofs (simulation relations)
+linking/GF3Simulation.v
+
+# Additional proofs
+proofs/SplitMix64.v
+proofs/PlasticConstant.v
+proofs/QuadBalancing.v

@@ -1,0 +1,280 @@
+DIGEST 0b642cb1c52151d6d0e7416aed54bfc5
+FGF3.Proofs.SplitMix64
+R302:318 Coq.ZArith.ZArith <> <> lib
+R336:352 Coq.micromega.Lia <> <> lib
+R370:386 Coq.NArith.NArith <> <> lib
+def 499:510 <> GOLDEN_GAMMA
+R514:514 Coq.Numbers.BinNums <> Z ind
+def 591:601 <> MIX_CONST_1
+R605:605 Coq.Numbers.BinNums <> Z ind
+def 641:651 <> MIX_CONST_2
+R655:655 Coq.Numbers.BinNums <> Z ind
+def 717:723 <> W64_MAX
+R727:727 Coq.Numbers.BinNums <> Z ind
+R732:736 Coq.ZArith.BinInt Z pow def
+def 812:818 <> trunc64
+R825:825 Coq.Numbers.BinNums <> Z ind
+binder 821:821 <> z:1
+R830:830 Coq.Numbers.BinNums <> Z ind
+R835:842 Coq.ZArith.BinInt Z modulo def
+R844:844 GF3.Proofs.SplitMix64 <> z:1 var
+R846:852 GF3.Proofs.SplitMix64 <> W64_MAX def
+def 899:903 <> add64
+R912:912 Coq.Numbers.BinNums <> Z ind
+binder 906:906 <> a:2
+binder 908:908 <> b:3
+R917:917 Coq.Numbers.BinNums <> Z ind
+R922:928 GF3.Proofs.SplitMix64 <> trunc64 def
+R932:934 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R931:931 GF3.Proofs.SplitMix64 <> a:2 var
+R935:935 GF3.Proofs.SplitMix64 <> b:3 var
+def 989:993 <> mul64
+R1002:1002 Coq.Numbers.BinNums <> Z ind
+binder 996:996 <> a:4
+binder 998:998 <> b:5
+R1007:1007 Coq.Numbers.BinNums <> Z ind
+R1012:1018 GF3.Proofs.SplitMix64 <> trunc64 def
+R1022:1024 Coq.ZArith.BinInt <> ::Z_scope:x_'*'_x not
+R1021:1021 GF3.Proofs.SplitMix64 <> a:4 var
+R1025:1025 GF3.Proofs.SplitMix64 <> b:5 var
+def 1059:1063 <> xor64
+R1072:1072 Coq.Numbers.BinNums <> Z ind
+binder 1066:1066 <> a:6
+binder 1068:1068 <> b:7
+R1077:1077 Coq.Numbers.BinNums <> Z ind
+R1082:1087 Coq.ZArith.BinInt Z lxor def
+R1089:1089 GF3.Proofs.SplitMix64 <> a:6 var
+R1091:1091 GF3.Proofs.SplitMix64 <> b:7 var
+def 1132:1136 <> shr64
+R1145:1145 Coq.Numbers.BinNums <> Z ind
+binder 1139:1139 <> a:8
+binder 1141:1141 <> n:9
+R1150:1150 Coq.Numbers.BinNums <> Z ind
+R1155:1162 Coq.ZArith.BinInt Z shiftr def
+R1164:1164 GF3.Proofs.SplitMix64 <> a:8 var
+R1166:1166 GF3.Proofs.SplitMix64 <> n:9 var
+def 1274:1276 <> mix
+R1283:1283 Coq.Numbers.BinNums <> Z ind
+binder 1279:1279 <> z:10
+R1288:1288 Coq.Numbers.BinNums <> Z ind
+R1305:1309 GF3.Proofs.SplitMix64 <> xor64 def
+R1311:1311 GF3.Proofs.SplitMix64 <> z:10 var
+R1314:1318 GF3.Proofs.SplitMix64 <> shr64 def
+R1320:1320 GF3.Proofs.SplitMix64 <> z:10 var
+binder 1299:1300 <> z1:11
+R1341:1345 GF3.Proofs.SplitMix64 <> mul64 def
+R1347:1348 GF3.Proofs.SplitMix64 <> z1:11 var
+R1350:1360 GF3.Proofs.SplitMix64 <> MIX_CONST_1 def
+binder 1335:1336 <> z2:12
+R1377:1381 GF3.Proofs.SplitMix64 <> xor64 def
+R1383:1384 GF3.Proofs.SplitMix64 <> z2:12 var
+R1387:1391 GF3.Proofs.SplitMix64 <> shr64 def
+R1393:1394 GF3.Proofs.SplitMix64 <> z2:12 var
+binder 1371:1372 <> z3:13
+R1415:1419 GF3.Proofs.SplitMix64 <> mul64 def
+R1421:1422 GF3.Proofs.SplitMix64 <> z3:13 var
+R1424:1434 GF3.Proofs.SplitMix64 <> MIX_CONST_2 def
+binder 1409:1410 <> z4:14
+R1441:1445 GF3.Proofs.SplitMix64 <> xor64 def
+R1447:1448 GF3.Proofs.SplitMix64 <> z4:14 var
+R1451:1455 GF3.Proofs.SplitMix64 <> shr64 def
+R1457:1458 GF3.Proofs.SplitMix64 <> z4:14 var
+def 1550:1554 <> unmix
+R1561:1561 Coq.Numbers.BinNums <> Z ind
+binder 1557:1557 <> z:15
+R1566:1566 Coq.Numbers.BinNums <> Z ind
+R1754:1754 GF3.Proofs.SplitMix64 <> z:15 var
+prf 1855:1867 <> mix_bijective
+binder 1878:1878 <> z:16
+R1899:1904 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R1884:1887 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R1889:1891 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R1888:1888 GF3.Proofs.SplitMix64 <> z:16 var
+R1888:1888 GF3.Proofs.SplitMix64 <> z:16 var
+R1892:1898 GF3.Proofs.SplitMix64 <> W64_MAX def
+R1905:1911 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R1919:1925 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+binder 1912:1918 <> unmix_z:17
+R1948:1955 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R1927:1930 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R1938:1940 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R1931:1937 GF3.Proofs.SplitMix64 <> unmix_z:17 var
+R1931:1937 GF3.Proofs.SplitMix64 <> unmix_z:17 var
+R1941:1947 GF3.Proofs.SplitMix64 <> W64_MAX def
+R1967:1969 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1956:1958 GF3.Proofs.SplitMix64 <> mix def
+R1960:1966 GF3.Proofs.SplitMix64 <> unmix_z:17 var
+R1970:1976 GF3.Proofs.SplitMix64 <> trunc64 def
+R1978:1978 GF3.Proofs.SplitMix64 <> z:16 var
+def 2514:2528 <> splitmix64_next
+R2539:2539 Coq.Numbers.BinNums <> Z ind
+binder 2531:2535 <> state:18
+R2545:2547 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R2544:2544 Coq.Numbers.BinNums <> Z ind
+R2548:2548 Coq.Numbers.BinNums <> Z ind
+R2572:2576 GF3.Proofs.SplitMix64 <> add64 def
+R2578:2582 GF3.Proofs.SplitMix64 <> state:18 var
+R2584:2595 GF3.Proofs.SplitMix64 <> GOLDEN_GAMMA def
+binder 2559:2567 <> new_state:19
+R2616:2618 GF3.Proofs.SplitMix64 <> mix def
+R2620:2628 GF3.Proofs.SplitMix64 <> new_state:19 var
+binder 2606:2611 <> output:20
+R2635:2635 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2645:2646 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2653:2653 Coq.Init.Datatypes <> ::core_scope:'('_x_','_x_','_'..'_','_x_')' not
+R2636:2644 GF3.Proofs.SplitMix64 <> new_state:19 var
+R2647:2652 GF3.Proofs.SplitMix64 <> output:20 var
+prf 2744:2763 <> golden_gamma_coprime
+R2793:2795 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2767:2771 Coq.ZArith.BinInt Z gcd def
+R2773:2784 GF3.Proofs.SplitMix64 <> GOLDEN_GAMMA def
+R2786:2792 GF3.Proofs.SplitMix64 <> W64_MAX def
+R2866:2877 GF3.Proofs.SplitMix64 <> GOLDEN_GAMMA def
+R2880:2886 GF3.Proofs.SplitMix64 <> W64_MAX def
+prf 3030:3049 <> add_gamma_full_cycle
+binder 3060:3064 <> start:21
+binder 3066:3066 <> n:22
+R3091:3096 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3072:3075 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R3081:3083 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R3076:3080 GF3.Proofs.SplitMix64 <> start:21 var
+R3076:3080 GF3.Proofs.SplitMix64 <> start:21 var
+R3084:3090 GF3.Proofs.SplitMix64 <> W64_MAX def
+R3113:3118 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3098:3101 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R3103:3105 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R3102:3102 GF3.Proofs.SplitMix64 <> n:22 var
+R3102:3102 GF3.Proofs.SplitMix64 <> n:22 var
+R3106:3112 GF3.Proofs.SplitMix64 <> W64_MAX def
+R3132:3138 GF3.Proofs.SplitMix64 <> trunc64 def
+R3146:3148 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R3141:3145 GF3.Proofs.SplitMix64 <> start:21 var
+R3150:3152 Coq.ZArith.BinInt <> ::Z_scope:x_'*'_x not
+R3149:3149 GF3.Proofs.SplitMix64 <> n:22 var
+R3153:3164 GF3.Proofs.SplitMix64 <> GOLDEN_GAMMA def
+binder 3123:3127 <> final:23
+R3172:3172 Coq.Init.Logic <> ::type_scope:x_'\/'_x not
+R3196:3203 Coq.Init.Logic <> ::type_scope:x_'\/'_x not
+R3232:3232 Coq.Init.Logic <> ::type_scope:x_'\/'_x not
+R3178:3181 Coq.Init.Logic <> ::type_scope:x_'\/'_x not
+R3174:3176 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R3173:3173 GF3.Proofs.SplitMix64 <> n:22 var
+R3187:3190 Coq.Init.Logic <> ::type_scope:x_'<>'_x not
+R3182:3186 GF3.Proofs.SplitMix64 <> final:23 var
+R3191:3195 GF3.Proofs.SplitMix64 <> start:21 var
+R3215:3218 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R3205:3207 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R3204:3204 GF3.Proofs.SplitMix64 <> n:22 var
+R3208:3214 GF3.Proofs.SplitMix64 <> W64_MAX def
+R3224:3226 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R3219:3223 GF3.Proofs.SplitMix64 <> final:23 var
+R3227:3231 GF3.Proofs.SplitMix64 <> start:21 var
+R3465:3472 Coq.ZArith.BinInt Z eq_dec def
+R3465:3472 Coq.ZArith.BinInt Z eq_dec def
+prf 3705:3726 <> splitmix64_full_period
+binder 3737:3740 <> seed:24
+R3764:3830 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3746:3749 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R3754:3756 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R3750:3753 GF3.Proofs.SplitMix64 <> seed:24 var
+R3750:3753 GF3.Proofs.SplitMix64 <> seed:24 var
+R3757:3763 GF3.Proofs.SplitMix64 <> W64_MAX def
+R3857:3857 Coq.Numbers.BinNums <> Z ind
+binder 3853:3853 <> s:25
+R3865:3867 Coq.Init.Datatypes <> nat ind
+binder 3861:3861 <> n:26
+R3883:3883 GF3.Proofs.SplitMix64 <> n:26 var
+R3896:3896 Coq.Init.Datatypes <> O constr
+R3901:3901 GF3.Proofs.SplitMix64 <> s:25 var
+R3909:3909 Coq.Init.Datatypes <> S constr
+R3917:3917 GF3.Proofs.SplitMix64 <> f:27 var
+R3920:3924 GF3.Proofs.SplitMix64 <> add64 def
+R3926:3926 GF3.Proofs.SplitMix64 <> s:25 var
+R3928:3939 GF3.Proofs.SplitMix64 <> GOLDEN_GAMMA def
+binder 3835:3841 <> iterate:29
+R3989:3991 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R3958:3964 GF3.Proofs.SplitMix64 <> iterate:29 var
+R3972:3979 Coq.ZArith.BinInt Z to_nat def
+R3981:3987 GF3.Proofs.SplitMix64 <> W64_MAX def
+R3966:3969 GF3.Proofs.SplitMix64 <> seed:24 var
+R3992:3995 GF3.Proofs.SplitMix64 <> seed:24 var
+prf 4329:4352 <> mix_mod3_equidistributed
+binder 4488:4488 <> z:30
+R4507:4512 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4492:4495 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R4497:4499 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R4496:4496 GF3.Proofs.SplitMix64 <> z:30 var
+R4496:4496 GF3.Proofs.SplitMix64 <> z:30 var
+R4500:4506 GF3.Proofs.SplitMix64 <> W64_MAX def
+R4514:4517 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R4536:4538 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R4518:4525 Coq.ZArith.BinInt Z modulo def
+R4528:4530 GF3.Proofs.SplitMix64 <> mix def
+R4532:4532 GF3.Proofs.SplitMix64 <> z:30 var
+R4518:4525 Coq.ZArith.BinInt Z modulo def
+R4528:4530 GF3.Proofs.SplitMix64 <> mix def
+R4532:4532 GF3.Proofs.SplitMix64 <> z:30 var
+R4628:4642 Coq.ZArith.BinInt Z mod_pos_bound thm
+R4645:4647 GF3.Proofs.SplitMix64 <> mix def
+R4628:4642 Coq.ZArith.BinInt Z mod_pos_bound thm
+R4645:4647 GF3.Proofs.SplitMix64 <> mix def
+def 4720:4735 <> trit_from_output
+R4747:4747 Coq.Numbers.BinNums <> Z ind
+binder 4738:4743 <> output:31
+R4752:4752 Coq.Numbers.BinNums <> Z ind
+R4776:4778 Coq.ZArith.BinInt <> ::Z_scope:x_'-'_x not
+R4759:4766 Coq.ZArith.BinInt Z modulo def
+R4768:4773 GF3.Proofs.SplitMix64 <> output:31 var
+prf 4823:4833 <> trit_bounds
+binder 4844:4849 <> output:32
+R4856:4859 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<='_x not
+R4883:4886 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<='_x not
+R4860:4875 GF3.Proofs.SplitMix64 <> trit_from_output def
+R4877:4882 GF3.Proofs.SplitMix64 <> output:32 var
+R4860:4875 GF3.Proofs.SplitMix64 <> trit_from_output def
+R4877:4882 GF3.Proofs.SplitMix64 <> output:32 var
+R4922:4937 GF3.Proofs.SplitMix64 <> trit_from_output def
+R4954:4968 Coq.ZArith.BinInt Z mod_pos_bound thm
+R4954:4968 Coq.ZArith.BinInt Z mod_pos_bound thm
+prf 5044:5059 <> trit_determinism
+binder 5070:5073 <> seed:33
+binder 5075:5077 <> idx:34
+R5101:5106 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R5083:5086 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R5091:5093 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x_'<'_x not
+R5087:5090 GF3.Proofs.SplitMix64 <> seed:33 var
+R5087:5090 GF3.Proofs.SplitMix64 <> seed:33 var
+R5094:5100 GF3.Proofs.SplitMix64 <> W64_MAX def
+R5115:5184 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R5108:5111 Coq.ZArith.BinInt <> ::Z_scope:x_'<='_x not
+R5112:5114 GF3.Proofs.SplitMix64 <> idx:34 var
+R5207:5207 Coq.Numbers.BinNums <> Z ind
+binder 5203:5203 <> s:35
+R5215:5217 Coq.Init.Datatypes <> nat ind
+binder 5211:5211 <> n:36
+R5233:5233 GF3.Proofs.SplitMix64 <> n:36 var
+R5246:5246 Coq.Init.Datatypes <> O constr
+R5251:5251 GF3.Proofs.SplitMix64 <> s:35 var
+R5259:5259 Coq.Init.Datatypes <> S constr
+R5267:5271 GF3.Proofs.SplitMix64 <> add64 def
+R5274:5274 GF3.Proofs.SplitMix64 <> f:37 var
+R5276:5276 GF3.Proofs.SplitMix64 <> s:35 var
+R5282:5293 GF3.Proofs.SplitMix64 <> GOLDEN_GAMMA def
+binder 5189:5191 <> run:39
+R5322:5324 GF3.Proofs.SplitMix64 <> run:39 var
+R5332:5339 Coq.ZArith.BinInt Z to_nat def
+R5341:5343 GF3.Proofs.SplitMix64 <> idx:34 var
+R5326:5329 GF3.Proofs.SplitMix64 <> seed:33 var
+binder 5312:5317 <> state1:40
+R5365:5367 GF3.Proofs.SplitMix64 <> run:39 var
+R5375:5382 Coq.ZArith.BinInt Z to_nat def
+R5384:5386 GF3.Proofs.SplitMix64 <> idx:34 var
+R5369:5372 GF3.Proofs.SplitMix64 <> seed:33 var
+binder 5355:5360 <> state2:41
+R5423:5425 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5394:5409 GF3.Proofs.SplitMix64 <> trit_from_output def
+R5412:5414 GF3.Proofs.SplitMix64 <> mix def
+R5416:5421 GF3.Proofs.SplitMix64 <> state1:40 var
+R5426:5441 GF3.Proofs.SplitMix64 <> trit_from_output def
+R5444:5446 GF3.Proofs.SplitMix64 <> mix def
+R5448:5453 GF3.Proofs.SplitMix64 <> state2:41 var

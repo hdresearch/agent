@@ -1,0 +1,346 @@
+DIGEST 18cc3771a68248c4d786ddcacde35737
+FGF3.Linking.GF3Simulation
+R519:535 Coq.ZArith.ZArith <> <> lib
+R553:566 Coq.Lists.List <> <> lib
+R584:600 Coq.micromega.Lia <> <> lib
+R618:633 GF3.Spec.GF3Spec <> <> lib
+R643:655 Coq.Lists.List ListNotations <> mod
+mod 1117:1125 <> Extracted
+ind 1186:1194 Extracted Trit_impl
+constr 1212:1221 Extracted Minus_impl
+constr 1241:1249 Extracted Zero_impl
+constr 1270:1278 Extracted Plus_impl
+R1225:1233 GF3.Linking.GF3Simulation <> Trit_impl:1 ind
+R1254:1262 GF3.Linking.GF3Simulation <> Trit_impl:1 ind
+R1283:1291 GF3.Linking.GF3Simulation <> Trit_impl:1 ind
+scheme 1186:1194 Extracted Trit_impl_rect
+scheme 1186:1194 Extracted Trit_impl_ind
+scheme 1186:1194 Extracted Trit_impl_rec
+scheme 1186:1194 Extracted Trit_impl_sind
+def 1308:1322 Extracted trit_value_impl
+R1329:1337 GF3.Linking.GF3Simulation Extracted Trit_impl ind
+binder 1325:1325 <> t:3
+R1342:1342 Coq.Numbers.BinNums <> Z ind
+R1357:1357 GF3.Linking.GF3Simulation <> t:3 var
+R1370:1379 GF3.Linking.GF3Simulation Extracted Minus_impl constr
+R1393:1401 GF3.Linking.GF3Simulation Extracted Zero_impl constr
+R1415:1423 GF3.Linking.GF3Simulation Extracted Plus_impl constr
+def 1452:1463 Extracted gf3_sum_impl
+R1474:1477 Coq.Init.Datatypes <> list ind
+R1479:1487 GF3.Linking.GF3Simulation Extracted Trit_impl ind
+binder 1466:1470 <> trits:5
+R1492:1492 Coq.Numbers.BinNums <> Z ind
+R1507:1511 GF3.Linking.GF3Simulation <> trits:5 var
+R1524:1525 Coq.Lists.List ListNotations ::list_scope:'['_']' not
+R1539:1542 Coq.Init.Datatypes <> ::list_scope:x_'::'_x not
+R1568:1570 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1551:1565 GF3.Linking.GF3Simulation Extracted trit_value_impl def
+R1571:1582 GF3.Linking.GF3Simulation <> gf3_sum_impl:6 def
+def 1612:1627 Extracted is_balanced_impl
+R1638:1641 Coq.Init.Datatypes <> list ind
+R1643:1651 GF3.Linking.GF3Simulation Extracted Trit_impl ind
+binder 1630:1634 <> trits:8
+R1656:1659 Coq.Init.Datatypes <> bool ind
+R1668:1672 Coq.ZArith.BinInt Z eqb def
+R1675:1682 Coq.ZArith.BinInt Z modulo def
+R1685:1696 GF3.Linking.GF3Simulation Extracted gf3_sum_impl def
+R1698:1702 GF3.Linking.GF3Simulation <> trits:8 var
+def 1725:1742 Extracted balance_triad_impl
+R1756:1764 GF3.Linking.GF3Simulation Extracted Trit_impl ind
+binder 1745:1746 <> t1:9
+binder 1748:1749 <> t2:10
+binder 1751:1752 <> t3:11
+R1769:1777 GF3.Linking.GF3Simulation Extracted Trit_impl ind
+R1836:1838 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1815:1817 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1797:1811 GF3.Linking.GF3Simulation Extracted trit_value_impl def
+R1813:1814 GF3.Linking.GF3Simulation <> t1:9 var
+R1818:1832 GF3.Linking.GF3Simulation Extracted trit_value_impl def
+R1834:1835 GF3.Linking.GF3Simulation <> t2:10 var
+R1839:1853 GF3.Linking.GF3Simulation Extracted trit_value_impl def
+R1855:1856 GF3.Linking.GF3Simulation <> t3:11 var
+binder 1790:1792 <> sum:12
+R1877:1884 Coq.ZArith.BinInt Z modulo def
+R1904:1906 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R1887:1894 Coq.ZArith.BinInt Z modulo def
+R1897:1897 Coq.ZArith.BinInt <> ::Z_scope:'-'_x not
+R1898:1900 GF3.Linking.GF3Simulation <> sum:12 var
+binder 1869:1872 <> mod3:13
+R1922:1926 Coq.ZArith.BinInt Z eqb def
+R1928:1931 GF3.Linking.GF3Simulation <> mod3:13 var
+R1962:1966 Coq.ZArith.BinInt Z eqb def
+R1968:1971 GF3.Linking.GF3Simulation <> mod3:13 var
+R1999:2008 GF3.Linking.GF3Simulation Extracted Minus_impl constr
+R1980:1988 GF3.Linking.GF3Simulation Extracted Plus_impl constr
+R1940:1948 GF3.Linking.GF3Simulation Extracted Zero_impl constr
+R2015:2023 GF3.Linking.GF3Simulation Extracted <> mod
+def 2133:2144 <> trit_refines
+R2156:2174 GF3.Linking.GF3Simulation <> Trit_impl ind
+binder 2147:2152 <> t_impl:14
+R2187:2190 GF3.Spec.GF3Spec <> Trit ind
+binder 2178:2183 <> t_spec:15
+R2237:2239 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2205:2229 GF3.Linking.GF3Simulation <> trit_value_impl def
+R2231:2236 GF3.Linking.GF3Simulation <> t_impl:14 var
+R2240:2249 GF3.Spec.GF3Spec <> trit_value def
+R2251:2256 GF3.Linking.GF3Simulation <> t_spec:15 var
+def 2321:2332 <> list_refines
+R2344:2347 Coq.Init.Datatypes <> list ind
+R2349:2367 GF3.Linking.GF3Simulation <> Trit_impl ind
+binder 2335:2340 <> l_impl:16
+R2380:2383 Coq.Init.Datatypes <> list ind
+R2385:2388 GF3.Spec.GF3Spec <> Trit ind
+binder 2371:2376 <> l_spec:17
+R2432:2437 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R2416:2418 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2403:2408 Coq.Init.Datatypes <> length def
+R2410:2415 GF3.Linking.GF3Simulation <> l_impl:16 var
+R2419:2424 Coq.Init.Datatypes <> length def
+R2426:2431 GF3.Linking.GF3Simulation <> l_spec:17 var
+R2449:2451 Coq.Init.Datatypes <> nat ind
+binder 2445:2445 <> i:18
+R2477:2484 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2456:2458 Coq.Init.Peano <> ::nat_scope:x_'<'_x not
+R2455:2455 GF3.Linking.GF3Simulation <> i:18 var
+R2459:2464 Coq.Init.Datatypes <> length def
+R2466:2471 GF3.Linking.GF3Simulation <> l_impl:16 var
+R2485:2496 GF3.Linking.GF3Simulation <> trit_refines def
+R2499:2501 Coq.Lists.List <> nth def
+R2512:2530 GF3.Linking.GF3Simulation <> Zero_impl constr
+R2505:2510 GF3.Linking.GF3Simulation <> l_impl:16 var
+R2503:2503 GF3.Linking.GF3Simulation <> i:18 var
+R2534:2536 Coq.Lists.List <> nth def
+R2547:2550 GF3.Spec.GF3Spec <> Zero constr
+R2540:2545 GF3.Linking.GF3Simulation <> l_spec:17 var
+R2538:2538 GF3.Linking.GF3Simulation <> i:18 var
+prf 2668:2688 <> trit_value_simulation
+binder 2699:2704 <> t_impl:19
+binder 2706:2711 <> t_spec:20
+R2742:2747 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2716:2727 GF3.Linking.GF3Simulation <> trit_refines def
+R2729:2734 GF3.Linking.GF3Simulation <> t_impl:19 var
+R2736:2741 GF3.Linking.GF3Simulation <> t_spec:20 var
+R2780:2782 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2748:2772 GF3.Linking.GF3Simulation <> trit_value_impl def
+R2774:2779 GF3.Linking.GF3Simulation <> t_impl:19 var
+R2783:2792 GF3.Spec.GF3Spec <> trit_value def
+R2794:2799 GF3.Linking.GF3Simulation <> t_spec:20 var
+prf 2916:2933 <> gf3_sum_simulation
+binder 2944:2949 <> l_impl:21
+binder 2951:2956 <> l_spec:22
+R2987:2992 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2961:2972 GF3.Linking.GF3Simulation <> list_refines def
+R2974:2979 GF3.Linking.GF3Simulation <> l_impl:21 var
+R2981:2986 GF3.Linking.GF3Simulation <> l_spec:22 var
+R3022:3024 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2993:3014 GF3.Linking.GF3Simulation <> gf3_sum_impl def
+R3016:3021 GF3.Linking.GF3Simulation <> l_impl:21 var
+R3025:3031 GF3.Spec.GF3Spec <> gf3_sum def
+R3033:3038 GF3.Linking.GF3Simulation <> l_spec:22 var
+R3449:3449 Coq.Init.Datatypes <> O constr
+R3449:3449 Coq.Init.Datatypes <> O constr
+R3624:3634 Coq.Init.Datatypes <> S constr
+R3624:3634 Coq.Init.Datatypes <> S constr
+prf 3788:3805 <> balance_simulation
+binder 3816:3822 <> t1_impl:23
+binder 3824:3830 <> t2_impl:24
+binder 3832:3838 <> t3_impl:25
+binder 3840:3846 <> t1_spec:26
+binder 3848:3854 <> t2_spec:27
+binder 3856:3862 <> t3_spec:28
+R3895:3900 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3867:3878 GF3.Linking.GF3Simulation <> trit_refines def
+R3880:3886 GF3.Linking.GF3Simulation <> t1_impl:23 var
+R3888:3894 GF3.Linking.GF3Simulation <> t1_spec:26 var
+R3929:3934 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3901:3912 GF3.Linking.GF3Simulation <> trit_refines def
+R3914:3920 GF3.Linking.GF3Simulation <> t2_impl:24 var
+R3922:3928 GF3.Linking.GF3Simulation <> t2_spec:27 var
+R3963:3968 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3935:3946 GF3.Linking.GF3Simulation <> trit_refines def
+R3948:3954 GF3.Linking.GF3Simulation <> t3_impl:25 var
+R3956:3962 GF3.Linking.GF3Simulation <> t3_spec:28 var
+R3969:3980 GF3.Linking.GF3Simulation <> trit_refines def
+R3983:4010 GF3.Linking.GF3Simulation <> balance_triad_impl def
+R4012:4018 GF3.Linking.GF3Simulation <> t1_impl:23 var
+R4020:4026 GF3.Linking.GF3Simulation <> t2_impl:24 var
+R4028:4034 GF3.Linking.GF3Simulation <> t3_impl:25 var
+R4053:4065 GF3.Spec.GF3Spec <> balance_triad def
+R4067:4073 GF3.Linking.GF3Simulation <> t1_spec:26 var
+R4075:4081 GF3.Linking.GF3Simulation <> t2_spec:27 var
+R4083:4089 GF3.Linking.GF3Simulation <> t3_spec:28 var
+R4176:4187 GF3.Linking.GF3Simulation <> trit_refines def
+prf 4419:4440 <> is_balanced_simulation
+binder 4451:4456 <> l_impl:29
+binder 4458:4463 <> l_spec:30
+R4494:4499 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4468:4479 GF3.Linking.GF3Simulation <> list_refines def
+R4481:4486 GF3.Linking.GF3Simulation <> l_impl:29 var
+R4488:4493 GF3.Linking.GF3Simulation <> l_spec:30 var
+R4533:4535 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4500:4525 GF3.Linking.GF3Simulation <> is_balanced_impl def
+R4527:4532 GF3.Linking.GF3Simulation <> l_impl:29 var
+R4536:4550 GF3.Spec.GF3Spec <> is_balanced_dec def
+R4552:4557 GF3.Linking.GF3Simulation <> l_spec:30 var
+R4605:4630 GF3.Linking.GF3Simulation <> is_balanced_impl def
+R4633:4647 GF3.Spec.GF3Spec <> is_balanced_dec def
+R4661:4678 GF3.Linking.GF3Simulation <> gf3_sum_simulation thm
+R4661:4678 GF3.Linking.GF3Simulation <> gf3_sum_simulation thm
+R4661:4678 GF3.Linking.GF3Simulation <> gf3_sum_simulation thm
+prf 4823:4842 <> dafny_rocq_agreement
+R4864:4867 GF3.Spec.GF3Spec <> Trit ind
+binder 4853:4854 <> t1:31
+binder 4856:4857 <> t2:32
+binder 4859:4860 <> t3:33
+R4893:4894 GF3.Linking.GF3Simulation <> t1:31 var
+R4901:4905 GF3.Spec.GF3Spec <> Minus constr
+R4910:4929 GF3.Linking.GF3Simulation <> Minus_impl constr
+R4963:4966 GF3.Spec.GF3Spec <> Zero constr
+R4971:4989 GF3.Linking.GF3Simulation <> Zero_impl constr
+R5023:5026 GF3.Spec.GF3Spec <> Plus constr
+R5031:5049 GF3.Linking.GF3Simulation <> Plus_impl constr
+binder 4876:4882 <> t1_impl:35
+R5081:5082 GF3.Linking.GF3Simulation <> t2:32 var
+R5089:5093 GF3.Spec.GF3Spec <> Minus constr
+R5098:5117 GF3.Linking.GF3Simulation <> Minus_impl constr
+R5151:5154 GF3.Spec.GF3Spec <> Zero constr
+R5159:5177 GF3.Linking.GF3Simulation <> Zero_impl constr
+R5211:5214 GF3.Spec.GF3Spec <> Plus constr
+R5219:5237 GF3.Linking.GF3Simulation <> Plus_impl constr
+binder 5064:5070 <> t2_impl:37
+R5269:5270 GF3.Linking.GF3Simulation <> t3:33 var
+R5277:5281 GF3.Spec.GF3Spec <> Minus constr
+R5286:5305 GF3.Linking.GF3Simulation <> Minus_impl constr
+R5339:5342 GF3.Spec.GF3Spec <> Zero constr
+R5347:5365 GF3.Linking.GF3Simulation <> Zero_impl constr
+R5399:5402 GF3.Spec.GF3Spec <> Plus constr
+R5407:5425 GF3.Linking.GF3Simulation <> Plus_impl constr
+binder 5252:5258 <> t3_impl:39
+R5451:5478 GF3.Linking.GF3Simulation <> balance_triad_impl def
+R5480:5486 GF3.Linking.GF3Simulation <> t1_impl:35 var
+R5488:5494 GF3.Linking.GF3Simulation <> t2_impl:37 var
+R5496:5502 GF3.Linking.GF3Simulation <> t3_impl:39 var
+binder 5440:5446 <> t4_impl:40
+R5524:5536 GF3.Spec.GF3Spec <> balance_triad def
+R5538:5539 GF3.Linking.GF3Simulation <> t1:31 var
+R5541:5542 GF3.Linking.GF3Simulation <> t2:32 var
+R5544:5545 GF3.Linking.GF3Simulation <> t3:33 var
+binder 5513:5519 <> t4_spec:41
+R5622:5668 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R5594:5605 GF3.Linking.GF3Simulation <> trit_refines def
+R5607:5613 GF3.Linking.GF3Simulation <> t4_impl:40 var
+R5615:5621 GF3.Linking.GF3Simulation <> t4_spec:41 var
+R5739:5744 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R5732:5734 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5669:5694 GF3.Linking.GF3Simulation <> is_balanced_impl def
+R5696:5696 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5704:5705 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5713:5714 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5722:5723 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5731:5731 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5697:5703 GF3.Linking.GF3Simulation <> t1_impl:35 var
+R5706:5712 GF3.Linking.GF3Simulation <> t2_impl:37 var
+R5715:5721 GF3.Linking.GF3Simulation <> t3_impl:39 var
+R5724:5730 GF3.Linking.GF3Simulation <> t4_impl:40 var
+R5735:5738 Coq.Init.Datatypes <> true constr
+R5745:5755 GF3.Spec.GF3Spec <> is_balanced def
+R5757:5757 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5760:5761 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5764:5765 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5768:5769 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5777:5777 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5758:5759 GF3.Linking.GF3Simulation <> t1:31 var
+R5762:5763 GF3.Linking.GF3Simulation <> t2:32 var
+R5766:5767 GF3.Linking.GF3Simulation <> t3:33 var
+R5770:5776 GF3.Linking.GF3Simulation <> t4_spec:41 var
+R5898:5909 GF3.Linking.GF3Simulation <> trit_refines def
+R6092:6112 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R6092:6112 GF3.Spec.GF3Spec <> balance_triad_correct thm
+prf 6209:6218 <> map_sum_eq
+R6243:6246 Coq.Init.Datatypes <> list ind
+R6248:6251 GF3.Spec.GF3Spec <> Trit ind
+binder 6230:6239 <> trits_spec:42
+R6577:6579 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R6257:6278 GF3.Linking.GF3Simulation <> gf3_sum_impl def
+R6281:6283 Coq.Lists.List <> map def
+R6566:6575 GF3.Linking.GF3Simulation <> trits_spec:42 var
+binder 6290:6290 <> t:43
+R6301:6301 GF3.Linking.GF3Simulation <> t:43 var
+R6351:6355 GF3.Spec.GF3Spec <> Minus constr
+R6360:6379 GF3.Linking.GF3Simulation <> Minus_impl constr
+R6423:6426 GF3.Spec.GF3Spec <> Zero constr
+R6431:6449 GF3.Linking.GF3Simulation <> Zero_impl constr
+R6493:6496 GF3.Spec.GF3Spec <> Plus constr
+R6501:6519 GF3.Linking.GF3Simulation <> Plus_impl constr
+R6580:6586 GF3.Spec.GF3Spec <> gf3_sum def
+R6588:6597 GF3.Linking.GF3Simulation <> trits_spec:42 var
+prf 6796:6817 <> conservation_agreement
+R6842:6845 Coq.Init.Datatypes <> list ind
+R6847:6850 GF3.Spec.GF3Spec <> Trit ind
+binder 6829:6838 <> trits_spec:45
+R6874:6876 Coq.Lists.List <> map def
+R7135:7144 GF3.Linking.GF3Simulation <> trits_spec:45 var
+binder 6883:6883 <> t:46
+R6894:6894 GF3.Linking.GF3Simulation <> t:46 var
+R6938:6942 GF3.Spec.GF3Spec <> Minus constr
+R6947:6966 GF3.Linking.GF3Simulation <> Minus_impl constr
+R7004:7007 GF3.Spec.GF3Spec <> Zero constr
+R7012:7030 GF3.Linking.GF3Simulation <> Zero_impl constr
+R7068:7071 GF3.Spec.GF3Spec <> Plus constr
+R7076:7094 GF3.Linking.GF3Simulation <> Plus_impl constr
+binder 6860:6869 <> trits_impl:48
+R7223:7228 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R7201:7211 GF3.Spec.GF3Spec <> is_balanced def
+R7213:7222 GF3.Linking.GF3Simulation <> trits_spec:45 var
+R7266:7268 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R7229:7254 GF3.Linking.GF3Simulation <> is_balanced_impl def
+R7256:7265 GF3.Linking.GF3Simulation <> trits_impl:48 var
+R7269:7272 Coq.Init.Datatypes <> true constr
+R7349:7359 GF3.Spec.GF3Spec <> is_balanced def
+R7379:7404 GF3.Linking.GF3Simulation <> is_balanced_impl def
+R7417:7426 GF3.Linking.GF3Simulation <> map_sum_eq thm
+R7417:7426 GF3.Linking.GF3Simulation <> map_sum_eq thm
+R7417:7426 GF3.Linking.GF3Simulation <> map_sum_eq thm
+mod 7774:7787 <> DafnyExtracted
+def 7939:7954 DafnyExtracted trit_value_dafny
+R7959:7983 GF3.Linking.GF3Simulation Extracted trit_value_impl def
+def 7999:8011 DafnyExtracted gf3_sum_dafny
+R8016:8037 GF3.Linking.GF3Simulation Extracted gf3_sum_impl def
+def 8053:8071 DafnyExtracted balance_triad_dafny
+R8076:8103 GF3.Linking.GF3Simulation Extracted balance_triad_impl def
+R8110:8123 GF3.Linking.GF3Simulation DafnyExtracted <> mod
+prf 8190:8213 <> dafny_native_equivalence
+binder 8224:8225 <> t1:49
+binder 8227:8228 <> t2:50
+binder 8230:8231 <> t3:51
+R8279:8284 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R8236:8269 GF3.Linking.GF3Simulation <> balance_triad_dafny def
+R8271:8272 GF3.Linking.GF3Simulation <> t1:49 var
+R8274:8275 GF3.Linking.GF3Simulation <> t2:50 var
+R8277:8278 GF3.Linking.GF3Simulation <> t3:51 var
+R8285:8312 GF3.Linking.GF3Simulation <> balance_triad_impl def
+R8314:8315 GF3.Linking.GF3Simulation <> t1:49 var
+R8317:8318 GF3.Linking.GF3Simulation <> t2:50 var
+R8320:8321 GF3.Linking.GF3Simulation <> t3:51 var
+prf 8458:8482 <> verification_completeness
+R8504:8507 GF3.Spec.GF3Spec <> Trit ind
+binder 8493:8494 <> t1:52
+binder 8496:8497 <> t2:53
+binder 8499:8500 <> t3:54
+R8722:8734 GF3.Spec.GF3Spec <> balance_triad def
+R8736:8737 GF3.Linking.GF3Simulation <> t1:52 var
+R8739:8740 GF3.Linking.GF3Simulation <> t2:53 var
+R8742:8743 GF3.Linking.GF3Simulation <> t3:54 var
+binder 8710:8717 <> balancer:55
+R8750:8760 GF3.Spec.GF3Spec <> is_balanced def
+R8762:8762 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R8765:8766 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R8769:8770 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R8773:8774 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R8783:8783 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R8763:8764 GF3.Linking.GF3Simulation <> t1:52 var
+R8767:8768 GF3.Linking.GF3Simulation <> t2:53 var
+R8771:8772 GF3.Linking.GF3Simulation <> t3:54 var
+R8775:8782 GF3.Linking.GF3Simulation <> balancer:55 var
+R8809:8829 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R8809:8829 GF3.Spec.GF3Spec <> balance_triad_correct thm

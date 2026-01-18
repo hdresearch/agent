@@ -1,0 +1,336 @@
+DIGEST b1591d902a37795b52ceb1bacebcdbfd
+FGF3.Proofs.QuadBalancing
+R298:314 Coq.ZArith.ZArith <> <> lib
+R332:345 Coq.Lists.List <> <> lib
+R363:379 Coq.micromega.Lia <> <> lib
+R397:412 GF3.Spec.GF3Spec <> <> lib
+R422:434 Coq.Lists.List ListNotations <> mod
+prf 578:605 <> balancing_trit_exists_unique
+R627:630 GF3.Spec.GF3Spec <> Trit ind
+binder 616:617 <> t1:1
+binder 619:620 <> t2:2
+binder 622:623 <> t3:3
+R635:642 Coq.Init.Logic <> ::type_scope:'exists'_'!'_x_'..'_x_','_x not
+R652:653 Coq.Init.Logic <> ::type_scope:'exists'_'!'_x_'..'_x_','_x not
+R648:651 GF3.Spec.GF3Spec <> Trit ind
+binder 643:644 <> t4:4
+R654:664 GF3.Spec.GF3Spec <> is_balanced def
+R666:666 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R669:670 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R673:674 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R677:678 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R681:681 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R667:668 GF3.Proofs.QuadBalancing <> t1:1 var
+R671:672 GF3.Proofs.QuadBalancing <> t2:2 var
+R675:676 GF3.Proofs.QuadBalancing <> t3:3 var
+R679:680 GF3.Proofs.QuadBalancing <> t4:4 var
+R765:777 GF3.Spec.GF3Spec <> balance_triad def
+R765:777 GF3.Spec.GF3Spec <> balance_triad def
+R831:851 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R831:851 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R954:974 GF3.Spec.GF3Spec <> balancing_trit_unique thm
+R954:974 GF3.Spec.GF3Spec <> balancing_trit_unique thm
+R999:1019 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R999:1019 GF3.Spec.GF3Spec <> balance_triad_correct thm
+prf 1179:1208 <> balance_triad_characterization
+binder 1219:1220 <> t1:5
+binder 1222:1223 <> t2:6
+binder 1225:1226 <> t3:7
+binder 1228:1229 <> t4:8
+R1262:1266 Coq.Init.Logic <> ::type_scope:x_'<->'_x not
+R1234:1244 GF3.Spec.GF3Spec <> is_balanced def
+R1246:1246 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R1249:1250 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R1253:1254 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R1257:1258 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R1261:1261 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R1247:1248 GF3.Proofs.QuadBalancing <> t1:5 var
+R1251:1252 GF3.Proofs.QuadBalancing <> t2:6 var
+R1255:1256 GF3.Proofs.QuadBalancing <> t3:7 var
+R1259:1260 GF3.Proofs.QuadBalancing <> t4:8 var
+R1269:1271 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1267:1268 GF3.Proofs.QuadBalancing <> t4:8 var
+R1272:1284 GF3.Spec.GF3Spec <> balance_triad def
+R1286:1287 GF3.Proofs.QuadBalancing <> t1:5 var
+R1289:1290 GF3.Proofs.QuadBalancing <> t2:6 var
+R1292:1293 GF3.Proofs.QuadBalancing <> t3:7 var
+R1483:1493 GF3.Spec.GF3Spec <> is_balanced def
+R1496:1508 GF3.Spec.GF3Spec <> balance_triad def
+R1651:1671 GF3.Spec.GF3Spec <> balance_triad_correct thm
+R1651:1671 GF3.Spec.GF3Spec <> balance_triad_correct thm
+prf 1761:1773 <> trit_add_comm
+binder 1784:1784 <> a:9
+binder 1786:1786 <> b:10
+R1800:1802 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1789:1795 GF3.Spec.GF3Spec <> add_gf3 def
+R1797:1797 GF3.Proofs.QuadBalancing <> a:9 var
+R1799:1799 GF3.Proofs.QuadBalancing <> b:10 var
+R1803:1809 GF3.Spec.GF3Spec <> add_gf3 def
+R1811:1811 GF3.Proofs.QuadBalancing <> b:10 var
+R1813:1813 GF3.Proofs.QuadBalancing <> a:9 var
+prf 1915:1928 <> trit_add_assoc
+binder 1939:1939 <> a:11
+binder 1941:1941 <> b:12
+binder 1943:1943 <> c:13
+R1971:1973 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1948:1954 GF3.Spec.GF3Spec <> add_gf3 def
+R1957:1963 GF3.Spec.GF3Spec <> add_gf3 def
+R1965:1965 GF3.Proofs.QuadBalancing <> a:11 var
+R1967:1967 GF3.Proofs.QuadBalancing <> b:12 var
+R1970:1970 GF3.Proofs.QuadBalancing <> c:13 var
+R1974:1980 GF3.Spec.GF3Spec <> add_gf3 def
+R1982:1982 GF3.Proofs.QuadBalancing <> a:11 var
+R1985:1991 GF3.Spec.GF3Spec <> add_gf3 def
+R1993:1993 GF3.Proofs.QuadBalancing <> b:12 var
+R1995:1995 GF3.Proofs.QuadBalancing <> c:13 var
+prf 2091:2105 <> trit_add_zero_l
+binder 2116:2116 <> t:14
+R2133:2135 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2119:2125 GF3.Spec.GF3Spec <> add_gf3 def
+R2127:2130 GF3.Spec.GF3Spec <> Zero constr
+R2132:2132 GF3.Proofs.QuadBalancing <> t:14 var
+R2136:2136 GF3.Proofs.QuadBalancing <> t:14 var
+prf 2194:2208 <> trit_add_zero_r
+binder 2219:2219 <> t:15
+R2236:2238 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2222:2228 GF3.Spec.GF3Spec <> add_gf3 def
+R2230:2230 GF3.Proofs.QuadBalancing <> t:15 var
+R2232:2235 GF3.Spec.GF3Spec <> Zero constr
+R2239:2239 GF3.Proofs.QuadBalancing <> t:15 var
+prf 2330:2345 <> trit_add_inverse
+binder 2356:2356 <> t:16
+R2383:2385 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2359:2365 GF3.Spec.GF3Spec <> add_gf3 def
+R2367:2367 GF3.Proofs.QuadBalancing <> t:16 var
+R2370:2379 GF3.Spec.GF3Spec <> negate_gf3 def
+R2381:2381 GF3.Proofs.QuadBalancing <> t:16 var
+R2386:2389 GF3.Spec.GF3Spec <> Zero constr
+def 2562:2569 <> quad_add
+R2580:2583 Coq.Init.Datatypes <> list ind
+R2585:2588 GF3.Spec.GF3Spec <> Trit ind
+binder 2572:2573 <> q1:17
+binder 2575:2576 <> q2:18
+R2593:2596 Coq.Init.Datatypes <> list ind
+R2598:2601 GF3.Spec.GF3Spec <> Trit ind
+R2618:2619 GF3.Proofs.QuadBalancing <> q2:18 var
+R2614:2615 GF3.Proofs.QuadBalancing <> q1:17 var
+R2630:2630 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2633:2634 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2637:2638 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2641:2642 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2645:2645 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2648:2648 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2651:2652 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2655:2656 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2659:2660 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2663:2663 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2672:2672 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2686:2687 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2701:2702 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2716:2717 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2731:2731 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R2673:2679 GF3.Spec.GF3Spec <> add_gf3 def
+R2688:2694 GF3.Spec.GF3Spec <> add_gf3 def
+R2703:2709 GF3.Spec.GF3Spec <> add_gf3 def
+R2718:2724 GF3.Spec.GF3Spec <> add_gf3 def
+R2745:2746 Coq.Lists.List ListNotations ::list_scope:'['_']' not
+prf 2764:2784 <> balanced_quads_closed
+binder 2795:2796 <> q1:21
+binder 2798:2799 <> q2:22
+R2821:2824 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2813:2815 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2804:2809 Coq.Init.Datatypes <> length def
+R2811:2812 GF3.Proofs.QuadBalancing <> q1:21 var
+R2842:2847 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2834:2836 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2825:2830 Coq.Init.Datatypes <> length def
+R2832:2833 GF3.Proofs.QuadBalancing <> q2:22 var
+R2862:2865 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2848:2858 GF3.Spec.GF3Spec <> is_balanced def
+R2860:2861 GF3.Proofs.QuadBalancing <> q1:21 var
+R2880:2885 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2866:2876 GF3.Spec.GF3Spec <> is_balanced def
+R2878:2879 GF3.Proofs.QuadBalancing <> q2:22 var
+R2886:2896 GF3.Spec.GF3Spec <> is_balanced def
+R2899:2906 GF3.Proofs.QuadBalancing <> quad_add def
+R2908:2909 GF3.Proofs.QuadBalancing <> q1:21 var
+R2911:2912 GF3.Proofs.QuadBalancing <> q2:22 var
+R3110:3117 GF3.Proofs.QuadBalancing <> quad_add def
+R3129:3139 GF3.Spec.GF3Spec <> is_balanced def
+prf 3649:3666 <> zero_quad_balanced
+R3670:3680 GF3.Spec.GF3Spec <> is_balanced def
+R3682:3682 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3687:3688 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3693:3694 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3699:3700 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3705:3705 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R3683:3686 GF3.Spec.GF3Spec <> Zero constr
+R3689:3692 GF3.Spec.GF3Spec <> Zero constr
+R3695:3698 GF3.Spec.GF3Spec <> Zero constr
+R3701:3704 GF3.Spec.GF3Spec <> Zero constr
+R3724:3734 GF3.Spec.GF3Spec <> is_balanced def
+def 3818:3828 <> quad_negate
+R3835:3838 Coq.Init.Datatypes <> list ind
+R3840:3843 GF3.Spec.GF3Spec <> Trit ind
+binder 3831:3831 <> q:23
+R3848:3851 Coq.Init.Datatypes <> list ind
+R3853:3856 GF3.Spec.GF3Spec <> Trit ind
+R3863:3865 Coq.Lists.List <> map def
+R3878:3878 GF3.Proofs.QuadBalancing <> q:23 var
+R3867:3876 GF3.Spec.GF3Spec <> negate_gf3 def
+prf 3890:3909 <> balanced_quad_negate
+binder 3920:3920 <> q:24
+R3938:3941 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R3925:3935 GF3.Spec.GF3Spec <> is_balanced def
+R3937:3937 GF3.Proofs.QuadBalancing <> q:24 var
+R3942:3952 GF3.Spec.GF3Spec <> is_balanced def
+R3955:3965 GF3.Proofs.QuadBalancing <> quad_negate def
+R3967:3967 GF3.Proofs.QuadBalancing <> q:24 var
+R4004:4014 GF3.Spec.GF3Spec <> is_balanced def
+R4017:4027 GF3.Proofs.QuadBalancing <> quad_negate def
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+R4285:4293 Coq.ZArith.BinInt Z add_mod thm
+prf 4502:4521 <> balance_homomorphism
+binder 4532:4533 <> a1:25
+binder 4535:4536 <> b1:26
+binder 4538:4539 <> c1:27
+binder 4541:4542 <> a2:28
+binder 4544:4545 <> b2:29
+binder 4547:4548 <> c2:30
+R4610:4614 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4553:4559 GF3.Spec.GF3Spec <> add_gf3 def
+R4562:4574 GF3.Spec.GF3Spec <> balance_triad def
+R4576:4577 GF3.Proofs.QuadBalancing <> a1:25 var
+R4579:4580 GF3.Proofs.QuadBalancing <> b1:26 var
+R4582:4583 GF3.Proofs.QuadBalancing <> c1:27 var
+R4587:4599 GF3.Spec.GF3Spec <> balance_triad def
+R4601:4602 GF3.Proofs.QuadBalancing <> a2:28 var
+R4604:4605 GF3.Proofs.QuadBalancing <> b2:29 var
+R4607:4608 GF3.Proofs.QuadBalancing <> c2:30 var
+R4615:4627 GF3.Spec.GF3Spec <> balance_triad def
+R4630:4636 GF3.Spec.GF3Spec <> add_gf3 def
+R4638:4639 GF3.Proofs.QuadBalancing <> a1:25 var
+R4641:4642 GF3.Proofs.QuadBalancing <> a2:28 var
+R4646:4652 GF3.Spec.GF3Spec <> add_gf3 def
+R4654:4655 GF3.Proofs.QuadBalancing <> b1:26 var
+R4657:4658 GF3.Proofs.QuadBalancing <> b2:29 var
+R4662:4668 GF3.Spec.GF3Spec <> add_gf3 def
+R4670:4671 GF3.Proofs.QuadBalancing <> c1:27 var
+R4673:4674 GF3.Proofs.QuadBalancing <> c2:30 var
+prf 4931:4949 <> balanced_quad_count
+binder 5020:5021 <> t1:31
+binder 5023:5024 <> t2:32
+binder 5026:5027 <> t3:33
+R5033:5040 Coq.Init.Logic <> ::type_scope:'exists'_'!'_x_'..'_x_','_x not
+R5043:5044 Coq.Init.Logic <> ::type_scope:'exists'_'!'_x_'..'_x_','_x not
+binder 5041:5042 <> t4:34
+R5045:5055 GF3.Spec.GF3Spec <> is_balanced def
+R5057:5057 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5060:5061 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5064:5065 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5068:5069 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5072:5072 Coq.Lists.List ListNotations ::list_scope:'['_x_';'_x_';'_'..'_';'_x_']' not
+R5058:5059 GF3.Proofs.QuadBalancing <> t1:31 var
+R5062:5063 GF3.Proofs.QuadBalancing <> t2:32 var
+R5066:5067 GF3.Proofs.QuadBalancing <> t3:33 var
+R5070:5071 GF3.Proofs.QuadBalancing <> t4:34 var
+R5098:5125 GF3.Proofs.QuadBalancing <> balancing_trit_exists_unique thm
+R5098:5125 GF3.Proofs.QuadBalancing <> balancing_trit_exists_unique thm
+prf 5328:5349 <> balance_permutation_12
+binder 5360:5361 <> t1:35
+binder 5363:5364 <> t2:36
+binder 5366:5367 <> t3:37
+R5394:5396 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5372:5384 GF3.Spec.GF3Spec <> balance_triad def
+R5386:5387 GF3.Proofs.QuadBalancing <> t1:35 var
+R5389:5390 GF3.Proofs.QuadBalancing <> t2:36 var
+R5392:5393 GF3.Proofs.QuadBalancing <> t3:37 var
+R5397:5409 GF3.Spec.GF3Spec <> balance_triad def
+R5411:5412 GF3.Proofs.QuadBalancing <> t2:36 var
+R5414:5415 GF3.Proofs.QuadBalancing <> t1:35 var
+R5417:5418 GF3.Proofs.QuadBalancing <> t3:37 var
+prf 5497:5518 <> balance_permutation_23
+binder 5529:5530 <> t1:38
+binder 5532:5533 <> t2:39
+binder 5535:5536 <> t3:40
+R5563:5565 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5541:5553 GF3.Spec.GF3Spec <> balance_triad def
+R5555:5556 GF3.Proofs.QuadBalancing <> t1:38 var
+R5558:5559 GF3.Proofs.QuadBalancing <> t2:39 var
+R5561:5562 GF3.Proofs.QuadBalancing <> t3:40 var
+R5566:5578 GF3.Spec.GF3Spec <> balance_triad def
+R5580:5581 GF3.Proofs.QuadBalancing <> t1:38 var
+R5583:5584 GF3.Proofs.QuadBalancing <> t3:40 var
+R5586:5587 GF3.Proofs.QuadBalancing <> t2:39 var
+prf 5732:5748 <> balance_symmetric
+binder 5759:5760 <> t1:41
+binder 5762:5763 <> t2:42
+binder 5765:5766 <> t3:43
+R5818:5823 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R5793:5795 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5771:5783 GF3.Spec.GF3Spec <> balance_triad def
+R5785:5786 GF3.Proofs.QuadBalancing <> t1:41 var
+R5788:5789 GF3.Proofs.QuadBalancing <> t2:42 var
+R5791:5792 GF3.Proofs.QuadBalancing <> t3:43 var
+R5796:5808 GF3.Spec.GF3Spec <> balance_triad def
+R5810:5811 GF3.Proofs.QuadBalancing <> t2:42 var
+R5813:5814 GF3.Proofs.QuadBalancing <> t3:43 var
+R5816:5817 GF3.Proofs.QuadBalancing <> t1:41 var
+R5846:5848 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5824:5836 GF3.Spec.GF3Spec <> balance_triad def
+R5838:5839 GF3.Proofs.QuadBalancing <> t1:41 var
+R5841:5842 GF3.Proofs.QuadBalancing <> t2:42 var
+R5844:5845 GF3.Proofs.QuadBalancing <> t3:43 var
+R5849:5861 GF3.Spec.GF3Spec <> balance_triad def
+R5863:5864 GF3.Proofs.QuadBalancing <> t3:43 var
+R5866:5867 GF3.Proofs.QuadBalancing <> t1:41 var
+R5869:5870 GF3.Proofs.QuadBalancing <> t2:42 var
+R5920:5941 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R5944:5965 GF3.Proofs.QuadBalancing <> balance_permutation_23 thm
+R5920:5941 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R5920:5941 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R5944:5965 GF3.Proofs.QuadBalancing <> balance_permutation_23 thm
+R5944:5965 GF3.Proofs.QuadBalancing <> balance_permutation_23 thm
+R5980:6001 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R5980:6001 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R5980:6001 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R6029:6050 GF3.Proofs.QuadBalancing <> balance_permutation_23 thm
+R6053:6074 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R6029:6050 GF3.Proofs.QuadBalancing <> balance_permutation_23 thm
+R6029:6050 GF3.Proofs.QuadBalancing <> balance_permutation_23 thm
+R6053:6074 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+R6053:6074 GF3.Proofs.QuadBalancing <> balance_permutation_12 thm
+prf 6301:6320 <> balance_self_inverse
+binder 6331:6332 <> t1:44
+binder 6334:6335 <> t2:45
+binder 6337:6338 <> t3:46
+R6353:6365 GF3.Spec.GF3Spec <> balance_triad def
+R6367:6368 GF3.Proofs.QuadBalancing <> t1:44 var
+R6370:6371 GF3.Proofs.QuadBalancing <> t2:45 var
+R6373:6374 GF3.Proofs.QuadBalancing <> t3:46 var
+binder 6347:6348 <> t4:47
+R6408:6413 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R6403:6405 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R6381:6393 GF3.Spec.GF3Spec <> balance_triad def
+R6395:6396 GF3.Proofs.QuadBalancing <> t2:45 var
+R6398:6399 GF3.Proofs.QuadBalancing <> t3:46 var
+R6401:6402 GF3.Proofs.QuadBalancing <> t4:47 var
+R6406:6407 GF3.Proofs.QuadBalancing <> t1:44 var
+R6441:6446 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R6436:6438 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R6414:6426 GF3.Spec.GF3Spec <> balance_triad def
+R6428:6429 GF3.Proofs.QuadBalancing <> t1:44 var
+R6431:6432 GF3.Proofs.QuadBalancing <> t3:46 var
+R6434:6435 GF3.Proofs.QuadBalancing <> t4:47 var
+R6439:6440 GF3.Proofs.QuadBalancing <> t2:45 var
+R6469:6471 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R6447:6459 GF3.Spec.GF3Spec <> balance_triad def
+R6461:6462 GF3.Proofs.QuadBalancing <> t1:44 var
+R6464:6465 GF3.Proofs.QuadBalancing <> t2:45 var
+R6467:6468 GF3.Proofs.QuadBalancing <> t4:47 var
+R6472:6473 GF3.Proofs.QuadBalancing <> t3:46 var

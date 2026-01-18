@@ -1,0 +1,279 @@
+DIGEST 7be9943b4137916b0fcd954577a4327a
+FGF3.Proofs.PlasticConstant
+R523:537 Coq.Reals.Reals <> <> lib
+R555:571 Coq.micromega.Lra <> <> lib
+R589:605 Coq.micromega.Lia <> <> lib
+R623:639 Coq.ZArith.ZArith <> <> lib
+R657:674 Coq.Arith.PeanoNat <> <> lib
+def 805:807 <> phi
+R811:811 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+R816:816 Coq.Reals.Rdefinitions <> ::R_scope:x_'/'_x not
+R827:830 Coq.Reals.Rdefinitions <> ::R_scope:x_'/'_x not
+R818:820 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R821:824 Coq.Reals.R_sqrt <> sqrt def
+ax 970:972 <> rho
+R976:976 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+ax 985:996 <> rho_positive
+R1003:1005 Coq.Reals.Rdefinitions <> ::R_scope:x_'>'_x not
+R1000:1002 GF3.Proofs.PlasticConstant <> rho defax
+ax 1015:1023 <> rho_cubic
+R1032:1034 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1030:1030 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R1027:1029 GF3.Proofs.PlasticConstant <> rho defax
+R1038:1040 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R1035:1037 GF3.Proofs.PlasticConstant <> rho defax
+ax 1107:1109 <> psi
+R1113:1113 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+ax 1122:1133 <> psi_positive
+R1140:1142 Coq.Reals.Rdefinitions <> ::R_scope:x_'>'_x not
+R1137:1139 GF3.Proofs.PlasticConstant <> psi defax
+ax 1152:1160 <> psi_cubic
+R1169:1171 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R1167:1167 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R1164:1166 GF3.Proofs.PlasticConstant <> psi defax
+R1177:1179 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R1175:1175 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R1172:1174 GF3.Proofs.PlasticConstant <> psi defax
+ax 1241:1250 <> phi_bounds
+R1259:1261 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x_'<'_x not
+R1265:1267 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x_'<'_x not
+R1262:1264 GF3.Proofs.PlasticConstant <> phi def
+R1262:1264 GF3.Proofs.PlasticConstant <> phi def
+ax 1305:1314 <> rho_bounds
+R1324:1326 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x_'<'_x not
+R1330:1332 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x_'<'_x not
+R1327:1329 GF3.Proofs.PlasticConstant <> rho defax
+R1327:1329 GF3.Proofs.PlasticConstant <> rho defax
+ax 1371:1380 <> psi_bounds
+R1390:1392 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x_'<'_x not
+R1396:1398 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x_'<'_x not
+R1393:1395 GF3.Proofs.PlasticConstant <> psi defax
+R1393:1395 GF3.Proofs.PlasticConstant <> psi defax
+prf 1450:1466 <> constant_ordering
+R1479:1482 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R1473:1475 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x not
+R1470:1472 GF3.Proofs.PlasticConstant <> rho defax
+R1476:1478 GF3.Proofs.PlasticConstant <> psi defax
+R1486:1488 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x not
+R1483:1485 GF3.Proofs.PlasticConstant <> psi defax
+R1489:1491 GF3.Proofs.PlasticConstant <> phi def
+R1545:1554 GF3.Proofs.PlasticConstant <> rho_bounds prfax
+R1545:1554 GF3.Proofs.PlasticConstant <> rho_bounds prfax
+R1568:1577 GF3.Proofs.PlasticConstant <> psi_bounds prfax
+R1568:1577 GF3.Proofs.PlasticConstant <> psi_bounds prfax
+R1620:1629 GF3.Proofs.PlasticConstant <> psi_bounds prfax
+R1620:1629 GF3.Proofs.PlasticConstant <> psi_bounds prfax
+R1643:1652 GF3.Proofs.PlasticConstant <> phi_bounds prfax
+R1643:1652 GF3.Proofs.PlasticConstant <> phi_bounds prfax
+ax 1879:1890 <> rho_is_pisot
+R1960:1966 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R1980:2007 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R1976:1978 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R1975:1975 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+R1979:1979 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+binder 1967:1968 <> z1:10
+R1976:1978 Coq.Init.Datatypes <> ::type_scope:x_'*'_x not
+R1975:1975 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+R1979:1979 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+binder 1970:1971 <> z2:11
+binder 2024:2024 <> p:12
+R2029:2032 Coq.Reals.R_sqrt <> sqrt def
+R2044:2046 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R2040:2042 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R2035:2037 Coq.Init.Datatypes <> fst def
+R2039:2039 GF3.Proofs.PlasticConstant <> p:12 var
+R2052:2054 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R2047:2049 Coq.Init.Datatypes <> snd def
+R2051:2051 GF3.Proofs.PlasticConstant <> p:12 var
+binder 2012:2015 <> norm:13
+R2074:2077 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R2070:2072 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x not
+R2063:2066 GF3.Proofs.PlasticConstant <> norm:13 var
+R2068:2069 GF3.Proofs.PlasticConstant <> z1:10 var
+R2085:2087 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x not
+R2078:2081 GF3.Proofs.PlasticConstant <> norm:13 var
+R2083:2084 GF3.Proofs.PlasticConstant <> z2:11 var
+prf 2139:2156 <> rho_smallest_pisot
+R2175:2175 Coq.Reals.Rdefinitions RbaseSymbolsImpl R defax
+binder 2167:2171 <> alpha:15
+R2189:2229 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2185:2187 Coq.Reals.Rdefinitions <> ::R_scope:x_'>'_x not
+R2180:2184 GF3.Proofs.PlasticConstant <> alpha:15 var
+R2230:2230 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2297:2342 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2231:2237 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R2250:2292 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R2245:2248 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R2242:2244 Coq.Init.Datatypes <> nat ind
+R2249:2249 Coq.Numbers.BinNums <> Z ind
+binder 2238:2238 <> p:16
+R2293:2296 Coq.Init.Logic <> True ind
+R2348:2351 Coq.Reals.Rdefinitions <> ::R_scope:x_'>='_x not
+R2343:2347 GF3.Proofs.PlasticConstant <> alpha:15 var
+R2352:2354 GF3.Proofs.PlasticConstant <> rho defax
+prf 2710:2733 <> dimension_correspondence
+R2811:2880 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R2801:2803 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2799:2799 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R2796:2798 GF3.Proofs.PlasticConstant <> phi def
+R2807:2809 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R2804:2806 GF3.Proofs.PlasticConstant <> phi def
+R2886:2888 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R2884:2884 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R2881:2883 GF3.Proofs.PlasticConstant <> rho defax
+R2892:2894 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R2889:2891 GF3.Proofs.PlasticConstant <> rho defax
+R2957:2959 GF3.Proofs.PlasticConstant <> phi def
+R3184:3192 GF3.Proofs.PlasticConstant <> rho_cubic prfax
+R3184:3192 GF3.Proofs.PlasticConstant <> rho_cubic prfax
+prf 3470:3494 <> rho_mod3_equidistribution
+R3586:3588 Coq.Init.Datatypes <> nat ind
+binder 3582:3582 <> n:17
+R3593:3599 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R3607:3610 Coq.Init.Logic <> ::type_scope:'exists'_x_'..'_x_','_x not
+R3604:3606 Coq.Init.Datatypes <> nat ind
+binder 3600:3600 <> k:18
+R3622:3693 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R3613:3615 Coq.Init.Peano <> ::nat_scope:x_'<'_x not
+R3612:3612 GF3.Proofs.PlasticConstant <> k:18 var
+R3694:3697 Coq.Init.Logic <> True ind
+R3772:3781 Coq.Arith.PeanoNat Nat modulo def
+R3772:3781 Coq.Arith.PeanoNat Nat modulo def
+R3806:3824 Coq.Arith.PeanoNat Nat mod_upper_bound def
+R3806:3824 Coq.Arith.PeanoNat Nat mod_upper_bound def
+def 4064:4073 <> perrin_aux
+R4080:4082 Coq.Init.Datatypes <> nat ind
+binder 4076:4076 <> n:19
+R4094:4094 Coq.Numbers.BinNums <> Z ind
+binder 4086:4086 <> a:20
+binder 4088:4088 <> b:21
+binder 4090:4090 <> c:22
+R4099:4099 Coq.Numbers.BinNums <> Z ind
+R4112:4112 GF3.Proofs.PlasticConstant <> n:19 var
+R4128:4128 GF3.Proofs.PlasticConstant <> a:20 var
+R4134:4134 Coq.Init.Datatypes <> S constr
+R4142:4151 GF3.Proofs.PlasticConstant <> perrin_aux:23 def
+R4162:4164 Coq.ZArith.BinInt <> ::Z_scope:x_'+'_x not
+R4161:4161 GF3.Proofs.PlasticConstant <> a:20 var
+R4165:4165 GF3.Proofs.PlasticConstant <> b:21 var
+R4158:4158 GF3.Proofs.PlasticConstant <> c:22 var
+R4156:4156 GF3.Proofs.PlasticConstant <> b:21 var
+def 4246:4251 <> perrin
+R4258:4260 Coq.Init.Datatypes <> nat ind
+binder 4254:4254 <> n:25
+R4265:4265 Coq.Numbers.BinNums <> Z ind
+R4270:4279 GF3.Proofs.PlasticConstant <> perrin_aux def
+R4281:4281 GF3.Proofs.PlasticConstant <> n:25 var
+def 4337:4349 <> perrin_values
+R4370:4373 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4364:4366 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4356:4361 GF3.Proofs.PlasticConstant <> perrin def
+R4388:4391 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4382:4384 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4374:4379 GF3.Proofs.PlasticConstant <> perrin def
+R4406:4411 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4400:4402 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4392:4397 GF3.Proofs.PlasticConstant <> perrin def
+R4426:4429 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4420:4422 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4412:4417 GF3.Proofs.PlasticConstant <> perrin def
+R4444:4447 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4438:4440 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4430:4435 GF3.Proofs.PlasticConstant <> perrin def
+R4462:4467 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4456:4458 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4448:4453 GF3.Proofs.PlasticConstant <> perrin def
+R4482:4485 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4476:4478 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4468:4473 GF3.Proofs.PlasticConstant <> perrin def
+R4500:4503 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4494:4496 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4486:4491 GF3.Proofs.PlasticConstant <> perrin def
+R4512:4514 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4504:4509 GF3.Proofs.PlasticConstant <> perrin def
+def 4669:4676 <> is_prime
+R4683:4685 Coq.Init.Datatypes <> nat ind
+binder 4679:4679 <> n:26
+R4712:4715 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R4702:4705 Coq.Init.Peano <> ::nat_scope:x_'>='_x not
+R4701:4701 GF3.Proofs.PlasticConstant <> n:26 var
+R4727:4729 Coq.Init.Datatypes <> nat ind
+binder 4723:4723 <> d:27
+R4748:4751 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4734:4737 Coq.Init.Peano <> ::nat_scope:x_'<='_x_'<'_x not
+R4739:4741 Coq.Init.Peano <> ::nat_scope:x_'<='_x_'<'_x not
+R4738:4738 GF3.Proofs.PlasticConstant <> d:27 var
+R4738:4738 GF3.Proofs.PlasticConstant <> d:27 var
+R4742:4742 GF3.Proofs.PlasticConstant <> n:26 var
+R4767:4770 Coq.Init.Logic <> ::type_scope:x_'<>'_x not
+R4753:4762 Coq.Arith.PeanoNat Nat modulo def
+R4764:4764 GF3.Proofs.PlasticConstant <> n:26 var
+R4766:4766 GF3.Proofs.PlasticConstant <> d:27 var
+prf 4917:4941 <> perrin_prime_divisibility
+R4956:4958 Coq.Init.Datatypes <> nat ind
+binder 4952:4952 <> p:28
+R4973:4978 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4963:4970 GF3.Proofs.PlasticConstant <> is_prime def
+R4972:4972 GF3.Proofs.PlasticConstant <> p:28 var
+R4990:4995 Coq.Init.Logic <> ::type_scope:x_'->'_x not
+R4981:4983 Coq.Init.Peano <> ::nat_scope:x_'>'_x not
+R4980:4980 GF3.Proofs.PlasticConstant <> p:28 var
+R5041:5043 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R4996:5003 Coq.ZArith.BinInt Z modulo def
+R5014:5016 Coq.ZArith.BinInt <> ::Z_scope:x_'-'_x not
+R5006:5011 GF3.Proofs.PlasticConstant <> perrin def
+R5013:5013 GF3.Proofs.PlasticConstant <> p:28 var
+R5017:5024 Coq.ZArith.BinInt Z of_nat def
+R5026:5026 GF3.Proofs.PlasticConstant <> p:28 var
+R5030:5037 Coq.ZArith.BinInt Z of_nat def
+R5039:5039 GF3.Proofs.PlasticConstant <> p:28 var
+def 5268:5278 <> perrin_mod3
+R5285:5287 Coq.Init.Datatypes <> nat ind
+binder 5281:5281 <> n:29
+R5292:5292 Coq.Numbers.BinNums <> Z ind
+R5297:5304 Coq.ZArith.BinInt Z modulo def
+R5307:5312 GF3.Proofs.PlasticConstant <> perrin def
+R5314:5314 GF3.Proofs.PlasticConstant <> n:29 var
+prf 5329:5348 <> perrin_mod3_periodic
+R5365:5367 Coq.Init.Datatypes <> nat ind
+binder 5361:5361 <> n:30
+R5390:5392 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5370:5380 GF3.Proofs.PlasticConstant <> perrin_mod3 def
+R5384:5386 Coq.Init.Peano <> ::nat_scope:x_'+'_x not
+R5383:5383 GF3.Proofs.PlasticConstant <> n:30 var
+R5393:5403 GF3.Proofs.PlasticConstant <> perrin_mod3 def
+R5405:5405 GF3.Proofs.PlasticConstant <> n:30 var
+R5535:5545 GF3.Proofs.PlasticConstant <> perrin_mod3 def
+prf 5685:5705 <> perrin_period_factors
+R5712:5714 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R5716:5718 Coq.Init.Peano <> ::nat_scope:x_'*'_x not
+def 5933:5945 <> PLASTIC_GAMMA
+R5949:5949 Coq.Numbers.BinNums <> Z ind
+prf 6029:6045 <> plastic_gamma_odd
+R6068:6070 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R6049:6053 Coq.ZArith.BinInt Z odd def
+R6055:6067 GF3.Proofs.PlasticConstant <> PLASTIC_GAMMA def
+R6071:6074 Coq.Init.Datatypes <> true constr
+prf 6214:6240 <> plastic_gamma_approximation
+R6348:6351 Coq.Init.Logic <> True ind
+prf 6482:6504 <> plastic_optimal_for_gf3
+R6691:6696 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R6681:6683 Coq.Init.Logic <> ::type_scope:x_'='_x not
+R6679:6679 Coq.Reals.Rfunctions <> ::R_scope:x_'^'_x not
+R6676:6678 GF3.Proofs.PlasticConstant <> rho defax
+R6687:6689 Coq.Reals.Rdefinitions <> ::R_scope:x_'+'_x not
+R6684:6686 GF3.Proofs.PlasticConstant <> rho defax
+R6704:6709 Coq.Init.Logic <> ::type_scope:x_'/\'_x not
+R6700:6702 Coq.Reals.Rdefinitions <> ::R_scope:x_'>'_x not
+R6697:6699 GF3.Proofs.PlasticConstant <> rho defax
+R6713:6715 Coq.Reals.Rdefinitions <> ::R_scope:x_'<'_x not
+R6710:6712 GF3.Proofs.PlasticConstant <> rho defax
+R6716:6718 GF3.Proofs.PlasticConstant <> phi def
+R6803:6811 GF3.Proofs.PlasticConstant <> rho_cubic prfax
+R6803:6811 GF3.Proofs.PlasticConstant <> rho_cubic prfax
+R6824:6835 GF3.Proofs.PlasticConstant <> rho_positive prfax
+R6824:6835 GF3.Proofs.PlasticConstant <> rho_positive prfax
+R6853:6869 GF3.Proofs.PlasticConstant <> constant_ordering thm
+R6853:6869 GF3.Proofs.PlasticConstant <> constant_ordering thm
+R6897:6913 GF3.Proofs.PlasticConstant <> constant_ordering thm
+R6897:6913 GF3.Proofs.PlasticConstant <> constant_ordering thm
