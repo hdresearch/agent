@@ -16,9 +16,12 @@ import { join } from "path";
 // Server URL - defaults to localhost
 const SERVER_URL = process.env.VERS_URL || `http://localhost:${process.env.PORT || "9999"}`;
 
-// Claude MCP config paths
+// Claude config paths
 const CLAUDE_CONFIG_DIR = join(homedir(), ".claude");
-const CLAUDE_CONFIG_FILE = join(CLAUDE_CONFIG_DIR, "claude_desktop_config.json");
+// Claude Desktop uses claude_desktop_config.json
+const CLAUDE_DESKTOP_CONFIG = join(CLAUDE_CONFIG_DIR, "claude_desktop_config.json");
+// Claude Code uses ~/.claude.json for user-scoped MCP servers
+const CLAUDE_CODE_CONFIG = join(homedir(), ".claude.json");
 
 interface McpServerEntry {
   command: string;
@@ -60,11 +63,11 @@ function findVersExecutable(): string {
 }
 
 /**
- * Check if vers is configured in Claude's MCP settings
+ * Check if vers is configured in a config file
  */
-async function isVersConfigured(): Promise<boolean> {
+async function isVersConfiguredIn(configPath: string): Promise<boolean> {
   try {
-    const file = Bun.file(CLAUDE_CONFIG_FILE);
+    const file = Bun.file(configPath);
     if (!(await file.exists())) {
       return false;
     }
@@ -76,16 +79,19 @@ async function isVersConfigured(): Promise<boolean> {
 }
 
 /**
- * Add vers to Claude's MCP settings
+ * Add vers to a Claude config file
  */
-async function installVersToClaudeConfig(): Promise<boolean> {
+async function installVersToConfig(configPath: string, configName: string): Promise<boolean> {
   try {
-    // Ensure config directory exists
-    await Bun.$`mkdir -p ${CLAUDE_CONFIG_DIR}`.quiet();
+    // Ensure parent directory exists
+    const dir = configPath.substring(0, configPath.lastIndexOf("/"));
+    if (dir) {
+      await Bun.$`mkdir -p ${dir}`.quiet();
+    }
 
     // Read existing config or create new one
     let config: ClaudeConfig = {};
-    const file = Bun.file(CLAUDE_CONFIG_FILE);
+    const file = Bun.file(configPath);
     if (await file.exists()) {
       try {
         config = (await file.json()) as ClaudeConfig;
@@ -107,32 +113,49 @@ async function installVersToClaudeConfig(): Promise<boolean> {
     };
 
     // Write config
-    await Bun.write(CLAUDE_CONFIG_FILE, JSON.stringify(config, null, 2));
+    await Bun.write(configPath, JSON.stringify(config, null, 2));
 
-    console.error(`✓ Installed vers MCP server to ${CLAUDE_CONFIG_FILE}`);
-    console.error(`  command: ${versPath}`);
-    console.error(`  args: ["--mcp"]`);
-    console.error("");
-    console.error("Restart Claude Desktop to load the new MCP server.");
-
+    console.error(`✓ Installed vers MCP server to ${configPath} (${configName})`);
     return true;
   } catch (err) {
-    console.error(`Failed to install vers to Claude config: ${err}`);
+    console.error(`Failed to install vers to ${configName}: ${err}`);
     return false;
   }
 }
 
 /**
- * Ensure vers is configured in Claude's MCP settings
+ * Ensure vers is configured in both Claude Desktop and Claude Code
  */
 async function ensureVersConfigured(): Promise<void> {
-  if (await isVersConfigured()) {
-    console.error("vers MCP server already configured in Claude");
-    return;
+  const versPath = findVersExecutable();
+  let installedAny = false;
+
+  // Check and install for Claude Desktop
+  if (await isVersConfiguredIn(CLAUDE_DESKTOP_CONFIG)) {
+    console.error("✓ vers already configured in Claude Desktop");
+  } else {
+    console.error("Installing vers MCP server for Claude Desktop...");
+    if (await installVersToConfig(CLAUDE_DESKTOP_CONFIG, "Claude Desktop")) {
+      installedAny = true;
+    }
   }
 
-  console.error("vers MCP server not found in Claude config, installing...");
-  await installVersToClaudeConfig();
+  // Check and install for Claude Code
+  if (await isVersConfiguredIn(CLAUDE_CODE_CONFIG)) {
+    console.error("✓ vers already configured in Claude Code");
+  } else {
+    console.error("Installing vers MCP server for Claude Code...");
+    if (await installVersToConfig(CLAUDE_CODE_CONFIG, "Claude Code")) {
+      installedAny = true;
+    }
+  }
+
+  if (installedAny) {
+    console.error("");
+    console.error(`Using executable: ${versPath}`);
+    console.error("Restart Claude Desktop/Code to load the new MCP server.");
+  }
+  console.error("");
 }
 
 /**
