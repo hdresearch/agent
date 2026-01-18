@@ -2,7 +2,7 @@
  * MCP Server - Exposes vers-agent CLI commands as MCP tools
  *
  * Run with: vers --mcp
- * Configure in Claude's MCP settings to use these tools.
+ * Auto-installs into Claude's MCP settings on first run.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -10,9 +10,130 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { HttpAcpClient } from "../client/http-client";
 import { tokenStore } from "../utils/token-store";
+import { homedir } from "os";
+import { join } from "path";
 
 // Server URL - defaults to localhost
 const SERVER_URL = process.env.VERS_URL || `http://localhost:${process.env.PORT || "9999"}`;
+
+// Claude MCP config paths
+const CLAUDE_CONFIG_DIR = join(homedir(), ".claude");
+const CLAUDE_CONFIG_FILE = join(CLAUDE_CONFIG_DIR, "claude_desktop_config.json");
+
+interface McpServerEntry {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+interface ClaudeConfig {
+  mcpServers?: Record<string, McpServerEntry>;
+  [key: string]: unknown;
+}
+
+/**
+ * Find the vers executable path
+ */
+function findVersExecutable(): string {
+  // If we're running as a compiled binary, use that path
+  const execPath = process.execPath;
+  if (execPath.includes("vers")) {
+    return execPath;
+  }
+
+  // Check common locations
+  const homeDir = homedir();
+  const candidates = [
+    join(homeDir, ".local", "bin", "vers"),
+    "/usr/local/bin/vers",
+    "/usr/bin/vers",
+  ];
+
+  for (const candidate of candidates) {
+    if (Bun.file(candidate).size > 0) {
+      return candidate;
+    }
+  }
+
+  // Fall back to just "vers" and hope it's in PATH
+  return "vers";
+}
+
+/**
+ * Check if vers is configured in Claude's MCP settings
+ */
+async function isVersConfigured(): Promise<boolean> {
+  try {
+    const file = Bun.file(CLAUDE_CONFIG_FILE);
+    if (!(await file.exists())) {
+      return false;
+    }
+    const config = (await file.json()) as ClaudeConfig;
+    return !!(config.mcpServers?.vers);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Add vers to Claude's MCP settings
+ */
+async function installVersToClaudeConfig(): Promise<boolean> {
+  try {
+    // Ensure config directory exists
+    await Bun.$`mkdir -p ${CLAUDE_CONFIG_DIR}`.quiet();
+
+    // Read existing config or create new one
+    let config: ClaudeConfig = {};
+    const file = Bun.file(CLAUDE_CONFIG_FILE);
+    if (await file.exists()) {
+      try {
+        config = (await file.json()) as ClaudeConfig;
+      } catch {
+        // Invalid JSON, start fresh
+        config = {};
+      }
+    }
+
+    // Add vers MCP server
+    if (!config.mcpServers) {
+      config.mcpServers = {};
+    }
+
+    const versPath = findVersExecutable();
+    config.mcpServers.vers = {
+      command: versPath,
+      args: ["--mcp"],
+    };
+
+    // Write config
+    await Bun.write(CLAUDE_CONFIG_FILE, JSON.stringify(config, null, 2));
+
+    console.error(`✓ Installed vers MCP server to ${CLAUDE_CONFIG_FILE}`);
+    console.error(`  command: ${versPath}`);
+    console.error(`  args: ["--mcp"]`);
+    console.error("");
+    console.error("Restart Claude Desktop to load the new MCP server.");
+
+    return true;
+  } catch (err) {
+    console.error(`Failed to install vers to Claude config: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Ensure vers is configured in Claude's MCP settings
+ */
+async function ensureVersConfigured(): Promise<void> {
+  if (await isVersConfigured()) {
+    console.error("vers MCP server already configured in Claude");
+    return;
+  }
+
+  console.error("vers MCP server not found in Claude config, installing...");
+  await installVersToClaudeConfig();
+}
 
 /**
  * Create authenticated HTTP client
@@ -58,6 +179,9 @@ async function autoClaimLocalhost(): Promise<string | null> {
  * Start the MCP server
  */
 export async function startMcpServer(): Promise<void> {
+  // Auto-install to Claude config if not already configured
+  await ensureVersConfigured();
+
   // Try to claim localhost
   await autoClaimLocalhost();
 
