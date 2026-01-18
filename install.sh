@@ -27,6 +27,9 @@ detect_platform() {
     # Windows only has x64 build
     if [ "$os" = "windows" ]; then
         echo "vers-agent-windows-x64.exe"
+    # Linux has both x64 and arm64
+    elif [ "$os" = "linux" ]; then
+        echo "vers-agent-linux-${arch}"
     else
         echo "vers-agent-${os}-${arch}"
     fi

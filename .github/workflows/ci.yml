@@ -39,6 +39,10 @@ jobs:
             target: bun-linux-x64
             artifact: vers-agent-linux-x64
             can_test: true
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            artifact: vers-agent-linux-arm64
+            can_test: false  # Cross-compiled, can't test on x64 runner
           - os: macos-latest
             target: bun-darwin-arm64
             artifact: vers-agent-darwin-arm64
