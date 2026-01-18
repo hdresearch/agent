@@ -88,9 +88,15 @@ main() {
     echo "Installing skills..."
     "$binary_path" --install-skills
 
+    # Configure MCP for Claude Desktop and Claude Code
+    echo ""
+    echo "Configuring MCP server..."
+    "$binary_path" --mcp-install
+
     echo ""
     echo "Quick start:"
     echo "  vers              # Start HTTP server"
+    echo "  vers --mcp        # Run as MCP server"
     echo "  vers --help       # Show all options"
     echo ""
 }

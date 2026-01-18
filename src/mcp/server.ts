@@ -126,7 +126,7 @@ async function installVersToConfig(configPath: string, configName: string): Prom
 /**
  * Ensure vers is configured in both Claude Desktop and Claude Code
  */
-async function ensureVersConfigured(): Promise<void> {
+export async function ensureVersConfigured(): Promise<void> {
   const versPath = findVersExecutable();
   let installedAny = false;
 

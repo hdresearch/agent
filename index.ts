@@ -5,7 +5,7 @@ import { loadDocsStore } from "./src/utils/docs-store";
 import { authStore } from "./src/utils/auth-store";
 import { initializeAgent } from "./src/core/agent-manager";
 import { executeCommand, isSubcommand } from "./src/cli/commands";
-import { startMcpServer } from "./src/mcp/server";
+import { startMcpServer, ensureVersConfigured } from "./src/mcp/server";
 
 // Import embedded skills to ensure they're bundled
 import { embeddedSkills } from "./src/skills/embedded";
@@ -138,6 +138,7 @@ function runFlagMode() {
   const showHelp = args.includes("--help") || args.includes("-h");
   const installSkills = args.includes("--install-skills");
   const mcpMode = args.includes("--mcp");
+  const mcpInstall = args.includes("--mcp-install");
   const cliOnly = args.includes("--cli");
   // Default to server-only mode (no interactive CLI)
   const serverOnly = !cliOnly;
@@ -179,6 +180,17 @@ function runFlagMode() {
       console.log("Try: /orchestrate");
       process.exit(0);
     })();
+    return;
+  }
+
+  // Install MCP config only (no server)
+  if (mcpInstall) {
+    ensureVersConfigured()
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error("MCP install error:", err);
+        process.exit(1);
+      });
     return;
   }
 
