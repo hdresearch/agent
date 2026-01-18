@@ -308,34 +308,6 @@ export async function startMcpServer(): Promise<void> {
     }
   );
 
-  // ============================================================
-  // Info Tools
-  // ============================================================
-
-  server.tool("vers_agents", "List available agents", async () => {
-    const client = await createClient();
-    const result = await client.rpcCall("agent/list", {});
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  });
-
-  server.tool("vers_skills", "List available skills", async () => {
-    const client = await createClient();
-    const result = await client.rpcCall("skill/list", {});
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  });
-
-  server.tool("vers_queue", "List queued prompts", async () => {
-    const client = await createClient();
-    const result = await client.rpcCall("queue/list", {});
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  });
-
   // Connect via stdio
   const transport = new StdioServerTransport();
   await server.connect(transport);
