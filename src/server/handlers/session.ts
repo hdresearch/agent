@@ -288,9 +288,10 @@ export async function handleSessionNew(
   // If we got a Claude ID, use it; otherwise create a new UUID
   // SessionManager handles storage synchronization automatically
   const newSessionId = claudeId || getAgentSessionId() || sessionManager.createSession();
-  if (claudeId) {
-    sessionManager.setSession(claudeId);
-  }
+  // Always ensure session is set - createSession() calls setSession() internally,
+  // but when claudeId or getAgentSessionId() provides the ID, we must call setSession()
+  // explicitly. Calling setSession() with the same ID is harmless (idempotent).
+  sessionManager.setSession(newSessionId);
 
   logStream.info("handleSessionNew - Session ID details:", {
     claudeInternalId: sessionManager.getClaudeInternalId(),
