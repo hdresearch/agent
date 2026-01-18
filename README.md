@@ -7,9 +7,12 @@ ACP-compliant agent harness with dual CLI/HTTP interface. Run AI coding agents l
 ## Quick Start
 
 ```bash
+# Install via script (recommended)
+curl -fsSL https://raw.githubusercontent.com/hdresearch/agent/main/install.sh | bash
+
+# Or build from source
 git clone https://github.com/hdresearch/agent.git && cd agent
 bun install && bun run build
-export ANTHROPIC_API_KEY=sk-ant-...
 ./vers-agent
 ```
 
@@ -76,28 +79,41 @@ The CLI remembers your last server and auto-reconnects on restart.
 
 | Command | Description |
 |---------|-------------|
-| `./vers-agent` | HTTP server only (default) |
-| `./vers-agent --cli` | Interactive CLI, connects to localhost:9999 |
-| `./vers-agent --mcp` | MCP server for Claude integration (stdio) |
-| `./vers-agent --url http://host:9999` | CLI connecting to remote server |
-| `./vers-agent --local` | Clear saved remote server, use local |
+| `vers` | HTTP server only (default) |
+| `vers --cli` | Interactive CLI, connects to localhost:9999 |
+| `vers --mcp` | MCP server for Claude integration (stdio) |
+| `vers --mcp-install` | Install MCP config without starting server |
+| `vers --url http://host:9999` | CLI connecting to remote server |
+| `vers --local` | Clear saved remote server, use local |
 
 ### MCP Server
 
-Run `vers --mcp` to expose VM orchestration tools to Claude via MCP:
+Run `vers --mcp` to expose VM orchestration tools to Claude via MCP.
 
-```json
-{
-  "mcpServers": {
-    "vers": {
-      "command": "vers",
-      "args": ["--mcp"]
-    }
-  }
-}
+**Auto-install**: The first time you run `vers --mcp`, it automatically configures both Claude Desktop and Claude Code:
+- Claude Desktop: `~/.claude/claude_desktop_config.json`
+- Claude Code: `~/.claude.json`
+
+You can also run `vers --mcp-install` to configure MCP without starting the server (this runs automatically during `install.sh`).
+
+**Available tools**: `vers_vms`, `vers_vm_create`, `vers_vm_run`, `vers_exec`, `vers_vm_sync`, `vers_vm_eval`, `vers_vm_status`, `vers_vm_wait`, `vers_run`, `vers_health`, `vers_config_get`, `vers_config_set`, `vers_cancel`
+
+### CLI Subcommands
+
+Run commands directly without the interactive CLI:
+
+```bash
+vers run "fix the bug"       # Send prompt and stream response
+vers vms                     # List VMs
+vers vm create "task"        # Create a new VM
+vers vm run "prompt"         # Run prompt on all VMs
+vers exec <vmId> "ls -la"    # Execute command on VM
+vers vm sync <vmId>          # Sync git to VM
+vers vm eval <vmId>          # Evaluate VM (build/test/lint)
+vers health                  # Check server health
+vers config                  # Show configuration
+vers help                    # Show all commands
 ```
-
-Available tools: `vers_vms`, `vers_vm_create`, `vers_vm_run`, `vers_exec`, `vers_vm_sync`, `vers_vm_eval`, `vers_vm_status`, `vers_vm_wait`, `vers_run`, `vers_health`, `vers_config_get`, `vers_config_set`, `vers_cancel`
 
 ## CLI Features
 
@@ -343,6 +359,8 @@ src/
 │   └── hooks/          # React hooks (useAcpClient, etc.)
 ├── core/               # Agent orchestration
 │   └── agent-manager.ts # High-level agent control
+├── mcp/                # MCP server
+│   └── server.ts       # MCP tools for Claude integration
 └── utils/              # Shared utilities
     ├── config.ts       # Application configuration
     ├── session-store.ts # SQLite session persistence
