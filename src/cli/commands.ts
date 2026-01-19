@@ -11,6 +11,7 @@
 
 import { HttpAcpClient } from "../client/http-client";
 import { tokenStore } from "../utils/token-store";
+import * as api from "../api/standalone";
 
 // ANSI color codes
 const colors = {
@@ -918,10 +919,29 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
       }
     }
 
+    case "delete": {
+      const vmId = ctx.args[2];
+      if (!vmId) {
+        console.error(red("Usage: vers-agent vm delete <vmId>"));
+        return 1;
+      }
+      try {
+        // Use standalone API - no server needed
+        await api.loadConfig();
+        const result = await api.deleteVm(vmId);
+        console.log(JSON.stringify(result, null, 2));
+        return 0;
+      } catch (err) {
+        console.error(red(`Error: ${err}`));
+        return 1;
+      }
+    }
+
     default:
       console.error(red(`Unknown vm subcommand: ${subCmd}`));
       console.log(`\n${blue("Available vm commands:")}`);
       console.log("  vm create [task]     Create a new VM");
+      console.log("  vm delete <id>       Delete a VM");
       console.log("  vm run <prompt>      Run prompt on all VMs");
       console.log("  vm watch [vmIds]     Watch VM event stream");
       console.log("  vm exec <id> <cmd>   Execute command on VM");

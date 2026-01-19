@@ -10,6 +10,9 @@ import { createHistory, saveHistory, type ConversationHistory } from "../../util
 import { isAgentCommand } from "../utils/command-matching";
 import { getSessionUsage, formatTokens as formatTokensUsage } from "../../utils/claude-usage";
 
+// Standalone API for VM operations (works without HTTP server)
+import * as api from "../../api/standalone";
+
 export interface CommandHandlerContext {
   client: HttpAcpClient | null;
   sessionConfig: SessionConfig;
@@ -1059,11 +1062,6 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
     restArgs = parts.slice(3);
   }
 
-  if (!ctx.client) {
-    ctx.addOutput({ type: "error", content: "Not connected to server" });
-    return;
-  }
-
   // Helper to format relative time
   const formatRelativeTime = (dateStr: string): string => {
     const date = new Date(dateStr);
@@ -1142,10 +1140,10 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   };
 
   if (!subCmd || subCmd === "list") {
-    // List VMs
+    // List VMs (standalone - no server needed)
     try {
-      const result = await ctx.client.vmList();
-      displayVms(result.vms, result.currentVmId);
+      const result = await api.listVms();
+      displayVms(result.vms);
 
       if (result.vms.length > 0) {
         ctx.addOutput({ type: "system", content: "Commands:" });
@@ -1160,12 +1158,12 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "create" || subCmd === "new") {
-    // Create a new VM
+    // Create a new VM (standalone - no server needed)
     const task = restArgs.join(" ") || undefined;
     ctx.addOutput({ type: "system", content: "Creating VM..." });
 
     try {
-      const result = await ctx.client.vmCreate(task);
+      const result = await api.createVm(task);
       ctx.addOutput({ type: "system", content: `✓ Created VM: ${result.vmId.slice(0, 8)}` });
       ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
       ctx.addOutput({ type: "system", content: "" });
@@ -1177,7 +1175,7 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "branch" && vmId) {
-    // Branch a VM - optionally multiple times
+    // Branch a VM (standalone - no server needed)
     // /vm:branch:<id> 3 → create 3 branches
     // /vm:branch:<id> → create 1 branch
     const countArg = restArgs[0];
@@ -1185,8 +1183,7 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
 
     try {
       // Find full VM ID from partial
-      const listResult = await ctx.client.vmList();
-      const vm = listResult.vms.find(v => v.vmId.startsWith(vmId));
+      const vm = await api.findVmByPartialId(vmId);
       if (!vm) {
         ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
         return;
@@ -1194,7 +1191,7 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
 
       if (count === 1) {
         ctx.addOutput({ type: "system", content: `Branching VM ${vmId}...` });
-        const result = await ctx.client.vmBranch(vm.vmId);
+        const result = await api.branchVmById(vm.vmId);
         ctx.addOutput({ type: "system", content: `✓ Branched VM: ${result.vmId.slice(0, 8)}` });
         ctx.addOutput({ type: "system", content: `  Parent: ${result.parentId.slice(0, 8)}` });
       } else {
@@ -1203,7 +1200,7 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
 
         // Create branches in parallel
         const branchPromises = Array.from({ length: count }, () =>
-          ctx.client!.vmBranch(vm.vmId)
+          api.branchVmById(vm.vmId)
         );
         const results = await Promise.allSettled(branchPromises);
 
@@ -1230,17 +1227,16 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "delete" && vmId) {
-    // Delete a VM
+    // Delete a VM (standalone - no server needed)
     try {
       // Find full VM ID from partial
-      const listResult = await ctx.client.vmList();
-      const vm = listResult.vms.find(v => v.vmId.startsWith(vmId));
+      const vm = await api.findVmByPartialId(vmId);
       if (!vm) {
         ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
         return;
       }
 
-      const result = await ctx.client.vmDelete(vm.vmId);
+      const result = await api.deleteVm(vm.vmId);
       if (result.deleted) {
         ctx.addOutput({ type: "system", content: `✓ Deleted VM: ${vm.vmId.slice(0, 8)}` });
       } else {
@@ -1253,28 +1249,24 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "connect" && vmId) {
-    // Connect to a VM
+    // Connect to a VM (standalone - no server needed)
     try {
       // Find full VM ID from partial
-      const listResult = await ctx.client.vmList();
-      const vm = listResult.vms.find(v => v.vmId.startsWith(vmId));
+      const vm = await api.findVmByPartialId(vmId);
       if (!vm) {
         ctx.addOutput({ type: "error", content: `VM not found: ${vmId}` });
         return;
       }
 
-      const result = await ctx.client.vmConnect(vm.vmId);
-      if (result.success) {
-        ctx.addOutput({ type: "system", content: `✓ Connected to VM: ${result.vmId.slice(0, 8)}` });
-        ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
-        ctx.addOutput({ type: "system", content: "" });
-        ctx.addOutput({ type: "system", content: "Prompts will now be sent to this VM's agent." });
+      // Get the agent URL for this VM
+      const agentUrl = api.getAgentUrl(vm.vmId);
+      ctx.addOutput({ type: "system", content: `✓ Connected to VM: ${vm.vmId.slice(0, 8)}` });
+      ctx.addOutput({ type: "system", content: `  Agent URL: ${agentUrl}` });
+      ctx.addOutput({ type: "system", content: "" });
+      ctx.addOutput({ type: "system", content: "Prompts will now be sent to this VM's agent." });
 
-        // Trigger reconnection to the VM's agent
-        ctx.reconnect(result.agentUrl);
-      } else {
-        ctx.addOutput({ type: "error", content: `Failed to connect: ${result.error}` });
-      }
+      // Trigger reconnection to the VM's agent
+      ctx.reconnect(agentUrl);
     } catch (err) {
       ctx.addOutput({ type: "error", content: `Failed to connect to VM: ${err}` });
     }
@@ -1282,25 +1274,26 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "status") {
-    // Show current VM status
-    try {
-      const result = await ctx.client.vmStatus();
-      ctx.addOutput({ type: "system", content: "" });
-      if (result.isLocal) {
-        ctx.addOutput({ type: "system", content: "Currently running locally (no VM)" });
+    // Show current VM status (based on current connection)
+    ctx.addOutput({ type: "system", content: "" });
+    if (ctx.currentServerUrl) {
+      // Try to extract VM ID from the URL if it's a vers VM URL
+      const vmMatch = ctx.currentServerUrl.match(/vers-vm-([a-f0-9-]+)/);
+      if (vmMatch?.[1]) {
+        ctx.addOutput({ type: "system", content: `Connected to VM: ${vmMatch[1].slice(0, 8)}` });
       } else {
-        ctx.addOutput({ type: "system", content: `Connected to VM: ${result.currentVmId?.slice(0, 8)}` });
-        ctx.addOutput({ type: "system", content: `Agent URL: ${result.currentAgentUrl}` });
+        ctx.addOutput({ type: "system", content: "Connected to remote server" });
       }
-      ctx.addOutput({ type: "system", content: "" });
-    } catch (err) {
-      ctx.addOutput({ type: "error", content: `Failed to get VM status: ${err}` });
+      ctx.addOutput({ type: "system", content: `Agent URL: ${ctx.currentServerUrl}` });
+    } else {
+      ctx.addOutput({ type: "system", content: "Currently running locally (no VM)" });
     }
+    ctx.addOutput({ type: "system", content: "" });
     return;
   }
 
   if (subCmd === "run") {
-    // Run a prompt on all (or selected) VMs - fire and forget
+    // Run a prompt on all VMs (standalone - no server needed)
     const prompt = vmId ? `${vmId} ${restArgs.join(" ")}` : restArgs.join(" ");
 
     if (!prompt.trim()) {
@@ -1311,7 +1304,7 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
     ctx.addOutput({ type: "system", content: "Dispatching prompt to VMs..." });
 
     try {
-      const result = await ctx.client.vmRun(prompt);
+      const result = await api.runOnAllVms(prompt);
 
       if (result.dispatched === 0) {
         ctx.addOutput({ type: "system", content: "No VMs to dispatch to." });
