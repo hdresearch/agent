@@ -708,9 +708,11 @@ async function noYoloCommand(ctx: CommandContext): Promise<number> {
 // VM Commands
 // ============================================================
 
-async function vmsCommand(ctx: CommandContext): Promise<number> {
+async function vmsCommand(_ctx: CommandContext): Promise<number> {
   try {
-    const result = await ctx.client.rpcCall("vm/list", {});
+    // Use standalone API - no server needed
+    await api.loadConfig();
+    const result = await api.listVms();
     console.log(JSON.stringify(result, null, 2));
     return 0;
   } catch (err) {
@@ -726,9 +728,9 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
     case "create": {
       const task = ctx.args.slice(2).join(" ") || undefined;
       try {
-        const params: { task?: string } = {};
-        if (task) params.task = task;
-        const result = await ctx.client.rpcCall("vm/create", params);
+        // Use standalone API - no server needed
+        await api.loadConfig();
+        const result = await api.createVm(task);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {
@@ -744,8 +746,10 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
         return 1;
       }
       try {
+        // Use standalone API - no server needed
+        await api.loadConfig();
         console.log(`${blue("Running on all VMs:")} ${prompt}`);
-        const result = await ctx.client.rpcCall("vm/run", { prompt });
+        const result = await api.runOnAllVms(prompt);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {
@@ -821,7 +825,9 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
         return 1;
       }
       try {
-        const result = await ctx.client.rpcCall("vm/execute", { vmId, command: cmd });
+        // Use standalone API - no server needed
+        await api.loadConfig();
+        const result = await api.executeOnVm(vmId, cmd);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {
@@ -858,8 +864,10 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
         return 1;
       }
       try {
+        // Use standalone API - no server needed
+        await api.loadConfig();
         console.log(blue(`Evaluating VM ${vmId}...`));
-        const result = await ctx.client.rpcCall("vm/eval", { vmId });
+        const result = await api.evalVm(vmId);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {
@@ -890,7 +898,9 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
     case "status": {
       const limit = ctx.args[2] ? parseInt(ctx.args[2], 10) : 1;
       try {
-        const result = await ctx.client.rpcCall("vm/outputs/all", { limit });
+        // Use standalone API - no server needed
+        await api.loadConfig();
+        const result = await api.getVmStatus(limit);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {
@@ -907,10 +917,10 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
         return 1;
       }
       try {
+        // Use standalone API - no server needed
+        await api.loadConfig();
         console.log(blue(`Waiting for VM ${vmId} to complete...`));
-        const params: { vmId: string; timeout?: number } = { vmId };
-        if (timeout) params.timeout = timeout;
-        const result = await ctx.client.rpcCall("vm/wait", params);
+        const result = await api.waitForVm(vmId, timeout);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {
