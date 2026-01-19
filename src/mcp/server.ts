@@ -3,18 +3,23 @@
  *
  * Run with: vers --mcp
  * Auto-installs into Claude's MCP settings on first run.
+ *
+ * This is a STANDALONE server - it calls orchestrator/vm/config modules directly
+ * without requiring an HTTP server to be running.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { HttpAcpClient } from "../client/http-client";
-import { tokenStore } from "../utils/token-store";
 import { homedir } from "os";
 import { join } from "path";
 
-// Server URL - defaults to localhost
-const SERVER_URL = process.env.VERS_URL || `http://localhost:${process.env.PORT || "9999"}`;
+// Direct imports for standalone operation
+import { listManagedVms, createManagedVm, getManagedVm } from "../orchestrator";
+import { execute, getAgentUrl } from "../vm";
+import { VM_AGENT_DIR } from "../vm/constants";
+import { loadConfig, getConfig, setConfig } from "../utils/config";
+import { subscribeToVmEvents } from "../server/vm-event-aggregator";
 
 // Claude config paths
 const CLAUDE_CONFIG_DIR = join(homedir(), ".claude");
@@ -158,45 +163,6 @@ export async function ensureVersConfigured(): Promise<void> {
   console.error("");
 }
 
-/**
- * Create authenticated HTTP client
- */
-async function createClient(): Promise<HttpAcpClient> {
-  const client = new HttpAcpClient(SERVER_URL);
-  return client;
-}
-
-/**
- * Auto-claim localhost server if unclaimed
- */
-async function autoClaimLocalhost(): Promise<string | null> {
-  try {
-    const response = await fetch(`${SERVER_URL}/claim`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Client-Id": "vers-mcp-server",
-      },
-      signal: AbortSignal.timeout(2000),
-    });
-    if (response.ok) {
-      const data = (await response.json()) as {
-        token?: string;
-        claimed: boolean;
-        isOwner?: boolean;
-      };
-      if (data.token) {
-        tokenStore.setToken(SERVER_URL, data.token);
-        return data.token;
-      } else if (data.isOwner) {
-        return tokenStore.getToken(SERVER_URL);
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Start the MCP server
@@ -205,8 +171,8 @@ export async function startMcpServer(): Promise<void> {
   // Auto-install to Claude config if not already configured
   await ensureVersConfigured();
 
-  // Try to claim localhost
-  await autoClaimLocalhost();
+  // Load config for standalone operation
+  await loadConfig();
 
   const server = new McpServer({
     name: "vers-agent",
@@ -221,11 +187,27 @@ export async function startMcpServer(): Promise<void> {
     "vers_vms",
     "List all VMs managed by vers-agent",
     async () => {
-      const client = await createClient();
-      const result = await client.rpcCall("vm/list", {});
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      try {
+        const vms = await listManagedVms();
+        const result = {
+          vms: vms.map(vm => ({
+            vmId: vm.vmId,
+            parent: vm.parent,
+            status: vm.metadata?.status || "ready",
+            task: vm.metadata?.task,
+            approach: vm.metadata?.approach,
+            createdAt: vm.metadata?.createdAt || new Date().toISOString(),
+          })),
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error listing VMs: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -234,13 +216,22 @@ export async function startMcpServer(): Promise<void> {
     "Create a new VM with optional task description",
     { task: z.string().optional().describe("Optional task description for the VM") },
     async ({ task }) => {
-      const client = await createClient();
-      const params: { task?: string } = {};
-      if (task) params.task = task;
-      const result = await client.rpcCall("vm/create", params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      try {
+        const vm = await createManagedVm({}, task);
+        const agentUrl = getAgentUrl(vm.vmId);
+        const result = {
+          vmId: vm.vmId,
+          agentUrl,
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error creating VM: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -249,11 +240,46 @@ export async function startMcpServer(): Promise<void> {
     "Run a prompt on all VMs in parallel",
     { prompt: z.string().describe("The prompt to send to all VMs") },
     async ({ prompt }) => {
-      const client = await createClient();
-      const result = await client.rpcCall("vm/run", { prompt });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      try {
+        const allVms = await listManagedVms();
+        const dispatched: string[] = [];
+
+        // Fire prompts to all VMs without waiting for completion
+        for (const vm of allVms) {
+          try {
+            const managed = await getManagedVm(vm.vmId);
+            if (managed) {
+              // Initialize and send prompt without waiting
+              managed.client.initialize("vers-agent").then(() => {
+                managed.client.newSession().then((session) => {
+                  managed.sessionId = session.sessionId;
+                  managed.client.prompt(prompt).catch(() => {
+                    // Ignore prompt errors
+                  });
+                });
+              }).catch(() => {
+                // Ignore initialization errors
+              });
+              dispatched.push(vm.vmId);
+            }
+          } catch {
+            // Skip VMs that can't be reached
+          }
+        }
+
+        const result = {
+          dispatched: dispatched.length,
+          vmIds: dispatched,
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error running prompt: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -265,53 +291,25 @@ export async function startMcpServer(): Promise<void> {
       command: z.string().describe("The shell command to execute"),
     },
     async ({ vmId, command }) => {
-      const client = await createClient();
-      const result = (await client.rpcCall("vm/execute", {
-        vmId,
-        command,
-      })) as { stdout?: string; stderr?: string; exitCode?: number };
+      try {
+        const result = await execute(vmId, command);
 
-      let output = "";
-      if (result.stdout) output += result.stdout;
-      if (result.stderr) output += result.stderr;
-      if (result.exitCode !== undefined && result.exitCode !== 0) {
-        output += `\n[Exit code: ${result.exitCode}]`;
-      }
+        let output = "";
+        if (result.stdout) output += result.stdout;
+        if (result.stderr) output += result.stderr;
+        if (result.exitCode !== undefined && result.exitCode !== 0) {
+          output += `\n[Exit code: ${result.exitCode}]`;
+        }
 
-      return {
-        content: [{ type: "text", text: output || "(no output)" }],
-      };
-    }
-  );
-
-  server.tool(
-    "vers_vm_sync",
-    "Sync local git changes to a VM",
-    {
-      vmId: z.string().describe("The VM ID"),
-      baseCommit: z
-        .string()
-        .optional()
-        .describe("Base commit to sync from (defaults to VERS_GOLDEN_COMMIT_ID)"),
-    },
-    async ({ vmId, baseCommit }) => {
-      const client = await createClient();
-      const commit = baseCommit || process.env.VERS_GOLDEN_COMMIT_ID;
-      if (!commit) {
         return {
-          content: [
-            {
-              type: "text",
-              text: "Error: No base commit specified and VERS_GOLDEN_COMMIT_ID not set",
-            },
-          ],
+          content: [{ type: "text", text: output || "(no output)" }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error executing command: ${err}` }],
           isError: true,
         };
       }
-      const result = await client.rpcCall("vm/sync", { vmId, baseCommit: commit });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
     }
   );
 
@@ -320,11 +318,124 @@ export async function startMcpServer(): Promise<void> {
     "Evaluate a VM by running build/test/lint/typecheck",
     { vmId: z.string().describe("The VM ID to evaluate") },
     async ({ vmId }) => {
-      const client = await createClient();
-      const result = await client.rpcCall("vm/eval", { vmId });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      try {
+        const managed = await getManagedVm(vmId);
+        if (!managed) {
+          return {
+            content: [{ type: "text", text: `Error: VM not found: ${vmId}` }],
+            isError: true,
+          };
+        }
+
+        const evalTimeout = 60000;
+        const workDir = VM_AGENT_DIR;
+
+        // Detect project type
+        const detectCmd = `
+          if [ -f bun.lock ] || [ -f bun.lockb ]; then echo "bun";
+          elif [ -f package.json ]; then echo "node";
+          elif [ -f Cargo.toml ]; then echo "rust";
+          elif [ -f go.mod ]; then echo "go";
+          elif [ -f pyproject.toml ] || [ -f requirements.txt ]; then echo "python";
+          else echo "unknown"; fi
+        `.trim().replace(/\n\s*/g, ' ');
+
+        const detectResult = await execute(vmId, `cd ${workDir} && ${detectCmd}`);
+        const projectType = detectResult.stdout.trim() || "unknown";
+
+        // Get default commands based on project type
+        const defaultCommands: Record<string, { build?: string; test?: string; lint?: string; typecheck?: string }> = {
+          bun: { build: "bun run build", test: "bun test", lint: "bun run lint", typecheck: "bun run tsc --noEmit" },
+          node: { build: "npm run build", test: "npm test", lint: "npm run lint", typecheck: "npm run typecheck" },
+          rust: { build: "cargo build", test: "cargo test", lint: "cargo clippy -- -D warnings", typecheck: "cargo check" },
+          go: { build: "go build ./...", test: "go test ./...", lint: "golangci-lint run", typecheck: "go vet ./..." },
+          python: { test: "pytest", lint: "ruff check .", typecheck: "mypy ." },
+          unknown: {},
+        };
+
+        const cmds = defaultCommands[projectType] || {};
+        const results: Record<string, { success: boolean; exitCode: number; stdout: string; stderr: string; durationMs: number }> = {};
+        const scoreBreakdown = { build: 0, test: 0, lint: 0, typecheck: 0 };
+
+        // Helper to run a command
+        async function runCmd(cmd: string): Promise<{ success: boolean; exitCode: number; stdout: string; stderr: string; durationMs: number }> {
+          const start = Date.now();
+          try {
+            const result = await execute(vmId, `cd ${workDir} && timeout ${Math.floor(evalTimeout / 1000)} ${cmd}`);
+            return {
+              success: result.exitCode === 0,
+              exitCode: result.exitCode,
+              stdout: result.stdout,
+              stderr: result.stderr,
+              durationMs: Date.now() - start,
+            };
+          } catch (err) {
+            return {
+              success: false,
+              exitCode: -1,
+              stdout: "",
+              stderr: err instanceof Error ? err.message : String(err),
+              durationMs: Date.now() - start,
+            };
+          }
+        }
+
+        const startTime = Date.now();
+
+        // Run build
+        if (cmds.build) {
+          results.build = await runCmd(cmds.build);
+          scoreBreakdown.build = results.build.success ? 25 : 0;
+        } else {
+          scoreBreakdown.build = 25;
+        }
+
+        // Run typecheck
+        if (cmds.typecheck) {
+          results.typecheck = await runCmd(cmds.typecheck);
+          scoreBreakdown.typecheck = results.typecheck.success ? 15 : 0;
+        } else {
+          scoreBreakdown.typecheck = 10;
+        }
+
+        // Run lint
+        if (cmds.lint) {
+          results.lint = await runCmd(cmds.lint);
+          scoreBreakdown.lint = results.lint.success ? 20 : 0;
+        } else {
+          scoreBreakdown.lint = 15;
+        }
+
+        // Run tests
+        if (cmds.test) {
+          results.test = await runCmd(cmds.test);
+          scoreBreakdown.test = results.test.success ? 40 : 0;
+        } else {
+          scoreBreakdown.test = 30;
+        }
+
+        const score = scoreBreakdown.build + scoreBreakdown.test + scoreBreakdown.lint + scoreBreakdown.typecheck;
+        const success = (!results.build || results.build.success) && (!results.test || results.test.success);
+
+        const evalResult = {
+          vmId,
+          success,
+          projectType,
+          score,
+          scoreBreakdown,
+          results,
+          totalDurationMs: Date.now() - startTime,
+        };
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(evalResult, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error evaluating VM: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -339,11 +450,69 @@ export async function startMcpServer(): Promise<void> {
         .describe("Number of recent outputs per VM"),
     },
     async ({ limit }) => {
-      const client = await createClient();
-      const result = await client.rpcCall("vm/outputs/all", { limit });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      try {
+        const vmList = await listManagedVms();
+        const result: Record<string, {
+          vmId: string;
+          status: string;
+          task?: string;
+          lastMessage?: string;
+          lastMessageType?: string;
+        }> = {};
+
+        // Fetch outputs from each VM in parallel
+        await Promise.all(
+          vmList.map(async (vm) => {
+            const vmId = vm.vmId;
+            const metadata = vm.metadata;
+            let lastMessage: string | undefined;
+            let lastMessageType: string | undefined;
+
+            try {
+              const managed = await getManagedVm(vmId);
+              if (managed) {
+                const outputsResult = await managed.client.getSessionOutputs({});
+                const outputs = outputsResult.outputs || [];
+
+                // Find the last assistant message
+                for (let i = outputs.length - 1; i >= 0; i--) {
+                  const output = outputs[i];
+                  if (!output) continue;
+                  if (output.type === "text") {
+                    lastMessage = output.content;
+                    lastMessageType = "assistant";
+                    break;
+                  } else if (output.type === "tool-result" || output.type === "tool_result") {
+                    if (!lastMessage) {
+                      lastMessage = output.content.slice(0, 200);
+                      lastMessageType = "tool_result";
+                    }
+                  }
+                }
+              }
+            } catch {
+              // VM not reachable
+            }
+
+            result[vmId] = {
+              vmId,
+              status: metadata?.status || "unknown",
+              task: metadata?.task,
+              lastMessage,
+              lastMessageType,
+            };
+          })
+        );
+
+        return {
+          content: [{ type: "text", text: JSON.stringify({ vms: result }, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error getting VM status: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -355,68 +524,113 @@ export async function startMcpServer(): Promise<void> {
       timeout: z
         .number()
         .optional()
-        .describe("Timeout in milliseconds (default: no timeout)"),
+        .describe("Timeout in milliseconds (default: 5 minutes)"),
     },
     async ({ vmId, timeout }) => {
-      const client = await createClient();
-      const params: { vmId: string; timeout?: number } = { vmId };
-      if (timeout) params.timeout = timeout;
-      const result = await client.rpcCall("vm/wait", params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      try {
+        const waitTimeout = timeout ?? 300000; // 5 min default
+        const startTime = Date.now();
+
+        const managed = await getManagedVm(vmId);
+        if (!managed) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ vmId, status: "failed", error: "VM not found" }, null, 2) }],
+            isError: true,
+          };
+        }
+
+        return new Promise((resolve) => {
+          let resolved = false;
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+          // Subscribe to VM events
+          const unsubscribe = subscribeToVmEvents((event) => {
+            if (resolved) return;
+            if (event.vmId !== vmId) return;
+
+            const eventType = event.event.type;
+
+            if (eventType === "completed") {
+              resolved = true;
+              if (timeoutId) clearTimeout(timeoutId);
+              unsubscribe();
+
+              const durationMs = Date.now() - startTime;
+              resolve({
+                content: [{ type: "text", text: JSON.stringify({ vmId, status: "completed", durationMs }, null, 2) }],
+              });
+            } else if (eventType === "failed") {
+              resolved = true;
+              if (timeoutId) clearTimeout(timeoutId);
+              unsubscribe();
+
+              const errorData = event.event.data as { error?: string };
+              resolve({
+                content: [{ type: "text", text: JSON.stringify({
+                  vmId,
+                  status: "failed",
+                  durationMs: Date.now() - startTime,
+                  error: errorData?.error || "Task failed",
+                }, null, 2) }],
+                isError: true,
+              });
+            }
+          });
+
+          // Set timeout
+          timeoutId = setTimeout(() => {
+            if (resolved) return;
+            resolved = true;
+            unsubscribe();
+
+            resolve({
+              content: [{ type: "text", text: JSON.stringify({
+                vmId,
+                status: "timeout",
+                durationMs: waitTimeout,
+                error: `Timeout after ${waitTimeout}ms`,
+              }, null, 2) }],
+            });
+          }, waitTimeout);
+        });
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error waiting for VM: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
   // ============================================================
-  // Session/Agent Tools
+  // Config Tools
   // ============================================================
-
-  server.tool(
-    "vers_run",
-    "Send a prompt to the local agent and get the response",
-    { prompt: z.string().describe("The prompt to send") },
-    async ({ prompt }) => {
-      const client = await createClient();
-      await client.rpcCall("session/prompt", { text: prompt });
-
-      // Collect response by watching events
-      // For now, just return acknowledgment - streaming is complex in MCP
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Prompt sent: "${prompt}"\n\nUse vers_watch or check the agent output for the response.`,
-          },
-        ],
-      };
-    }
-  );
 
   server.tool("vers_health", "Check the vers-agent server health", async () => {
-    try {
-      const response = await fetch(`${SERVER_URL}/health`);
-      const data = await response.json();
-      return {
-        content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-      };
-    } catch (err) {
-      return {
-        content: [{ type: "text", text: `Error: ${err}` }],
-        isError: true,
-      };
-    }
+    return {
+      content: [{ type: "text", text: JSON.stringify({
+        status: "ok",
+        mode: "standalone",
+        version: "1.0.0",
+      }, null, 2) }],
+    };
   });
 
   server.tool(
     "vers_config_get",
     "Get the current vers-agent configuration",
     async () => {
-      const client = await createClient();
-      const result = await client.rpcCall<{ config: unknown }>("config/get", {});
-      return {
-        content: [{ type: "text", text: JSON.stringify(result.config, null, 2) }],
-      };
+      try {
+        const config = getConfig();
+        return {
+          content: [{ type: "text", text: JSON.stringify(config, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error getting config: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -428,30 +642,24 @@ export async function startMcpServer(): Promise<void> {
       value: z.string().describe("Configuration value"),
     },
     async ({ key, value }) => {
-      const client = await createClient();
-      const params: Record<string, unknown> = {};
+      try {
+        const updates: Record<string, unknown> = {};
 
-      // Handle boolean values
-      if (value === "true") params[key] = true;
-      else if (value === "false") params[key] = false;
-      else params[key] = value;
+        // Handle boolean values
+        if (value === "true") updates[key] = true;
+        else if (value === "false") updates[key] = false;
+        else updates[key] = value;
 
-      const result = await client.rpcCall<{ config: unknown }>("config/set", params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result.config, null, 2) }],
-      };
-    }
-  );
-
-  server.tool(
-    "vers_cancel",
-    "Cancel the currently running task",
-    async () => {
-      const client = await createClient();
-      const result = await client.rpcCall("session/cancel", {});
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+        const config = await setConfig(updates);
+        return {
+          content: [{ type: "text", text: JSON.stringify(config, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Error setting config: ${err}` }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -460,6 +668,5 @@ export async function startMcpServer(): Promise<void> {
   await server.connect(transport);
 
   // Log to stderr so it doesn't interfere with stdio protocol
-  console.error("vers-agent MCP server started");
-  console.error(`Connecting to: ${SERVER_URL}`);
+  console.error("vers-agent MCP server started (standalone mode)");
 }
