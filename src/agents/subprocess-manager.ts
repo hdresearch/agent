@@ -62,7 +62,7 @@ export class SubprocessManager {
   private stderrHandler: StderrHandler | null = null;
   private defaultTimeout: number;
 
-  constructor(defaultTimeout = 60000) {
+  constructor(defaultTimeout = 300000) { // 5 minutes default timeout
     this.defaultTimeout = defaultTimeout;
   }
 

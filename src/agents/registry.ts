@@ -365,7 +365,7 @@ export function registerBuiltinAgents(): void {
     description: "Claude's raw power in your terminal via ACP",
     tags: [],
     runCommand: {
-      "*": "claude-code-acp",
+      "*": "claude-code-acp --dangerously-skip-permissions",
     },
     actions: {
       "*": {

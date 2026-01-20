@@ -44,7 +44,7 @@ export async function createVm(config: VmConfig = {}): Promise<string> {
     vm_config: {
       mem_size_mib: config.memSizeMib ?? 2048,
       vcpu_count: config.vcpuCount ?? 2,
-      fs_size_mib: config.fsSizeMib ?? 1024,
+      fs_size_mib: config.fsSizeMib ?? 4096, // 4GB disk for Node.js + Claude Code + vers-agent
     },
   };
   const response = await client.vm.createRoot(params);
