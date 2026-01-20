@@ -1,11 +1,28 @@
-// Simple API key authentication
-// Uses versApiKey from config - no SQLite, no derived tokens, no claims
+// Authentication for vers-agent
+// Supports both master API key and derived VM tokens
 
 import { getConfig, setConfig } from "./config";
 import { logStream } from "./log-stream";
 
 /**
- * Get the stored VERS API key.
+ * Get the authentication token for this agent.
+ * Priority:
+ * 1. VERS_VM_TOKEN (derived token for VM agents)
+ * 2. versApiKey from config
+ * 3. VERS_API_KEY env var (master key)
+ */
+export function getAuthToken(): string | null {
+  // VMs should use their derived token
+  if (process.env.VERS_VM_TOKEN) {
+    return process.env.VERS_VM_TOKEN;
+  }
+  // Fall back to config/env
+  const config = getConfig();
+  return config.versApiKey || process.env.VERS_API_KEY || null;
+}
+
+/**
+ * Get the stored VERS API key (master key).
  * Checks config first, then falls back to environment variable.
  */
 export function getVersApiKey(): string | null {
@@ -25,18 +42,27 @@ export async function setVersApiKey(apiKey: string): Promise<void> {
  * Check if authentication is configured.
  */
 export function hasAuth(): boolean {
-  return getVersApiKey() !== null;
+  return getAuthToken() !== null;
 }
 
 /**
- * Verify a provided API key matches the stored one.
+ * Verify a provided token matches our auth token.
+ * Works with both master keys and derived VM tokens.
  */
 export function verifyApiKey(providedKey: string): boolean {
-  const storedKey = getVersApiKey();
-  if (!storedKey) {
+  const storedToken = getAuthToken();
+  if (!storedToken) {
     return false;
   }
-  return providedKey === storedKey;
+  // Use timing-safe comparison
+  if (storedToken.length !== providedKey.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < storedToken.length; i++) {
+    result |= storedToken.charCodeAt(i) ^ providedKey.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 /**

@@ -182,6 +182,66 @@ export function handleVmStatus(ctx: VmHandlerContext): VmStatusResult {
   };
 }
 
+/**
+ * Send a prompt to a VM via SSH (localhost HTTP).
+ * This bypasses DNS issues by connecting to the agent via localhost.
+ */
+async function sendPromptViaSsh(vmId: string, prompt: string): Promise<{ success: boolean; error?: string }> {
+  const { execute: executeOnVm } = await import("../../vm");
+  const { deriveVmToken } = await import("../../utils/token-derivation");
+
+  // Get the VM's derived token for authentication
+  const masterKey = process.env.VERS_API_KEY;
+  if (!masterKey) {
+    return { success: false, error: "No VERS_API_KEY configured" };
+  }
+
+  const vmToken = deriveVmToken(masterKey, vmId);
+
+  // Escape the prompt for shell
+  const escapedPrompt = prompt.replace(/'/g, "'\"'\"'");
+
+  // First initialize and create session via SSH
+  const initCmd = `curl -s -X POST http://localhost:80/rpc \\
+    -H "Content-Type: application/json" \\
+    -H "Authorization: Bearer ${vmToken}" \\
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"vers-orchestrator","version":"1.0.0"},"capabilities":{}}}'`;
+
+  try {
+    const initResult = await executeOnVm(vmId, initCmd);
+    if (initResult.exitCode !== 0) {
+      return { success: false, error: `Init failed: ${initResult.stderr}` };
+    }
+
+    // Create new session
+    const sessionCmd = `curl -s -X POST http://localhost:80/rpc \\
+      -H "Content-Type: application/json" \\
+      -H "Authorization: Bearer ${vmToken}" \\
+      -d '{"jsonrpc":"2.0","id":2,"method":"session/new","params":{}}'`;
+
+    const sessionResult = await executeOnVm(vmId, sessionCmd);
+    if (sessionResult.exitCode !== 0) {
+      return { success: false, error: `Session creation failed: ${sessionResult.stderr}` };
+    }
+
+    // Send the prompt
+    const promptCmd = `curl -s -X POST http://localhost:80/rpc \\
+      -H "Content-Type: application/json" \\
+      -H "Authorization: Bearer ${vmToken}" \\
+      -d '{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"text":"${escapedPrompt}"}}'`;
+
+    const promptResult = await executeOnVm(vmId, promptCmd);
+    if (promptResult.exitCode !== 0) {
+      return { success: false, error: `Prompt failed: ${promptResult.stderr}` };
+    }
+
+    info(`Prompt sent to VM ${vmId.slice(0, 8)} via SSH`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
   const { listManagedVms, getManagedVm } = await import("../../orchestrator");
 
@@ -198,26 +258,42 @@ export async function handleVmRun(params: VmRunParams): Promise<VmRunResult> {
   // Fire prompts to all VMs without waiting for completion
   for (const vmId of targetVmIds) {
     try {
-      // Use getManagedVm to get/reconnect client (this also registers with event aggregator)
+      // First try HTTP client (if DNS works)
       const managed = await getManagedVm(vmId);
 
       if (managed) {
-        // Initialize and send prompt without waiting
-        managed.client.initialize("vers-agent").then(() => {
-          managed.client.newSession().then((session) => {
-            managed.sessionId = session.sessionId;
-            managed.client.prompt(params.prompt).catch(err => {
-              warn(`Prompt failed on VM ${vmId}`, { error: err.message });
-            });
+        // Try HTTP client first
+        try {
+          await managed.client.initialize("vers-agent");
+          const session = await managed.client.newSession();
+          managed.sessionId = session.sessionId;
+          // Don't await prompt - let it run in background
+          managed.client.prompt(params.prompt).catch(err => {
+            warn(`HTTP prompt failed on VM ${vmId}, falling back to SSH`, { error: err.message });
+            // Fallback to SSH-based prompt
+            sendPromptViaSsh(vmId, params.prompt);
           });
-        }).catch(err => {
-          warn(`Failed to initialize VM ${vmId}`, { error: err.message });
-        });
-
-        dispatched.push(vmId);
-        info(`Dispatched prompt to VM ${vmId.slice(0, 8)}`);
+          dispatched.push(vmId);
+          info(`Dispatched prompt to VM ${vmId.slice(0, 8)} via HTTP`);
+        } catch (err) {
+          // HTTP failed, try SSH fallback
+          warn(`HTTP connection failed for VM ${vmId}, using SSH fallback`, { error: err instanceof Error ? err.message : String(err) });
+          sendPromptViaSsh(vmId, params.prompt).then(result => {
+            if (!result.success) {
+              warn(`SSH prompt also failed for VM ${vmId}`, { error: result.error });
+            }
+          });
+          dispatched.push(vmId);
+        }
       } else {
-        warn(`Failed to get managed VM ${vmId}`);
+        // No managed VM client, use SSH directly
+        warn(`No managed client for VM ${vmId}, using SSH fallback`);
+        sendPromptViaSsh(vmId, params.prompt).then(result => {
+          if (!result.success) {
+            warn(`SSH prompt failed for VM ${vmId}`, { error: result.error });
+          }
+        });
+        dispatched.push(vmId);
       }
     } catch (err) {
       warn(`Failed to dispatch to VM ${vmId}`, { error: err instanceof Error ? err.message : String(err) });

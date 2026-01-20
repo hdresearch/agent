@@ -10,7 +10,7 @@ import { createVm, branch, deleteVm, listVms, getAgentUrl, restore, execute, typ
 import { VM_VERS_AGENT_CONFIG_DIR } from "../vm/constants";
 import { bootstrap } from "../vm/bootstrap";
 import { registerVm, receiveVmEvent, removeVmConnection } from "../server/vm-event-aggregator";
-// Auth is now simple: just use VERS_API_KEY directly
+import { deriveVmToken } from "../utils/token-derivation";
 
 // Golden image commit ID (pre-installed Node.js, Claude Code, vers-agent)
 const GOLDEN_COMMIT_ID = process.env.VERS_GOLDEN_COMMIT_ID;
@@ -106,35 +106,44 @@ export function removeVmMetadata(vmId: string): void {
 const VERS_API_KEY = process.env.VERS_API_KEY;
 
 /**
- * Create an HttpAcpClient for a VM with the API key set.
+ * Create an HttpAcpClient for a VM with a derived token.
+ * Each VM gets a unique token derived from the master key.
  */
 function createVmClient(vmId: string): HttpAcpClient {
   const agentUrl = getAgentUrl(vmId);
   const client = new HttpAcpClient(agentUrl, { rejectUnauthorized: false });
 
-  // Use the API key directly for authentication
+  // Use derived token for this specific VM
   if (VERS_API_KEY) {
-    client.setToken(VERS_API_KEY);
+    const vmToken = deriveVmToken(VERS_API_KEY, vmId);
+    client.setToken(vmToken);
   }
 
   return client;
 }
 
 /**
- * Inject VERS_API_KEY and VERS_VM_ID into the VM's config and restart vers-agent.
- * The API key enables SDK calls and authentication.
+ * Inject VM-specific config and restart vers-agent.
+ * - VERS_VM_ID: So the VM knows its own ID
+ * - VERS_API_KEY: Master key for SDK calls (branching, committing, etc.)
+ * - VERS_VM_TOKEN: Derived token for authentication (unique per VM)
  */
 async function injectVmIdAndRestart(vmId: string): Promise<void> {
   if (!VERS_API_KEY) return; // No API key, skip injection
 
-  // Update env file with VERS_VM_ID and VERS_API_KEY, then restart
+  // Derive a unique token for this VM
+  const vmToken = deriveVmToken(VERS_API_KEY, vmId);
+
+  // Update env file with VM-specific config, then restart
   const commands = [
     // Ensure env file exists
     `mkdir -p /etc/vers-agent`,
     // Update or add VERS_VM_ID
     `grep -q "^VERS_VM_ID=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_VM_ID=.*/VERS_VM_ID=${vmId}/" /etc/vers-agent/env || echo "VERS_VM_ID=${vmId}" >> /etc/vers-agent/env`,
-    // Update or add VERS_API_KEY (so VM can use SDK)
+    // Update or add VERS_API_KEY (so VM can use SDK for branching/committing)
     `grep -q "^VERS_API_KEY=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_API_KEY=.*/VERS_API_KEY=${VERS_API_KEY}/" /etc/vers-agent/env || echo "VERS_API_KEY=${VERS_API_KEY}" >> /etc/vers-agent/env`,
+    // Update or add VERS_VM_TOKEN (derived token for this VM's authentication)
+    `grep -q "^VERS_VM_TOKEN=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_VM_TOKEN=.*/VERS_VM_TOKEN=${vmToken}/" /etc/vers-agent/env || echo "VERS_VM_TOKEN=${vmToken}" >> /etc/vers-agent/env`,
     // Clear stale auth.db
     `rm -f ${VM_VERS_AGENT_CONFIG_DIR}/auth.db`,
     // Restart vers-agent via systemd
