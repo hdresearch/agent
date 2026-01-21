@@ -1293,31 +1293,28 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   }
 
   if (subCmd === "run") {
-    // Run a prompt on all VMs (standalone - no server needed)
-    const prompt = vmId ? `${vmId} ${restArgs.join(" ")}` : restArgs.join(" ");
+    // Run a prompt on a specific VM (standalone - no server needed)
+    const prompt = restArgs.join(" ");
 
-    if (!prompt.trim()) {
-      ctx.addOutput({ type: "error", content: "Usage: /vm:run <prompt>" });
+    if (!vmId || !prompt.trim()) {
+      ctx.addOutput({ type: "error", content: "Usage: /vm:run:<vmId> <prompt>" });
       return;
     }
 
-    ctx.addOutput({ type: "system", content: "Dispatching prompt to VMs..." });
+    ctx.addOutput({ type: "system", content: `Dispatching prompt to VM ${vmId.slice(0, 8)}...` });
 
     try {
-      const result = await api.runOnAllVms(prompt);
+      const result = await api.runOnVm(vmId, prompt);
 
-      if (result.dispatched === 0) {
-        ctx.addOutput({ type: "system", content: "No VMs to dispatch to." });
-        ctx.addOutput({ type: "system", content: "Create VMs first: /vm:new" });
+      if (!result.dispatched) {
+        ctx.addOutput({ type: "error", content: `Failed to dispatch to VM ${vmId}` });
+        ctx.addOutput({ type: "system", content: "Check VM exists: /vm:list" });
       } else {
         ctx.addOutput({ type: "system", content: "" });
-        ctx.addOutput({ type: "system", content: `✓ Dispatched to ${result.dispatched} VM(s):` });
-        for (const id of result.vmIds) {
-          ctx.addOutput({ type: "system", content: `  • ${id.slice(0, 8)}` });
-        }
+        ctx.addOutput({ type: "system", content: `✓ Dispatched to VM ${result.vmId.slice(0, 8)}` });
         ctx.addOutput({ type: "system", content: "" });
         ctx.addOutput({ type: "system", content: "Check status: /vm:list" });
-        ctx.addOutput({ type: "system", content: "Connect to VM: /vm:connect:<id>" });
+        ctx.addOutput({ type: "system", content: `Connect to VM: /vm:connect:${vmId}` });
       }
     } catch (err) {
       ctx.addOutput({ type: "error", content: `Failed to dispatch: ${err}` });

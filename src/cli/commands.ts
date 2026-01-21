@@ -740,16 +740,17 @@ async function vmCommand(ctx: CommandContext): Promise<number> {
     }
 
     case "run": {
-      const prompt = ctx.args.slice(2).join(" ");
-      if (!prompt) {
-        console.error(red("Usage: vers-agent vm run <prompt>"));
+      const vmId = ctx.args[2];
+      const prompt = ctx.args.slice(3).join(" ");
+      if (!vmId || !prompt) {
+        console.error(red("Usage: vers-agent vm run <vmId> <prompt>"));
         return 1;
       }
       try {
         // Use standalone API - no server needed
         await api.loadConfig();
-        console.log(`${blue("Running on all VMs:")} ${prompt}`);
-        const result = await api.runOnAllVms(prompt);
+        console.log(`${blue("Running on VM")} ${vmId}: ${prompt}`);
+        const result = await api.runOnVm(vmId, prompt);
         console.log(JSON.stringify(result, null, 2));
         return 0;
       } catch (err) {

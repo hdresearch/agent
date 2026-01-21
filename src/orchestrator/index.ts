@@ -349,6 +349,177 @@ export async function runPrompt(
   }
 }
 
+// ============================================================
+// Ralph-Style Looping
+// ============================================================
+
+// Track active loops
+const activeLoops = new Map<string, {
+  prompt: string;
+  iteration: number;
+  maxIterations: number;
+  completionPromise?: string;
+  cancelled: boolean;
+}>();
+
+/**
+ * Run a prompt in a loop (Ralph-style)
+ * Re-sends the same prompt when the task completes until:
+ * - Max iterations reached
+ * - Completion promise detected in output
+ * - Loop is cancelled via cancelLoop()
+ */
+export async function runPromptLoop(
+  vmId: string,
+  prompt: string,
+  options: {
+    maxIterations?: number;
+    completionPromise?: string;
+  } = {}
+): Promise<{ started: boolean; error?: string }> {
+  const managed = await getManagedVm(vmId);
+  if (!managed) {
+    return { started: false, error: "VM not found or not connected" };
+  }
+
+  const maxIterations = options.maxIterations ?? 0; // 0 = infinite
+  const completionPromise = options.completionPromise;
+
+  // Store loop state
+  activeLoops.set(vmId, {
+    prompt,
+    iteration: 1,
+    maxIterations,
+    completionPromise,
+    cancelled: false,
+  });
+
+  logStream.info(`[ralph] Starting loop on VM ${vmId.slice(0, 8)}`, {
+    maxIterations: maxIterations || "infinite",
+    completionPromise,
+  });
+
+  // Start the loop
+  runLoopIteration(vmId).catch(err => {
+    logStream.error(`[ralph] Loop error on VM ${vmId.slice(0, 8)}`, { error: err.message });
+  });
+
+  return { started: true };
+}
+
+/**
+ * Run a single iteration of the loop
+ */
+async function runLoopIteration(vmId: string): Promise<void> {
+  const loop = activeLoops.get(vmId);
+  if (!loop || loop.cancelled) {
+    activeLoops.delete(vmId);
+    return;
+  }
+
+  const managed = await getManagedVm(vmId);
+  if (!managed) {
+    logStream.error(`[ralph] VM ${vmId.slice(0, 8)} not found, stopping loop`);
+    activeLoops.delete(vmId);
+    return;
+  }
+
+  logStream.info(`[ralph] Iteration ${loop.iteration} on VM ${vmId.slice(0, 8)}`);
+
+  // Create session if needed
+  if (!managed.sessionId) {
+    const session = await managed.client.newSession();
+    managed.sessionId = session.sessionId;
+  }
+
+  // Add iteration info to prompt
+  const iterationPrompt = `🔄 Ralph iteration ${loop.iteration}${loop.maxIterations ? ` of ${loop.maxIterations}` : ""}\n${loop.completionPromise ? `To complete: output <promise>${loop.completionPromise}</promise>\n` : ""}\n${loop.prompt}`;
+
+  updateVmMetadata(vmId, { status: "busy" });
+
+  try {
+    await managed.client.prompt(iterationPrompt);
+
+    // Check for completion promise in outputs
+    if (loop.completionPromise) {
+      const outputs = await managed.client.getSessionOutputs({});
+      const lastOutput = outputs.outputs?.slice(-1)[0];
+      if (lastOutput?.content?.includes(`<promise>${loop.completionPromise}</promise>`)) {
+        logStream.info(`[ralph] Completion promise detected on VM ${vmId.slice(0, 8)}`);
+        activeLoops.delete(vmId);
+        updateVmMetadata(vmId, { status: "completed" });
+        return;
+      }
+    }
+
+    // Check max iterations
+    if (loop.maxIterations > 0 && loop.iteration >= loop.maxIterations) {
+      logStream.info(`[ralph] Max iterations (${loop.maxIterations}) reached on VM ${vmId.slice(0, 8)}`);
+      activeLoops.delete(vmId);
+      updateVmMetadata(vmId, { status: "completed" });
+      return;
+    }
+
+    // Continue loop
+    loop.iteration++;
+    updateVmMetadata(vmId, { status: "ready" });
+
+    // Small delay before next iteration
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Schedule next iteration
+    runLoopIteration(vmId);
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    logStream.error(`[ralph] Error in iteration ${loop.iteration} on VM ${vmId.slice(0, 8)}`, { error });
+    updateVmMetadata(vmId, { status: "failed" });
+    activeLoops.delete(vmId);
+  }
+}
+
+/**
+ * Cancel an active loop
+ */
+export function cancelLoop(vmId: string): boolean {
+  const loop = activeLoops.get(vmId);
+  if (loop) {
+    loop.cancelled = true;
+    logStream.info(`[ralph] Cancelled loop on VM ${vmId.slice(0, 8)} at iteration ${loop.iteration}`);
+    activeLoops.delete(vmId);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Check if a VM has an active loop
+ */
+export function hasActiveLoop(vmId: string): boolean {
+  const loop = activeLoops.get(vmId);
+  return loop !== undefined && !loop.cancelled;
+}
+
+/**
+ * Get loop status for a VM
+ */
+export function getLoopStatus(vmId: string): {
+  active: boolean;
+  iteration?: number;
+  maxIterations?: number;
+  completionPromise?: string;
+} | null {
+  const loop = activeLoops.get(vmId);
+  if (!loop || loop.cancelled) {
+    return { active: false };
+  }
+  return {
+    active: true,
+    iteration: loop.iteration,
+    maxIterations: loop.maxIterations || undefined,
+    completionPromise: loop.completionPromise,
+  };
+}
+
 /**
  * Run the same task on multiple branches in parallel
  */

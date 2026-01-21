@@ -50,8 +50,8 @@ export interface VmExecuteResult {
 }
 
 export interface VmRunResult {
-  dispatched: number;
-  vmIds: string[];
+  vmId: string;
+  dispatched: boolean;
 }
 
 export interface VmEvalResult {
@@ -167,35 +167,85 @@ export async function executeOnVm(vmId: string, command: string): Promise<VmExec
   };
 }
 
-export async function runOnAllVms(prompt: string): Promise<VmRunResult> {
-  const allVms = await listManagedVms();
-  const dispatched: string[] = [];
-
-  for (const vm of allVms) {
-    try {
-      const managed = await getManagedVm(vm.vmId);
-      if (managed) {
-        // Initialize and send prompt without waiting
-        managed.client.initialize("vers-agent").then(() => {
-          managed.client.newSession().then((session) => {
-            managed.sessionId = session.sessionId;
-            managed.client.prompt(prompt).catch(() => {
-              // Ignore prompt errors
-            });
-          });
-        }).catch(() => {
-          // Ignore initialization errors
-        });
-        dispatched.push(vm.vmId);
-      }
-    } catch {
-      // Skip VMs that can't be reached
-    }
+export async function runOnVm(vmId: string, prompt: string): Promise<VmRunResult> {
+  const managed = await getManagedVm(vmId);
+  if (!managed) {
+    return { vmId, dispatched: false };
   }
 
+  try {
+    // Initialize and send prompt without waiting
+    managed.client.initialize("vers-agent").then(() => {
+      managed.client.newSession().then((session) => {
+        managed.sessionId = session.sessionId;
+        managed.client.prompt(prompt).catch(() => {
+          // Ignore prompt errors
+        });
+      });
+    }).catch(() => {
+      // Ignore initialization errors
+    });
+    return { vmId, dispatched: true };
+  } catch {
+    return { vmId, dispatched: false };
+  }
+}
+
+// ============================================================
+// Ralph-Style Loop
+// ============================================================
+
+import { runPromptLoop, cancelLoop, getLoopStatus } from "../orchestrator";
+
+export interface VmLoopResult {
+  vmId: string;
+  started: boolean;
+  error?: string;
+}
+
+export interface VmLoopStatusResult {
+  vmId: string;
+  active: boolean;
+  iteration?: number;
+  maxIterations?: number;
+  completionPromise?: string;
+}
+
+/**
+ * Start a ralph-style loop on a VM
+ */
+export async function startVmLoop(
+  vmId: string,
+  prompt: string,
+  options: { maxIterations?: number; completionPromise?: string } = {}
+): Promise<VmLoopResult> {
+  const result = await runPromptLoop(vmId, prompt, options);
   return {
-    dispatched: dispatched.length,
-    vmIds: dispatched,
+    vmId,
+    started: result.started,
+    error: result.error,
+  };
+}
+
+/**
+ * Cancel an active loop on a VM
+ */
+export function stopVmLoop(vmId: string): { vmId: string; cancelled: boolean } {
+  const cancelled = cancelLoop(vmId);
+  return { vmId, cancelled };
+}
+
+/**
+ * Get loop status for a VM
+ */
+export function getVmLoopStatus(vmId: string): VmLoopStatusResult {
+  const status = getLoopStatus(vmId);
+  return {
+    vmId,
+    active: status?.active ?? false,
+    iteration: status?.iteration,
+    maxIterations: status?.maxIterations,
+    completionPromise: status?.completionPromise,
   };
 }
 

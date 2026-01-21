@@ -225,11 +225,14 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     "vers_vm_run",
-    "Run a prompt on all VMs in parallel",
-    { prompt: z.string().describe("The prompt to send to all VMs") },
-    async ({ prompt }) => {
+    "Run a prompt on a specific VM",
+    {
+      vmId: z.string().describe("The VM ID to send the prompt to"),
+      prompt: z.string().describe("The prompt to send to the VM"),
+    },
+    async ({ vmId, prompt }) => {
       try {
-        return jsonResponse(await api.runOnAllVms(prompt));
+        return jsonResponse(await api.runOnVm(vmId, prompt));
       } catch (err) {
         return errorResponse(`Error running prompt: ${err}`);
       }
