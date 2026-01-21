@@ -305,6 +305,22 @@ export async function startMcpServer(): Promise<void> {
     }
   );
 
+  server.tool(
+    "vers_vm_outputs",
+    "Get recent conversation outputs from a VM (like tail -n)",
+    {
+      vmId: z.string().describe("The VM ID to get outputs from"),
+      n: z.number().optional().default(10).describe("Number of recent outputs to return (default: 10)"),
+    },
+    async ({ vmId, n }) => {
+      try {
+        return jsonResponse(await api.getVmOutputs(vmId, n));
+      } catch (err) {
+        return errorResponse(`Error getting VM outputs: ${err}`);
+      }
+    }
+  );
+
   // ============================================================
   // Config Tools
   // ============================================================

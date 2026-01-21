@@ -428,6 +428,65 @@ export async function findVmByPartialId(partialId: string): Promise<VmInfo | nul
 }
 
 // ============================================================
+// VM Outputs - Get full conversation from a VM
+// ============================================================
+
+export interface VmOutput {
+  type: "assistant" | "tool_result" | "user";
+  content: string;
+  toolName?: string;
+}
+
+export interface VmOutputsResult {
+  vmId: string;
+  sessionId?: string;
+  outputs: VmOutput[];
+}
+
+/**
+ * Get recent outputs from a VM session (like `tail -n`)
+ * @param vmId - The VM ID
+ * @param n - Number of recent outputs to return (default: 10)
+ */
+export async function getVmOutputs(vmId: string, n: number = 10): Promise<VmOutputsResult> {
+  const managed = await getManagedVm(vmId);
+  if (!managed) {
+    return { vmId, outputs: [] };
+  }
+
+  try {
+    const result = await managed.client.getSessionOutputs({});
+    const allOutputs = result.outputs || [];
+
+    // Take only the last n outputs
+    const recentOutputs = allOutputs.slice(-n);
+    const outputs: VmOutput[] = [];
+
+    for (const output of recentOutputs) {
+      if (output.type === "text") {
+        outputs.push({ type: "assistant", content: output.content });
+      } else if (output.type === "tool-result" || output.type === "tool_result") {
+        outputs.push({
+          type: "tool_result",
+          content: output.content,
+          toolName: output.toolName,
+        });
+      } else if (output.type === "user") {
+        outputs.push({ type: "user", content: output.content });
+      }
+    }
+
+    return {
+      vmId,
+      sessionId: managed.sessionId,
+      outputs,
+    };
+  } catch {
+    return { vmId, outputs: [] };
+  }
+}
+
+// ============================================================
 // Get managed VM client (for advanced operations)
 // ============================================================
 
