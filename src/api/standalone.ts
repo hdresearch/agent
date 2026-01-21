@@ -130,8 +130,8 @@ export async function listVms(): Promise<VmListResult> {
   };
 }
 
-export async function createVm(task?: string): Promise<VmCreateResult> {
-  const vm = await createManagedVm({}, task);
+export async function createVm(task?: string, env?: Record<string, string>): Promise<VmCreateResult> {
+  const vm = await createManagedVm({}, task, env);
   const agentUrl = getAgentUrl(vm.vmId);
   return {
     vmId: vm.vmId,

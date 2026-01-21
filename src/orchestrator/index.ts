@@ -127,8 +127,9 @@ function createVmClient(vmId: string): HttpAcpClient {
  * - VERS_VM_ID: So the VM knows its own ID
  * - VERS_API_KEY: Master key for SDK calls (branching, committing, etc.)
  * - VERS_VM_TOKEN: Derived token for authentication (unique per VM)
+ * - extraEnv: Additional environment variables to inject (e.g., ANTHROPIC_API_KEY)
  */
-async function injectVmIdAndRestart(vmId: string): Promise<void> {
+async function injectVmIdAndRestart(vmId: string, extraEnv?: Record<string, string>): Promise<void> {
   if (!VERS_API_KEY) return; // No API key, skip injection
 
   // Derive a unique token for this VM
@@ -144,13 +145,27 @@ async function injectVmIdAndRestart(vmId: string): Promise<void> {
     `grep -q "^VERS_API_KEY=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_API_KEY=.*/VERS_API_KEY=${VERS_API_KEY}/" /etc/vers-agent/env || echo "VERS_API_KEY=${VERS_API_KEY}" >> /etc/vers-agent/env`,
     // Update or add VERS_VM_TOKEN (derived token for this VM's authentication)
     `grep -q "^VERS_VM_TOKEN=" /etc/vers-agent/env 2>/dev/null && sed -i "s/^VERS_VM_TOKEN=.*/VERS_VM_TOKEN=${vmToken}/" /etc/vers-agent/env || echo "VERS_VM_TOKEN=${vmToken}" >> /etc/vers-agent/env`,
+  ];
+
+  // Add custom env vars if provided
+  if (extraEnv) {
+    for (const [key, value] of Object.entries(extraEnv)) {
+      // Escape special chars for sed (use | as delimiter to avoid issues with / in URLs)
+      const escapedValue = value.replace(/[|&]/g, '\\$&');
+      commands.push(
+        `grep -q "^${key}=" /etc/vers-agent/env 2>/dev/null && sed -i "s|^${key}=.*|${key}=${escapedValue}|" /etc/vers-agent/env || echo "${key}=${value}" >> /etc/vers-agent/env`
+      );
+    }
+  }
+
+  commands.push(
     // Clear stale auth.db
     `rm -f ${VM_VERS_AGENT_CONFIG_DIR}/auth.db`,
     // Restart vers-agent via systemd
-    `systemctl restart vers-agent`,
-  ].join(" && ");
+    `systemctl restart vers-agent`
+  );
 
-  await execute(vmId, commands);
+  await execute(vmId, commands.join(" && "));
   // Wait for agent to restart
   await new Promise(resolve => setTimeout(resolve, 3000));
 }
@@ -169,7 +184,8 @@ const managedVms = new Map<string, ManagedVm>();
  */
 export async function createManagedVm(
   config: VmConfig = {},
-  task?: string
+  task?: string,
+  env?: Record<string, string>
 ): Promise<ManagedVm> {
   let vmId: string;
 
@@ -195,7 +211,8 @@ export async function createManagedVm(
   updateVmMetadata(vmId, metadata);
 
   // Inject VM ID so agent can auto-claim with derived token
-  await injectVmIdAndRestart(vmId);
+  // Also inject any custom env vars (e.g., ANTHROPIC_API_KEY for LiteLLM virtual keys)
+  await injectVmIdAndRestart(vmId, env);
 
   // Connect client (with derived token if VERS_API_KEY is set)
   const client = createVmClient(vmId);

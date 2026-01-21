@@ -203,6 +203,7 @@ WorkingDirectory=${VM_AGENT_DIR}
 ExecStart=${REMOTE_BINARY_PATH} --server
 Restart=always
 RestartSec=5
+EnvironmentFile=-/etc/vers-agent/env
 Environment=PORT=${AGENT_PORT}
 Environment=HOME=${VM_HOME_DIR}
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
