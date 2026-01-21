@@ -203,7 +203,15 @@ export async function startMcpServer(): Promise<void> {
     { task: z.string().optional().describe("Optional task description for the VM") },
     async ({ task }) => {
       try {
-        return jsonResponse(await api.createVm(task));
+        // Auto-forward ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL to VMs if set
+        const env: Record<string, string> = {};
+        if (process.env.ANTHROPIC_API_KEY) {
+          env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+        }
+        if (process.env.ANTHROPIC_BASE_URL) {
+          env.ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL;
+        }
+        return jsonResponse(await api.createVm(task, Object.keys(env).length > 0 ? env : undefined));
       } catch (err) {
         return errorResponse(`Error creating VM: ${err}`);
       }

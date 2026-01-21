@@ -9,6 +9,7 @@ WorkingDirectory=/root/vers-agent
 ExecStart=/usr/local/bin/bun run index.ts --server
 Restart=always
 RestartSec=5
+EnvironmentFile=-/etc/vers-agent/env
 Environment=PORT=9999
 Environment=HOME=/root
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
