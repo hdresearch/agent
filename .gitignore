@@ -42,3 +42,6 @@ bin
 # Nix
 result
 .direnv/
+
+# Local docs/scratchpads - Claude artifacts can clutter the commit tree
+docs/
