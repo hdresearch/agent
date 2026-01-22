@@ -3,8 +3,7 @@
 
 set -e
 
-REPO="hdresearch/agent"
-RELEASE_TAG="nightly"
+RELEASE_URL="https://releases.vers.sh/nightly"
 INSTALL_DIR="${HOME}/.local/bin"
 
 # Detect OS and architecture
@@ -38,7 +37,7 @@ detect_platform() {
 # Get download URL for the asset
 get_download_url() {
     local asset_name="$1"
-    echo "https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${asset_name}"
+    echo "${RELEASE_URL}/${asset_name}"
 }
 
 main() {
@@ -65,9 +64,9 @@ main() {
     echo "Downloading from: ${download_url}"
 
     if command -v curl &> /dev/null; then
-        curl -fsSL -o "$binary_path" "$download_url"
+        curl -fL# -o "$binary_path" "$download_url"
     elif command -v wget &> /dev/null; then
-        wget -q -O "$binary_path" "$download_url"
+        wget --progress=bar:force -O "$binary_path" "$download_url" 2>&1
     else
         echo "Error: curl or wget required"
         exit 1
@@ -75,6 +74,12 @@ main() {
 
     # Make executable
     chmod +x "$binary_path"
+
+    # macOS: remove quarantine and ad-hoc sign (Gatekeeper blocks unsigned binaries)
+    if [ "$(uname -s)" = "Darwin" ]; then
+        xattr -d com.apple.quarantine "$binary_path" 2>/dev/null || true
+        codesign --force --sign - "$binary_path" 2>/dev/null || true
+    fi
 
     echo ""
     echo "Installed vers to: ${binary_path}"

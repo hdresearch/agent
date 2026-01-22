@@ -1,4 +1,10 @@
 import { runCli } from "./src/cli/cli.js";
+
+// Version injected at build time via --define BUILD_VERSION='...'
+// Falls back to "dev" when running via bun (not compiled)
+declare const BUILD_VERSION: string;
+const VERSION = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "dev";
+const RELEASES_BASE_URL = "https://releases.vers.sh";
 import { createHttpServer } from "./src/server/http-server";
 import { loadConfig, loadMcpServers, getConfig, setConfig } from "./src/utils/config";
 import { loadDocsStore } from "./src/utils/docs-store";
@@ -134,8 +140,93 @@ if (firstArg && !firstArg.startsWith("-") && isSubcommand(firstArg)) {
   runFlagMode();
 }
 
+
+// Check if running as standalone binary (not via bun run)
+function isStandalone(): boolean {
+  // process.execPath is the actual binary path
+  // When compiled: /path/to/vers-agent (our binary)
+  // When via bun: /path/to/bun (the bun executable)
+  const execPath = process.execPath;
+  return !execPath.endsWith("/bun") && !execPath.includes("/bun/") && !execPath.endsWith("/node");
+}
+
+// Detect platform for download
+function detectPlatform(): string {
+  const platform = process.platform;
+  const arch = process.arch;
+
+  if (platform === "win32") {
+    return "vers-agent-windows-x64.exe";
+  } else if (platform === "linux") {
+    return arch === "arm64" ? "vers-agent-linux-arm64" : "vers-agent-linux-x64";
+  } else if (platform === "darwin") {
+    return arch === "arm64" ? "vers-agent-darwin-arm64" : "vers-agent-darwin-x64";
+  }
+  throw new Error(`Unsupported platform: ${platform}-${arch}`);
+}
+
+// Self-update the binary
+async function selfUpdate(channel: string = "nightly"): Promise<void> {
+  if (!isStandalone()) {
+    console.error("--update only works with standalone binary, not when running via bun");
+    process.exit(1);
+  }
+
+  const asset = detectPlatform();
+  const url = `${RELEASES_BASE_URL}/${channel}/${asset}`;
+  const execPath = process.execPath;
+
+  console.log(`Updating vers to ${channel}...`);
+  console.log(`  ${url}`);
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Channel "${channel}" not found. Try "nightly" or a version tag like "v0.2.0"`);
+      }
+      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+    }
+
+    const tmpPath = `${execPath}.new`;
+    const data = await response.arrayBuffer();
+    await Bun.write(tmpPath, data);
+
+    // Make executable
+    await Bun.$`chmod +x ${tmpPath}`.quiet();
+
+    // On macOS, ad-hoc sign to satisfy Gatekeeper
+    if (process.platform === "darwin") {
+      await Bun.$`codesign --force --sign - ${tmpPath}`.quiet().nothrow();
+      await Bun.$`xattr -d com.apple.quarantine ${tmpPath}`.quiet().nothrow();
+    }
+
+    // Replace old binary
+    const backupPath = `${execPath}.old`;
+    await Bun.$`mv ${execPath} ${backupPath}`.quiet();
+    await Bun.$`mv ${tmpPath} ${execPath}`.quiet();
+    await Bun.$`rm -f ${backupPath}`.quiet();
+
+    console.log("✓ Updated successfully!");
+    console.log(`  Run 'vers --version' to verify.`);
+  } catch (err) {
+    console.error("Update failed:", err);
+    process.exit(1);
+  }
+}
+
 function runFlagMode() {
   const showHelp = args.includes("--help") || args.includes("-h");
+  const showVersion = args.includes("--version") || args.includes("-v");
+
+  // Parse --update [channel] option
+  const updateIndex = args.indexOf("--update");
+  const doUpdate = updateIndex !== -1;
+  const updateArg = args[updateIndex + 1];
+  const updateChannel = doUpdate && updateArg && !updateArg.startsWith("-")
+    ? updateArg
+    : "nightly";
+
   const installSkills = args.includes("--install-skills");
   const mcpMode = args.includes("--mcp");
   const mcpInstall = args.includes("--mcp-install");
@@ -149,6 +240,23 @@ function runFlagMode() {
   // Parse --url option
   const urlIndex = args.indexOf("--url");
   const explicitServerUrl = urlIndex !== -1 && args[urlIndex + 1] ? args[urlIndex + 1] : undefined;
+
+  // --version: print version and exit
+  if (showVersion) {
+    console.log(`vers ${VERSION}`);
+    process.exit(0);
+  }
+
+  // --update [channel]: self-update the binary (standalone only)
+  if (doUpdate) {
+    selfUpdate(updateChannel)
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error("Update failed:", err);
+        process.exit(1);
+      });
+    return;
+  }
 
   // Install embedded skills to ~/.claude/skills/
   if (installSkills) {
@@ -221,6 +329,8 @@ Commands:
   help              Show detailed command help
 
 Options:
+  --version, -v     Show version
+  --update [channel] Self-update (default: nightly, or specify version like v0.2.0)
   --cli             Run interactive CLI (connects to HTTP server)
   --mcp             Run as MCP server (stdio transport for Claude integration)
   --url <url>       Connect CLI to remote server (e.g., --url http://192.168.1.100:9999)

@@ -70,7 +70,13 @@ jobs:
         run: bun install
 
       - name: Build
-        run: bun build --compile --minify --external cpu-features --target=${{ matrix.target }} ./index.ts --outfile ${{ matrix.artifact }}
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME:-nightly}"
+          SHA="${GITHUB_SHA::7}"
+          bun build --compile --minify --external cpu-features --target=${{ matrix.target }} \
+            --define "BUILD_VERSION='$VERSION ($SHA)'" \
+            ./index.ts --outfile ${{ matrix.artifact }}
 
       - name: Test binary
         if: matrix.can_test
@@ -83,6 +89,18 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           retention-days: 90
+
+      - name: Upload to R2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: ryand56/r2-upload-action@latest
+        with:
+          r2-account-id: ${{ secrets.CF_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.CF_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.CF_SECRET_ACCESS_KEY }}
+          r2-bucket: vers-releases
+          source-dir: .
+          destination-dir: nightly
+          glob: ${{ matrix.artifact }}
 
   nightly:
     needs: build
@@ -106,16 +124,6 @@ jobs:
             cp "$dir"* release/ 2>/dev/null || true
           done
           ls -la release/
-
-      - name: Upload to R2
-        uses: ryand56/r2-upload-action@latest
-        with:
-          r2-account-id: ${{ secrets.CF_ACCOUNT_ID }}
-          r2-access-key-id: ${{ secrets.CF_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ secrets.CF_SECRET_ACCESS_KEY }}
-          r2-bucket: vers-releases
-          source-dir: release
-          destination-dir: nightly
 
       - name: Update nightly release
         uses: softprops/action-gh-release@v2
