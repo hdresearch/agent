@@ -70,6 +70,7 @@ jobs:
         run: bun install
 
       - name: Build
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME:-nightly}"
           SHA="${GITHUB_SHA::7}"
