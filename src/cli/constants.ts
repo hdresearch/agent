@@ -28,7 +28,8 @@ export const COMMANDS = [
   { name: "vm:delete", alias: null, description: "Delete a VM" },
   { name: "vm:status", alias: null, description: "Show current VM connection" },
   { name: "vm:run", alias: null, description: "Fire prompt to all VMs (fire & forget)" },
-  { name: "tree", alias: "t", description: "Show VM branch tree with links" },
+  { name: "tree", alias: "t", description: "Show VM branch tree (or: -i for interactive)" },
+  { name: "canvas", alias: null, description: "Interactive VM branch tree (fullscreen)" },
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];

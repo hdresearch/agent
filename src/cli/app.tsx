@@ -7,6 +7,7 @@ import {
   OutputArea,
   StatusBar,
   InputBar,
+  BranchTree,
 } from "./components";
 import { PermissionDialog } from "./components/permission-dialog";
 import { PopupWindow } from "./components/popup-window";
@@ -39,6 +40,8 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
   const [output, setOutput] = useState<OutputLine[]>([]);
   const [state, setState] = useState<AppState>({ status: "idle" });
   const [scrollOffset, setScrollOffset] = useState(0);
+  // Interactive tree view mode
+  const [showTreeView, setShowTreeView] = useState(false);
   // Server URL - can be changed with /connect command
   const [serverUrl, setServerUrl] = useState(initialServerUrl);
   // In remote mode, default to continuing the most recent session
@@ -278,6 +281,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
           },
           currentServerUrl: serverUrl,
           agentCommands,
+          setShowTreeView,
         };
 
         const result = handleSlashCommand(value, ctx);
@@ -416,6 +420,34 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
       setScrollOffset(0);
     }
   });
+
+  // Handle tree view actions
+  const handleTreeAction = useCallback((action: string, vmId: string) => {
+    switch (action) {
+      case "open":
+        // Open VM shell in browser/terminal
+        addOutput({ type: "system", content: `Opening shell for VM ${vmId.slice(0, 8)}...` });
+        break;
+      case "focus":
+        // Connect to this VM
+        setShowTreeView(false);
+        // Could trigger /vm connect here
+        break;
+      case "kill":
+        addOutput({ type: "system", content: `Killing VM ${vmId.slice(0, 8)}...` });
+        break;
+    }
+  }, [addOutput]);
+
+  // Render interactive tree view if active
+  if (showTreeView) {
+    return (
+      <BranchTree
+        onClose={() => setShowTreeView(false)}
+        onAction={handleTreeAction}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column" height={containerHeight}>

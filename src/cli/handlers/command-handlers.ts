@@ -37,6 +37,7 @@ export interface CommandHandlerContext {
   reconnect: (url: string) => void;
   currentServerUrl?: string;
   agentCommands?: AvailableCommandData[];
+  setShowTreeView?: (show: boolean) => void;
 }
 
 export type CommandResult = {
@@ -170,9 +171,19 @@ export function handleSlashCommand(
 
     case "tree":
     case "t":
-      handleTree(ctx).catch(err => {
-        ctx.addOutput({ type: "error", content: `Tree error: ${err.message}` });
-      });
+    case "canvas":
+      // Check for -i flag for interactive mode
+      if (arg === "-i" || arg === "--interactive" || cmd === "canvas") {
+        if (ctx.setShowTreeView) {
+          ctx.setShowTreeView(true);
+        } else {
+          ctx.addOutput({ type: "error", content: "Interactive tree view not available" });
+        }
+      } else {
+        handleTree(ctx).catch(err => {
+          ctx.addOutput({ type: "error", content: `Tree error: ${err.message}` });
+        });
+      }
       return { handled: true };
 
     default:

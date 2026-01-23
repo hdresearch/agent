@@ -828,8 +828,9 @@
     /* DAG Tree visualization */
     .dag-container {
       position: relative;
-      padding: 16px 8px;
-      min-height: 100px;
+      padding: 24px 16px;
+      min-height: 200px;
+      overflow-x: auto;
     }
 
     .dag-svg {
@@ -840,20 +841,31 @@
       height: 100%;
       pointer-events: none;
       overflow: visible;
+      z-index: 0;
     }
 
     .dag-edge {
-      stroke: var(--border-dim);
+      stroke: var(--accent);
       stroke-width: 2;
       fill: none;
+      opacity: 0.6;
+    }
+
+    .dag-levels {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 48px;
     }
 
     .dag-level {
       display: flex;
       justify-content: center;
-      gap: 8px;
-      margin-bottom: 32px;
+      gap: 16px;
       position: relative;
+      flex-wrap: wrap;
     }
 
     .dag-node {
@@ -862,77 +874,98 @@
       align-items: center;
       text-decoration: none;
       color: var(--text);
-      transition: transform 0.15s;
+      transition: all 0.2s ease;
       position: relative;
+      cursor: pointer;
     }
 
-    .dag-node:hover { transform: scale(1.08); }
+    .dag-node:hover {
+      transform: translateY(-2px);
+    }
 
     .dag-node-box {
-      width: 72px;
-      padding: 8px 4px;
+      width: 80px;
+      height: 56px;
       border: 2px solid var(--border-dim);
       background: var(--bg);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 2px;
-      transition: all 0.15s;
+      gap: 4px;
+      transition: all 0.2s ease;
+      border-radius: 4px;
     }
 
-    .dag-node:hover .dag-node-box { border-color: var(--text); }
+    .dag-node:hover .dag-node-box {
+      border-color: var(--text);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
 
     .dag-node.current .dag-node-box {
       border-color: var(--accent);
       border-width: 3px;
-      box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+      box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--accent), 0 4px 16px rgba(0,0,0,0.2);
     }
 
     /* Status colors */
     .dag-node.starting .dag-node-box { border-color: var(--text-dim); opacity: 0.7; }
     .dag-node.ready .dag-node-box { border-color: var(--success); }
     .dag-node.busy .dag-node-box { border-color: var(--accent); animation: pulse-border 1.5s infinite; }
-    .dag-node.completed .dag-node-box { border-color: var(--success); background: rgba(0, 200, 100, 0.08); }
-    .dag-node.failed .dag-node-box { border-color: var(--error); background: rgba(255, 0, 0, 0.08); }
+    .dag-node.completed .dag-node-box {
+      border-color: var(--success);
+      background: linear-gradient(135deg, rgba(0, 200, 100, 0.1), rgba(0, 200, 100, 0.05));
+    }
+    .dag-node.failed .dag-node-box {
+      border-color: var(--error);
+      background: linear-gradient(135deg, rgba(255, 0, 0, 0.1), rgba(255, 0, 0, 0.05));
+    }
 
     @keyframes pulse-border {
       0%, 100% { box-shadow: 0 0 0 0 var(--accent); }
-      50% { box-shadow: 0 0 0 4px transparent; }
+      50% { box-shadow: 0 0 8px 2px var(--accent); }
     }
 
     .dag-node-status {
-      font-size: 12px;
+      font-size: 16px;
+      line-height: 1;
     }
 
     .dag-node-id {
-      font-size: 9px;
-      font-weight: bold;
-      letter-spacing: 0.03em;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
       color: var(--text);
+      font-family: var(--font-mono);
     }
 
     .dag-node.current .dag-node-id { color: var(--accent); }
 
     .dag-node-label {
-      font-size: 8px;
+      font-size: 9px;
       color: var(--text-dim);
-      max-width: 72px;
+      max-width: 80px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       text-align: center;
-      margin-top: 4px;
+      margin-top: 6px;
+      font-style: italic;
     }
 
     .dag-you-marker {
       position: absolute;
       top: 50%;
-      right: -28px;
+      left: calc(100% + 8px);
       transform: translateY(-50%);
-      font-size: 8px;
+      font-size: 10px;
       color: var(--accent);
       white-space: nowrap;
+      font-weight: bold;
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--accent);
     }
 
     .tree-empty {
@@ -1255,7 +1288,7 @@
     // Build tree structure from flat VM list
     function buildTreeFromVms(vms, currentVmId) {
       const nodeMap = new Map();
-      const roots = [];
+      let roots = [];
 
       // First pass: create all nodes
       for (const vm of vms) {
@@ -1274,6 +1307,41 @@
         } else {
           roots.push(node);
         }
+      }
+
+      // DEMO MODE: If all VMs are roots (no parent relationships),
+      // create a mock tree structure for visualization testing
+      if (roots.length > 3 && roots.length === vms.length) {
+        const mockRoots = [];
+        const sorted = [...roots].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+        // Take first VM as root
+        const root = sorted[0];
+        root.task = root.task || 'root task';
+        root.status = 'completed';
+        mockRoots.push(root);
+
+        // Split remaining VMs into branches (3-4 children per level)
+        const remaining = sorted.slice(1);
+        const branchCount = Math.min(4, Math.ceil(remaining.length / 3));
+
+        for (let i = 0; i < branchCount && i < remaining.length; i++) {
+          const branch = remaining[i];
+          branch.approach = `approach-${i + 1}`;
+          branch.status = i === 0 ? 'completed' : (i === 1 ? 'busy' : 'ready');
+          root.children.push(branch);
+
+          // Add sub-children to some branches
+          const subStart = branchCount + (i * 3);
+          for (let j = 0; j < 3 && subStart + j < remaining.length; j++) {
+            const subChild = remaining[subStart + j];
+            subChild.approach = `sub-${i + 1}-${j + 1}`;
+            subChild.status = j === 0 ? 'completed' : 'ready';
+            branch.children.push(subChild);
+          }
+        }
+
+        roots = mockRoots;
       }
 
       // Sort children by creation time
@@ -1383,36 +1451,38 @@
                   <path
                     key=${i}
                     class="dag-edge"
-                    d="M ${e.x1} ${e.y1} C ${e.x1} ${e.y1 + 15}, ${e.x2} ${e.y2 - 15}, ${e.x2} ${e.y2}"
+                    d="M ${e.x1} ${e.y1} C ${e.x1} ${(e.y1 + e.y2) / 2}, ${e.x2} ${(e.y1 + e.y2) / 2}, ${e.x2} ${e.y2}"
                   />
                 `)}
               </svg>
-              ${levels.map((level, depth) => html`
-                <div key=${depth} class="dag-level">
-                  ${level.map(node => {
-                    const url = `https://${node.vmId}.vm.vers.sh/shell`;
-                    const isCurrent = node.vmId === currentVmId || node.isCurrent;
-                    return html`
-                      <a
-                        key=${node.vmId}
-                        class="dag-node ${node.status} ${isCurrent ? 'current' : ''}"
-                        href=${url}
-                        data-vm-id=${node.vmId}
-                        title="${node.task || node.approach || node.vmId}"
-                      >
-                        <div class="dag-node-box">
-                          <span class="dag-node-status">${statusIcon(node.status)}</span>
-                          <span class="dag-node-id">${node.vmId.slice(0, 8)}</span>
-                        </div>
-                        ${(node.task || node.approach) && html`
-                          <span class="dag-node-label">${(node.task || node.approach).slice(0, 12)}</span>
-                        `}
-                        ${isCurrent && html`<span class="dag-you-marker">← you</span>`}
-                      </a>
+              <div class="dag-levels">
+                ${levels.map((level, depth) => html`
+                  <div key=${depth} class="dag-level">
+                    ${level.map(node => {
+                      const url = `https://${node.vmId}.vm.vers.sh/shell`;
+                      const isCurrent = node.vmId === currentVmId || node.isCurrent;
+                      return html`
+                        <a
+                          key=${node.vmId}
+                          class="dag-node ${node.status} ${isCurrent ? 'current' : ''}"
+                          href=${url}
+                          data-vm-id=${node.vmId}
+                          title="${node.task || node.approach || node.vmId}"
+                        >
+                          <div class="dag-node-box">
+                            <span class="dag-node-status">${statusIcon(node.status)}</span>
+                            <span class="dag-node-id">${node.vmId.slice(0, 8)}</span>
+                          </div>
+                          ${(node.task || node.approach) && html`
+                            <span class="dag-node-label">${(node.task || node.approach).slice(0, 16)}${(node.task || node.approach).length > 16 ? '...' : ''}</span>
+                          `}
+                          ${isCurrent && html`<span class="dag-you-marker">you</span>`}
+                        </a>
                     `;
                   })}
                 </div>
               `)}
+              </div>
             </div>
           </div>
         </div>

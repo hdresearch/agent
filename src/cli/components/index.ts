@@ -7,3 +7,4 @@ export { TopStatusBar } from "./top-status-bar";
 export { CommandSuggestions, shouldShowCommandSuggestions } from "./command-suggestions";
 export { PathSuggestions } from "./path-suggestions";
 export { InputBar } from "./input-bar";
+export { BranchTree } from "./branch-tree";
