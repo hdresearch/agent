@@ -678,26 +678,30 @@
       const [permissions, setPermissions] = useState({});
       const [typing, setTyping] = useState(false);
       const [working, setWorking] = useState(false);
-      const [vmContext, setVmContext] = useState({ parent: null, children: [] });
+      const [vmContext, setVmContext] = useState({ vmId: null, parent: null, children: [], siblings: [] });
       const mainRef = useRef(null);
       const textAccum = useRef('');
 
-      // Fetch VM context (parent/children)
+      // Fetch VM context (parent/children/siblings)
       useEffect(() => {
         async function fetchContext() {
           try {
-            const list = await rpc('vm/list');
-            // For now, mock the context - in real impl, vers API provides this
-            // TODO: Get actual parent/children from vers metadata
+            const ctx = await rpc('vm/context');
             setVmContext({
-              parent: list.currentVmId ? null : null, // Would come from vers
-              children: [], // Would come from vers
+              vmId: ctx.vmId,
+              parent: ctx.parent,
+              children: ctx.children || [],
+              siblings: ctx.siblings || [],
             });
           } catch (e) {
             console.log('Could not fetch VM context:', e);
           }
         }
         fetchContext();
+
+        // Refresh context periodically to catch new children
+        const interval = setInterval(fetchContext, 10000);
+        return () => clearInterval(interval);
       }, []);
 
       // SSE connection
@@ -839,10 +843,27 @@
         }
       }
 
-      function handleBranch(e) {
+      async function handleBranch(e) {
         e.preventDefault();
-        // TODO: Implement branch creation via vers API
-        setMessages(m => [...m, { type: 'system', content: 'branch creation coming soon' }]);
+
+        if (!vmContext.vmId) {
+          setMessages(m => [...m, { type: 'error', content: 'cannot branch: not running in a VM' }]);
+          return;
+        }
+
+        try {
+          setMessages(m => [...m, { type: 'system', content: 'creating branch...' }]);
+          const result = await rpc('vm/branch', { vmId: vmContext.vmId });
+          setMessages(m => [...m, { type: 'system', content: `branch created: ${result.vmId}` }]);
+
+          // Add the new child to context
+          setVmContext(ctx => ({
+            ...ctx,
+            children: [...ctx.children, { vmId: result.vmId, status: 'starting' }],
+          }));
+        } catch (e) {
+          setMessages(m => [...m, { type: 'error', content: 'failed to create branch: ' + e.message }]);
+        }
       }
 
       const hasContent = messages.length > 0 || Object.keys(tools).length > 0 || typing;

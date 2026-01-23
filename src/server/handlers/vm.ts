@@ -183,6 +183,74 @@ export function handleVmStatus(ctx: VmHandlerContext): VmStatusResult {
 }
 
 /**
+ * Get VM context - current VM's place in the DAG (parent, children, siblings)
+ * This is used by the shell UI to show navigation links
+ */
+export async function handleVmContext(): Promise<import("../../protocol/acp-types").VmContextResult> {
+  // Get current VM ID from environment (set when running inside a vers VM)
+  const currentVmId = process.env.VERS_VM_ID || null;
+
+  if (!currentVmId) {
+    // Running locally, not in a VM
+    return {
+      vmId: null,
+      parent: null,
+      children: [],
+      siblings: [],
+    };
+  }
+
+  try {
+    const { listManagedVms } = await import("../../orchestrator");
+    const allVms = await listManagedVms();
+
+    // Find current VM to get its parent
+    const currentVm = allVms.find(vm => vm.vmId === currentVmId);
+    const parentId = currentVm?.parent || currentVm?.metadata?.parentId || null;
+
+    // Find children (VMs whose parent is current VM)
+    const children = allVms
+      .filter(vm => vm.parent === currentVmId || vm.metadata?.parentId === currentVmId)
+      .map(vm => ({
+        vmId: vm.vmId,
+        status: vm.metadata?.status || "ready" as const,
+        task: vm.metadata?.task,
+        approach: vm.metadata?.approach,
+      }));
+
+    // Find siblings (other children of same parent, excluding self)
+    const siblings = parentId
+      ? allVms
+          .filter(vm =>
+            (vm.parent === parentId || vm.metadata?.parentId === parentId) &&
+            vm.vmId !== currentVmId
+          )
+          .map(vm => ({
+            vmId: vm.vmId,
+            status: vm.metadata?.status || "ready" as const,
+            task: vm.metadata?.task,
+            approach: vm.metadata?.approach,
+          }))
+      : [];
+
+    return {
+      vmId: currentVmId,
+      parent: parentId,
+      children,
+      siblings,
+    };
+  } catch (err) {
+    error("Failed to get VM context", { error: err instanceof Error ? err.message : String(err) });
+    return {
+      vmId: currentVmId,
+      parent: null,
+      children: [],
+      siblings: [],
+    };
+  }
+}
+
+/**
  * Send a prompt to a VM via SSH (localhost HTTP).
  * This bypasses DNS issues by connecting to the agent via localhost.
  */

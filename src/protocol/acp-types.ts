@@ -546,6 +546,20 @@ export interface VmStatusResult {
   isLocal: boolean;
 }
 
+export interface VmContextChild {
+  vmId: string;
+  status: VmStatus;
+  task?: string;
+  approach?: string;
+}
+
+export interface VmContextResult {
+  vmId: string | null;          // Current VM's ID (null if running locally, not in a VM)
+  parent: string | null;        // Parent VM ID (null if root or local)
+  children: VmContextChild[];   // Child VMs
+  siblings: VmContextChild[];   // Sibling VMs (other children of same parent)
+}
+
 export interface VmRunParams {
   prompt: string;
   vmIds?: string[];  // If not specified, run on all VMs
@@ -810,6 +824,7 @@ export const AcpMethod = {
   VmOutputsAll: "vm/outputs/all",
   VmWait: "vm/wait",
   VmEval: "vm/eval",
+  VmContext: "vm/context",
 
   // Config Management
   ConfigGet: "config/get",

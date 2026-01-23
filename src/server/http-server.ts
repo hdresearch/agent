@@ -131,6 +131,7 @@ import {
   handleVmDelete,
   handleVmConnect,
   handleVmStatus,
+  handleVmContext,
   handleVmRun,
   handleVmExecute,
   handleVmUpload,
@@ -926,6 +927,10 @@ async function handleRpcRequest(request: JsonRpcRequest): Promise<JsonRpcRespons
         result = handleVmStatus(vmCtx);
         break;
       }
+
+      case AcpMethod.VmContext:
+        result = await handleVmContext();
+        break;
 
       case AcpMethod.VmRun:
         result = await handleVmRun(params as VmRunParams);
