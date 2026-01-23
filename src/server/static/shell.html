@@ -3,20 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vers Shell</title>
+  <title>vers shell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0d1117;
-      --bg-secondary: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --text-dim: #8b949e;
-      --accent: #58a6ff;
-      --green: #3fb950;
-      --red: #f85149;
-      --yellow: #d29922;
-      --cyan: #39c5cf;
-      --magenta: #bc8cff;
+      --bg: #000000;
+      --bg-elevated: #0a0a0a;
+      --border: #ffffff;
+      --border-dim: #333333;
+      --text: #ffffff;
+      --text-dim: #888888;
+      --accent: #002fff;
+      --accent-hover: #0040ff;
+      --success: #00ff88;
+      --error: #ff3333;
+      --warning: #ffaa00;
     }
 
     * {
@@ -26,27 +29,35 @@
     }
 
     body {
-      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-      font-size: 13px;
-      line-height: 1.5;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      line-height: 1.6;
       background: var(--bg);
       color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
+      letter-spacing: 0.02em;
     }
 
+    /* Header */
     header {
-      background: var(--bg-secondary);
       border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
+      padding: 16px 24px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 24px;
+      background: var(--bg);
     }
 
     .logo {
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      text-transform: lowercase;
+    }
+
+    .logo span {
       color: var(--accent);
     }
 
@@ -55,44 +66,57 @@
       align-items: center;
       gap: 8px;
       color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: 0.05em;
     }
 
-    .status-dot {
+    .status-indicator {
       width: 8px;
       height: 8px;
-      border-radius: 50%;
       background: var(--text-dim);
     }
 
-    .status-dot.connected {
-      background: var(--green);
+    .status-indicator.connected {
+      background: var(--success);
     }
 
-    .status-dot.busy {
-      background: var(--yellow);
-      animation: pulse 1s infinite;
+    .status-indicator.busy {
+      background: var(--accent);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-indicator.error {
+      background: var(--error);
     }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.4; }
     }
 
-    .links {
+    .header-links {
       margin-left: auto;
       display: flex;
-      gap: 12px;
+      gap: 16px;
     }
 
-    .links a {
+    .header-links a {
       color: var(--text-dim);
       text-decoration: none;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: lowercase;
+      padding: 4px 0;
+      border-bottom: 1px solid transparent;
+      transition: all 0.2s ease;
     }
 
-    .links a:hover {
-      color: var(--accent);
+    .header-links a:hover {
+      color: var(--text);
+      border-bottom-color: var(--accent);
     }
 
+    /* Main content */
     main {
       flex: 1;
       overflow: hidden;
@@ -103,11 +127,24 @@
     #output {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 24px;
     }
 
+    #output::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    #output::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    #output::-webkit-scrollbar-thumb {
+      background: var(--border-dim);
+    }
+
+    /* Messages */
     .message {
-      margin-bottom: 12px;
+      margin-bottom: 16px;
       white-space: pre-wrap;
       word-wrap: break-word;
     }
@@ -116,106 +153,182 @@
       color: var(--text);
     }
 
-    .message.tool {
-      color: var(--cyan);
-      background: rgba(57, 197, 207, 0.1);
-      padding: 8px 12px;
-      border-radius: 4px;
-      border-left: 3px solid var(--cyan);
+    .message.system {
+      color: var(--text-dim);
+      font-size: 12px;
     }
 
-    .message.tool-result {
-      color: var(--text-dim);
-      background: var(--bg-secondary);
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin-left: 16px;
+    .message.user-prompt {
+      color: var(--accent);
+      padding-left: 16px;
+      border-left: 2px solid var(--accent);
+    }
+
+    /* Tool calls */
+    .tool-block {
+      border: 1px solid var(--border-dim);
+      margin: 16px 0;
+      background: var(--bg);
+    }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-dim);
       font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+    }
+
+    .tool-header.running {
+      border-left: 2px solid var(--accent);
+    }
+
+    .tool-header.success {
+      border-left: 2px solid var(--success);
+    }
+
+    .tool-header.error {
+      border-left: 2px solid var(--error);
+    }
+
+    .tool-name {
+      color: var(--text);
+    }
+
+    .tool-status {
+      margin-left: auto;
+      font-size: 11px;
+    }
+
+    .tool-content {
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--text-dim);
       max-height: 200px;
       overflow-y: auto;
     }
 
+    .tool-content::-webkit-scrollbar {
+      width: 2px;
+    }
+
+    .tool-content::-webkit-scrollbar-thumb {
+      background: var(--border-dim);
+    }
+
+    /* Error messages */
     .message.error {
-      color: var(--red);
-      background: rgba(248, 81, 73, 0.1);
-      padding: 8px 12px;
-      border-radius: 4px;
-      border-left: 3px solid var(--red);
+      color: var(--error);
+      padding: 12px 16px;
+      border: 1px solid var(--error);
+      background: rgba(255, 51, 51, 0.05);
     }
 
-    .message.system {
-      color: var(--text-dim);
-      font-style: italic;
-    }
-
-    .message.completed {
-      color: var(--green);
-      padding: 8px 12px;
-      background: rgba(63, 185, 80, 0.1);
-      border-radius: 4px;
-    }
-
-    .permission-request {
-      background: var(--bg-secondary);
-      border: 1px solid var(--yellow);
-      border-radius: 8px;
-      padding: 16px;
-      margin: 12px 0;
-    }
-
-    .permission-request h3 {
-      color: var(--yellow);
-      margin-bottom: 8px;
-    }
-
-    .permission-request .options {
+    /* Completion stats */
+    .completion-stats {
       display: flex;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 16px;
+      padding: 12px 16px;
+      border: 1px solid var(--border-dim);
+      font-size: 12px;
+      color: var(--text-dim);
+      margin: 16px 0;
     }
 
-    .permission-request button {
-      padding: 6px 12px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      background: var(--bg);
+    .completion-stats .stat {
+      display: flex;
+      gap: 6px;
+    }
+
+    .completion-stats .stat-value {
       color: var(--text);
-      cursor: pointer;
+    }
+
+    /* Permission request */
+    .permission-block {
+      border: 1px solid var(--warning);
+      margin: 16px 0;
+      background: var(--bg);
+    }
+
+    .permission-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--warning);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--warning);
+    }
+
+    .permission-content {
+      padding: 16px;
+    }
+
+    .permission-tool {
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .permission-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .permission-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
       font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
 
-    .permission-request button:hover {
-      background: var(--bg-secondary);
-      border-color: var(--accent);
+    .permission-btn:hover {
+      background: var(--text);
+      color: var(--bg);
     }
 
-    .permission-request button.primary {
+    .permission-btn.primary {
       background: var(--accent);
       border-color: var(--accent);
-      color: #000;
+      color: var(--text);
     }
 
+    .permission-btn.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    /* Input area */
     #input-area {
       border-top: 1px solid var(--border);
-      padding: 12px 16px;
-      background: var(--bg-secondary);
+      padding: 16px 24px;
+      background: var(--bg);
     }
 
     #input-form {
       display: flex;
-      gap: 8px;
+      gap: 12px;
     }
 
     #prompt-input {
       flex: 1;
-      padding: 10px 14px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      padding: 12px 16px;
+      border: 1px solid var(--border-dim);
       background: var(--bg);
       color: var(--text);
       font-family: inherit;
-      font-size: 13px;
+      font-size: 14px;
+      letter-spacing: 0.02em;
       outline: none;
+      transition: border-color 0.2s ease;
     }
 
     #prompt-input:focus {
@@ -226,105 +339,164 @@
       opacity: 0.5;
     }
 
+    #prompt-input::placeholder {
+      color: var(--text-dim);
+    }
+
     #send-btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 6px;
+      padding: 12px 24px;
+      border: 1px solid var(--accent);
       background: var(--accent);
-      color: #000;
+      color: var(--text);
       font-family: inherit;
-      font-weight: 500;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
       cursor: pointer;
+      transition: all 0.2s ease;
     }
 
     #send-btn:hover {
-      opacity: 0.9;
+      background: var(--accent-hover);
     }
 
     #send-btn:disabled {
-      opacity: 0.5;
+      opacity: 0.3;
       cursor: not-allowed;
     }
 
-    .spinner {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid var(--text-dim);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+    /* Typing indicator */
+    .typing {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-dim);
+      font-size: 12px;
+      margin: 16px 0;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .typing-dots span {
+      width: 4px;
+      height: 4px;
+      background: var(--accent);
+      animation: typing 1.4s infinite;
+    }
+
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; }
+      30% { opacity: 1; }
+    }
+
+    /* Animations */
+    .fade-in {
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 48px;
+    }
+
+    .empty-state h2 {
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .empty-state p {
+      font-size: 13px;
+      max-width: 400px;
     }
   </style>
 </head>
 <body>
   <header>
-    <span class="logo">vers shell</span>
+    <div class="logo">vers <span>shell</span></div>
     <div class="status">
-      <div class="status-dot" id="status-dot"></div>
-      <span id="status-text">Connecting...</span>
+      <div class="status-indicator" id="status-indicator"></div>
+      <span id="status-text">connecting</span>
     </div>
-    <div class="links">
-      <a href="/" target="_blank">App</a>
-      <a href="/health" target="_blank">Health</a>
-      <a href="/metrics" target="_blank">Metrics</a>
+    <div class="header-links">
+      <a href="/" target="_blank">app</a>
+      <a href="/health" target="_blank">health</a>
+      <a href="/metrics" target="_blank">metrics</a>
     </div>
   </header>
 
   <main>
-    <div id="output"></div>
+    <div id="output">
+      <div class="empty-state" id="empty-state">
+        <h2>vers shell</h2>
+        <p>autonomous infrastructure for agents. send a message to begin.</p>
+      </div>
+    </div>
   </main>
 
   <div id="input-area">
     <form id="input-form">
-      <input type="text" id="prompt-input" placeholder="Send a message..." autocomplete="off" disabled>
-      <button type="submit" id="send-btn" disabled>Send</button>
+      <input type="text" id="prompt-input" placeholder="send a message" autocomplete="off" disabled>
+      <button type="submit" id="send-btn" disabled>send</button>
     </form>
   </div>
 
   <script>
     const output = document.getElementById('output');
-    const statusDot = document.getElementById('status-dot');
+    const emptyState = document.getElementById('empty-state');
+    const statusIndicator = document.getElementById('status-indicator');
     const statusText = document.getElementById('status-text');
     const promptInput = document.getElementById('prompt-input');
     const sendBtn = document.getElementById('send-btn');
     const inputForm = document.getElementById('input-form');
 
     let eventSource = null;
-    let sessionId = null;
     let isWorking = false;
     let currentTextElement = null;
-    let pendingPermission = null;
+    let typingIndicator = null;
 
-    // Connect to SSE
     function connect() {
-      // Get token from URL if present
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token');
-
       const eventsUrl = token ? `/events?token=${token}` : '/events';
+
       eventSource = new EventSource(eventsUrl);
 
       eventSource.onopen = () => {
-        setStatus('connected', 'Connected');
+        setStatus('connected', 'connected');
         promptInput.disabled = false;
         sendBtn.disabled = false;
       };
 
       eventSource.onerror = () => {
-        setStatus('disconnected', 'Disconnected');
+        setStatus('error', 'disconnected');
         promptInput.disabled = true;
         sendBtn.disabled = true;
-        // Try to reconnect
         setTimeout(connect, 3000);
       };
 
       eventSource.addEventListener('connected', () => {
-        appendMessage('system', 'Connected to vers-agent');
+        // Connected silently
       });
 
       eventSource.addEventListener('notification', (e) => {
@@ -334,7 +506,7 @@
     }
 
     function setStatus(state, text) {
-      statusDot.className = 'status-dot ' + state;
+      statusIndicator.className = 'status-indicator ' + state;
       statusText.textContent = text;
 
       if (state === 'busy') {
@@ -346,6 +518,34 @@
       }
     }
 
+    function hideEmptyState() {
+      if (emptyState) {
+        emptyState.style.display = 'none';
+      }
+    }
+
+    function showTypingIndicator() {
+      if (typingIndicator) return;
+
+      typingIndicator = document.createElement('div');
+      typingIndicator.className = 'typing fade-in';
+      typingIndicator.innerHTML = `
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span>working</span>
+      `;
+      output.appendChild(typingIndicator);
+      scrollToBottom();
+    }
+
+    function hideTypingIndicator() {
+      if (typingIndicator) {
+        typingIndicator.remove();
+        typingIndicator = null;
+      }
+    }
+
     function handleNotification(notification) {
       const { type, data } = notification;
 
@@ -353,46 +553,36 @@
         case 'content_chunk':
           handleContentChunk(data);
           break;
-
         case 'tool_call':
           handleToolCall(data);
           break;
-
         case 'tool_result':
           handleToolResult(data);
           break;
-
         case 'completed':
           handleCompleted(data);
           break;
-
         case 'failed':
           handleFailed(data);
           break;
-
         case 'cancelled':
           handleCancelled();
           break;
-
         case 'permission_request':
           handlePermissionRequest(data);
-          break;
-
-        case 'mode_update':
-          if (data.mode === 'plan') {
-            appendMessage('system', 'Entered plan mode');
-          }
           break;
       }
     }
 
     function handleContentChunk(data) {
-      setStatus('busy', 'Generating...');
+      hideEmptyState();
+      hideTypingIndicator();
+      setStatus('busy', 'generating');
       isWorking = true;
 
       if (!currentTextElement) {
         currentTextElement = document.createElement('div');
-        currentTextElement.className = 'message text';
+        currentTextElement.className = 'message text fade-in';
         output.appendChild(currentTextElement);
       }
 
@@ -405,145 +595,183 @@
     }
 
     function handleToolCall(data) {
-      setStatus('busy', `Running ${data.toolName || 'tool'}...`);
+      hideEmptyState();
+      hideTypingIndicator();
+      setStatus('busy', data.toolName || 'tool');
       currentTextElement = null;
 
-      const toolEl = document.createElement('div');
-      toolEl.className = 'message tool';
-      toolEl.textContent = `${getToolIcon(data.toolName)} ${data.title || data.toolName}`;
-      output.appendChild(toolEl);
+      const block = document.createElement('div');
+      block.className = 'tool-block fade-in';
+      block.id = `tool-${data.toolId || data.toolCallId || Date.now()}`;
+
+      block.innerHTML = `
+        <div class="tool-header running">
+          <span class="tool-name">${data.toolName || 'tool'}</span>
+          ${data.title && data.title !== data.toolName ? `<span>${escapeHtml(data.title)}</span>` : ''}
+          <span class="tool-status">running</span>
+        </div>
+      `;
+
+      output.appendChild(block);
       scrollToBottom();
     }
 
     function handleToolResult(data) {
-      if (data.content) {
-        const resultEl = document.createElement('div');
-        resultEl.className = 'message tool-result';
-        const content = typeof data.content === 'string'
-          ? data.content
-          : JSON.stringify(data.content, null, 2);
-        resultEl.textContent = content.slice(0, 500) + (content.length > 500 ? '...' : '');
-        output.appendChild(resultEl);
-        scrollToBottom();
+      const toolId = data.toolId || data.toolCallId;
+      const block = document.getElementById(`tool-${toolId}`);
+
+      if (block) {
+        const header = block.querySelector('.tool-header');
+        header.className = 'tool-header ' + (data.success !== false ? 'success' : 'error');
+        header.querySelector('.tool-status').textContent = data.success !== false ? 'done' : 'failed';
+
+        if (data.content) {
+          const content = document.createElement('div');
+          content.className = 'tool-content';
+          const text = typeof data.content === 'string'
+            ? data.content
+            : JSON.stringify(data.content, null, 2);
+          content.textContent = text.slice(0, 1000) + (text.length > 1000 ? '\n...' : '');
+          block.appendChild(content);
+        }
       }
+
+      scrollToBottom();
     }
 
     function handleCompleted(data) {
-      setStatus('connected', 'Connected');
+      setStatus('connected', 'connected');
       isWorking = false;
       currentTextElement = null;
+      hideTypingIndicator();
 
       const stats = [];
-      if (data.durationMs) stats.push(`${(data.durationMs / 1000).toFixed(1)}s`);
-      if (data.inputTokens) stats.push(`${data.inputTokens} in`);
-      if (data.outputTokens) stats.push(`${data.outputTokens} out`);
-      if (data.totalCostUsd) stats.push(`$${data.totalCostUsd.toFixed(4)}`);
+      if (data.durationMs) stats.push({ label: 'time', value: (data.durationMs / 1000).toFixed(1) + 's' });
+      if (data.inputTokens) stats.push({ label: 'in', value: data.inputTokens.toLocaleString() });
+      if (data.outputTokens) stats.push({ label: 'out', value: data.outputTokens.toLocaleString() });
+      if (data.totalCostUsd) stats.push({ label: 'cost', value: '$' + data.totalCostUsd.toFixed(4) });
 
       if (stats.length > 0) {
-        const completeEl = document.createElement('div');
-        completeEl.className = 'message completed';
-        completeEl.textContent = `✓ Completed (${stats.join(' • ')})`;
-        output.appendChild(completeEl);
+        const el = document.createElement('div');
+        el.className = 'completion-stats fade-in';
+        el.innerHTML = stats.map(s => `
+          <div class="stat">
+            <span>${s.label}</span>
+            <span class="stat-value">${s.value}</span>
+          </div>
+        `).join('');
+        output.appendChild(el);
         scrollToBottom();
       }
     }
 
     function handleFailed(data) {
-      setStatus('connected', 'Connected');
+      setStatus('connected', 'connected');
       isWorking = false;
       currentTextElement = null;
-      appendMessage('error', `Error: ${data.error || 'Unknown error'}`);
+      hideTypingIndicator();
+
+      const el = document.createElement('div');
+      el.className = 'message error fade-in';
+      el.textContent = data.error || 'unknown error';
+      output.appendChild(el);
+      scrollToBottom();
     }
 
     function handleCancelled() {
-      setStatus('connected', 'Connected');
+      setStatus('connected', 'connected');
       isWorking = false;
       currentTextElement = null;
-      appendMessage('system', 'Cancelled');
+      hideTypingIndicator();
+      appendSystem('cancelled');
     }
 
     function handlePermissionRequest(data) {
-      pendingPermission = data;
+      hideTypingIndicator();
 
-      const permEl = document.createElement('div');
-      permEl.className = 'permission-request';
-      permEl.id = `perm-${data.requestId}`;
+      const block = document.createElement('div');
+      block.className = 'permission-block fade-in';
+      block.id = `perm-${data.requestId}`;
 
-      let html = `<h3>Permission Required</h3>`;
-      if (data.toolCall) {
-        html += `<p>${data.toolCall.title || data.toolCall.toolName}</p>`;
-      }
-      html += `<div class="options">`;
-
+      let actionsHtml = '';
       if (data.options) {
         for (const opt of data.options) {
           const isPrimary = opt.id === 'allow' || opt.id === 'yes';
-          html += `<button class="${isPrimary ? 'primary' : ''}" onclick="respondPermission('${data.requestId}', '${opt.id}')">${opt.label}</button>`;
+          actionsHtml += `<button class="permission-btn ${isPrimary ? 'primary' : ''}" onclick="respondPermission('${data.requestId}', '${opt.id}')">${opt.label.toLowerCase()}</button>`;
         }
       } else {
-        html += `<button class="primary" onclick="respondPermission('${data.requestId}', 'allow')">Allow</button>`;
-        html += `<button onclick="respondPermission('${data.requestId}', 'deny')">Deny</button>`;
+        actionsHtml = `
+          <button class="permission-btn primary" onclick="respondPermission('${data.requestId}', 'allow')">allow</button>
+          <button class="permission-btn" onclick="respondPermission('${data.requestId}', 'deny')">deny</button>
+        `;
       }
 
-      html += `</div>`;
-      permEl.innerHTML = html;
-      output.appendChild(permEl);
+      block.innerHTML = `
+        <div class="permission-header">permission required</div>
+        <div class="permission-content">
+          ${data.toolCall ? `<div class="permission-tool">${escapeHtml(data.toolCall.title || data.toolCall.toolName)}</div>` : ''}
+          <div class="permission-actions">${actionsHtml}</div>
+        </div>
+      `;
+
+      output.appendChild(block);
       scrollToBottom();
     }
 
     async function respondPermission(requestId, optionId) {
-      const permEl = document.getElementById(`perm-${requestId}`);
-      if (permEl) {
-        permEl.remove();
-      }
+      const el = document.getElementById(`perm-${requestId}`);
+      if (el) el.remove();
 
       try {
         await rpc('permission/respond', { requestId, optionId });
       } catch (err) {
-        appendMessage('error', `Failed to respond: ${err.message}`);
+        appendError('failed to respond: ' + err.message);
       }
-
-      pendingPermission = null;
     }
 
-    function getToolIcon(toolName) {
-      const icons = {
-        Read: '📄',
-        Write: '✏️',
-        Edit: '🔧',
-        Bash: '💻',
-        Glob: '🔍',
-        Grep: '🔎',
-        WebFetch: '🌐',
-        WebSearch: '🔍',
-        Task: '📋',
-      };
-      return icons[toolName] || '⚡';
-    }
-
-    function appendMessage(type, text) {
+    function appendSystem(text) {
+      hideEmptyState();
       const el = document.createElement('div');
-      el.className = `message ${type}`;
+      el.className = 'message system fade-in';
       el.textContent = text;
       output.appendChild(el);
       scrollToBottom();
+    }
+
+    function appendError(text) {
+      hideEmptyState();
+      const el = document.createElement('div');
+      el.className = 'message error fade-in';
+      el.textContent = text;
+      output.appendChild(el);
+      scrollToBottom();
+    }
+
+    function appendUserPrompt(text) {
+      hideEmptyState();
+      const el = document.createElement('div');
+      el.className = 'message user-prompt fade-in';
+      el.textContent = text;
+      output.appendChild(el);
+      scrollToBottom();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     function scrollToBottom() {
       output.scrollTop = output.scrollHeight;
     }
 
-    // RPC helper
     async function rpc(method, params = {}) {
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token');
 
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const response = await fetch('/rpc', {
         method: 'POST',
@@ -557,13 +785,10 @@
       });
 
       const result = await response.json();
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
+      if (result.error) throw new Error(result.error.message);
       return result.result;
     }
 
-    // Handle form submission
     inputForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -571,18 +796,26 @@
       if (!text || isWorking) return;
 
       promptInput.value = '';
-      appendMessage('system', `> ${text}`);
-      setStatus('busy', 'Sending...');
+      appendUserPrompt(text);
+      showTypingIndicator();
+      setStatus('busy', 'sending');
 
       try {
         await rpc('session/prompt', { text });
       } catch (err) {
-        appendMessage('error', `Failed to send: ${err.message}`);
-        setStatus('connected', 'Connected');
+        hideTypingIndicator();
+        appendError('failed to send: ' + err.message);
+        setStatus('connected', 'connected');
       }
     });
 
-    // Start connection
+    // Keyboard shortcut: Cmd+Enter to send
+    promptInput.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        inputForm.dispatchEvent(new Event('submit'));
+      }
+    });
+
     connect();
   </script>
 </body>
