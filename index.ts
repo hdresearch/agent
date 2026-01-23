@@ -440,7 +440,8 @@ Example:
         // Initialize agent eagerly so commands are available immediately
         await initializeAgent();
 
-        console.log(`\n  vers-agent server running on http://localhost:${server.port}\n`);
+        console.log(`\n  vers-agent server running on http://localhost:${server.port}`);
+        console.log(`  → Shell UI: http://localhost:${server.port}/shell\n`);
         console.log("  Press Ctrl+C to stop.\n");
 
         // Handle shutdown
