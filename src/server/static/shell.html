@@ -443,6 +443,149 @@
 
     .send-btn:hover { background: var(--accent-hover); }
     .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Split layout */
+    .split-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .split-container.sidebar-closed .tree-sidebar { display: none; }
+    .split-container.sidebar-closed .shell-content { width: 100%; }
+
+    /* Tree sidebar */
+    .tree-sidebar {
+      width: 280px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .tree-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tree-header-title { color: var(--accent); }
+
+    .tree-count {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .tree-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .tree-content::-webkit-scrollbar { width: 4px; }
+    .tree-content::-webkit-scrollbar-track { background: var(--bg); }
+    .tree-content::-webkit-scrollbar-thumb { background: var(--border-dim); }
+
+    /* Tree nodes */
+    .tree-node {
+      padding: 6px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .tree-node:hover { background: var(--bg-elevated); }
+    .tree-node.current { background: var(--bg-elevated); border-left: 2px solid var(--accent); }
+
+    .tree-node-prefix {
+      color: var(--text-dim);
+      font-size: 11px;
+      white-space: pre;
+    }
+
+    .tree-node-icon { font-size: 10px; }
+    .tree-node-icon.starting { color: var(--text-dim); }
+    .tree-node-icon.ready { color: var(--success); }
+    .tree-node-icon.busy { color: var(--accent); }
+    .tree-node-icon.completed { color: var(--success); }
+    .tree-node-icon.failed { color: var(--error); }
+
+    .tree-node-id {
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .tree-node.current .tree-node-id { color: var(--accent); }
+
+    .tree-node-task {
+      color: var(--text-dim);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .tree-node-status {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    .tree-empty {
+      padding: 14px;
+      color: var(--text-dim);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    /* Shell content area */
+    .shell-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Toggle button */
+    .sidebar-toggle {
+      background: none;
+      border: 1px solid var(--border-dim);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 3px 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .sidebar-toggle:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .sidebar-toggle.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      .tree-sidebar { display: none; }
+      .split-container.sidebar-closed .tree-sidebar { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -533,8 +676,104 @@
       }
     }
 
+    // Build tree structure from flat VM list
+    function buildTreeFromVms(vms, currentVmId) {
+      const nodeMap = new Map();
+      const roots = [];
+
+      // First pass: create all nodes
+      for (const vm of vms) {
+        nodeMap.set(vm.vmId, {
+          ...vm,
+          children: [],
+          isCurrent: vm.vmId === currentVmId,
+        });
+      }
+
+      // Second pass: build parent-child relationships
+      for (const vm of vms) {
+        const node = nodeMap.get(vm.vmId);
+        if (vm.parent && nodeMap.has(vm.parent)) {
+          nodeMap.get(vm.parent).children.push(node);
+        } else {
+          roots.push(node);
+        }
+      }
+
+      // Sort children by creation time
+      function sortChildren(node) {
+        node.children.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        node.children.forEach(sortChildren);
+      }
+      roots.forEach(sortChildren);
+
+      return { roots, nodeMap, total: vms.length };
+    }
+
     // Components
-    function Header({ parent, status, statusText, onThemeToggle }) {
+    function TreeSidebar({ tree, currentVmId }) {
+      if (!tree || tree.total === 0) {
+        return html`
+          <div class="tree-sidebar">
+            <div class="tree-header">
+              <span class="tree-header-title">tree</span>
+            </div>
+            <div class="tree-empty">no VMs</div>
+          </div>
+        `;
+      }
+
+      const statusIcon = (status) => {
+        switch (status) {
+          case 'starting': return '◔';
+          case 'ready': return '●';
+          case 'busy': return '◐';
+          case 'completed': return '✓';
+          case 'failed': return '✗';
+          default: return '○';
+        }
+      };
+
+      // Render a node and its children recursively
+      function renderNode(node, depth = 0, isLast = true, prefix = '') {
+        const indent = depth === 0 ? '' : prefix + (isLast ? '└─' : '├─');
+        const childPrefix = depth === 0 ? '' : prefix + (isLast ? '  ' : '│ ');
+        const url = `https://${node.vmId}.vm.vers.sh/shell`;
+
+        return html`
+          <a
+            key=${node.vmId}
+            class="tree-node ${node.isCurrent ? 'current' : ''}"
+            href=${url}
+            title="${node.task || node.approach || node.status}"
+          >
+            <span class="tree-node-prefix">${indent}</span>
+            <span class="tree-node-icon ${node.status}">${statusIcon(node.status)}</span>
+            <span class="tree-node-id">${node.vmId.slice(0, 8)}</span>
+            ${node.task && html`<span class="tree-node-task">${node.task.slice(0, 20)}</span>`}
+          </a>
+          ${node.children.map((child, idx) =>
+            renderNode(child, depth + 1, idx === node.children.length - 1, childPrefix)
+          )}
+        `;
+      }
+
+      return html`
+        <div class="tree-sidebar">
+          <div class="tree-header">
+            <span class="tree-header-title">tree</span>
+            <span class="tree-count">${tree.total} VMs</span>
+          </div>
+          <div class="tree-content">
+            ${tree.roots.map((root, idx) =>
+              renderNode(root, 0, idx === tree.roots.length - 1, '')
+            )}
+          </div>
+        </div>
+      `;
+    }
+
+    function Header({ parent, status, statusText, onThemeToggle, sidebarOpen, onToggleSidebar }) {
       const vmId = window.location.hostname.split('.')[0];
       const parentUrl = parent ? `https://${parent}.vm.vers.sh/shell` : null;
 
@@ -551,6 +790,9 @@
             <span>${statusText}</span>
           </div>
           <div class="header-right">
+            <button class="sidebar-toggle ${sidebarOpen ? 'active' : ''}" onClick=${onToggleSidebar}>
+              ${sidebarOpen ? '◀ tree' : '▶ tree'}
+            </button>
             <a class="header-link" href="/" target="_blank">app</a>
             <a class="header-link" href="/health" target="_blank">health</a>
             <button class="theme-btn" onClick=${onThemeToggle}>theme</button>
@@ -734,8 +976,13 @@
       const [typing, setTyping] = useState(false);
       const [working, setWorking] = useState(false);
       const [vmContext, setVmContext] = useState({ vmId: null, parent: null, children: [], siblings: [] });
+      const [sidebarOpen, setSidebarOpen] = useState(true);
+      const [tree, setTree] = useState(null);
       const mainRef = useRef(null);
       const textAccum = useRef('');
+
+      // Get current VM ID from hostname
+      const currentVmId = window.location.hostname.split('.')[0];
 
       // Fetch VM context (parent/children/siblings)
       useEffect(() => {
@@ -758,6 +1005,24 @@
         const interval = setInterval(fetchContext, 10000);
         return () => clearInterval(interval);
       }, []);
+
+      // Fetch full VM tree for sidebar
+      useEffect(() => {
+        async function fetchTree() {
+          try {
+            const result = await rpc('vm/list');
+            const treeData = buildTreeFromVms(result.vms || [], currentVmId);
+            setTree(treeData);
+          } catch (e) {
+            console.log('Could not fetch VM tree:', e);
+          }
+        }
+        fetchTree();
+
+        // Refresh tree periodically
+        const interval = setInterval(fetchTree, 15000);
+        return () => clearInterval(interval);
+      }, [currentVmId]);
 
       // SSE connection for session events
       useEffect(() => {
@@ -820,6 +1085,53 @@
 
         return () => vmEs.close();
       }, [childIdsKey]);
+
+      // SSE connection for ALL VM events (updates tree sidebar)
+      useEffect(() => {
+        if (!sidebarOpen) return; // Don't subscribe if sidebar is closed
+
+        const allVmEventsUrl = authToken
+          ? `/events/vms?token=${authToken}`
+          : `/events/vms`;
+        const allVmEs = new EventSource(allVmEventsUrl);
+
+        allVmEs.addEventListener('vm_event', (e) => {
+          try {
+            const event = JSON.parse(e.data);
+            // Update tree node status
+            if (event.vmId && event.type) {
+              setTree(currentTree => {
+                if (!currentTree || !currentTree.nodeMap.has(event.vmId)) return currentTree;
+                const node = currentTree.nodeMap.get(event.vmId);
+                const newStatus = mapEventTypeToStatus(event.type, node.status, event);
+                if (newStatus === node.status) return currentTree;
+
+                // Update node in map
+                const newNodeMap = new Map(currentTree.nodeMap);
+                newNodeMap.set(event.vmId, { ...node, status: newStatus });
+
+                // Update roots if needed
+                const newRoots = currentTree.roots.map(function updateNode(n) {
+                  if (n.vmId === event.vmId) {
+                    return { ...n, status: newStatus, children: n.children.map(updateNode) };
+                  }
+                  return { ...n, children: n.children.map(updateNode) };
+                });
+
+                return { ...currentTree, roots: newRoots, nodeMap: newNodeMap };
+              });
+            }
+          } catch (err) {
+            console.log('Error updating tree from vm_event:', err);
+          }
+        });
+
+        allVmEs.onerror = () => {
+          console.log('All VM events SSE error');
+        };
+
+        return () => allVmEs.close();
+      }, [sidebarOpen]);
 
       // Auto-scroll
       useEffect(() => {
@@ -968,51 +1280,59 @@
           status=${status}
           statusText=${statusText}
           onThemeToggle=${cycleTheme}
+          sidebarOpen=${sidebarOpen}
+          onToggleSidebar=${() => setSidebarOpen(!sidebarOpen)}
         />
 
-        <main class="main" ref=${mainRef}>
-          ${!hasContent && html`<${Empty} />`}
+        <div class="split-container ${sidebarOpen ? '' : 'sidebar-closed'}">
+          <${TreeSidebar} tree=${tree} currentVmId=${currentVmId} />
 
-          ${messages.map((m, i) => {
-            if (m.type === 'stats') {
-              return html`<${Stats} key=${i} data=${m.data} />`;
-            }
-            return html`<${Message} key=${i} type=${m.type} content=${m.content} />`;
-          })}
+          <div class="shell-content">
+            <main class="main" ref=${mainRef}>
+              ${!hasContent && html`<${Empty} />`}
 
-          ${Object.values(tools).map(t => html`
-            <${ToolBlock}
-              key=${t.id}
-              id=${t.id}
-              name=${t.name}
-              title=${t.title}
-              status=${t.status}
-              content=${t.content}
+              ${messages.map((m, i) => {
+                if (m.type === 'stats') {
+                  return html`<${Stats} key=${i} data=${m.data} />`;
+                }
+                return html`<${Message} key=${i} type=${m.type} content=${m.content} />`;
+              })}
+
+              ${Object.values(tools).map(t => html`
+                <${ToolBlock}
+                  key=${t.id}
+                  id=${t.id}
+                  name=${t.name}
+                  title=${t.title}
+                  status=${t.status}
+                  content=${t.content}
+                />
+              `)}
+
+              ${Object.values(permissions).map(p => html`
+                <${Permission}
+                  key=${p.requestId}
+                  id=${p.requestId}
+                  toolCall=${p.toolCall}
+                  options=${p.options}
+                  onRespond=${handlePermission}
+                />
+              `)}
+
+              ${typing && html`<${Typing} />`}
+            </main>
+
+            <${ChildrenBar}
+              children=${vmContext.children}
+              onBranch=${handleBranch}
             />
-          `)}
 
-          ${Object.values(permissions).map(p => html`
-            <${Permission}
-              key=${p.requestId}
-              id=${p.requestId}
-              toolCall=${p.toolCall}
-              options=${p.options}
-              onRespond=${handlePermission}
+            <${InputArea}
+              disabled=${working || status !== 'connected'}
+              onSubmit=${handleSend}
             />
-          `)}
-
-          ${typing && html`<${Typing} />`}
-        </main>
-
-        <${ChildrenBar}
-          children=${vmContext.children}
-          onBranch=${handleBranch}
-        />
-
-        <${InputArea}
-          disabled=${working || status !== 'connected'}
-          onSubmit=${handleSend}
-        />
+          </div>
+        </div>
       `;
     }
 
