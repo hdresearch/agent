@@ -376,9 +376,17 @@
       color: var(--accent);
     }
 
+    /* Child VM status colors */
+    .child-link.starting { border-color: var(--text-dim); opacity: 0.7; }
+    .child-link.ready { border-color: var(--success); }
+    .child-link.busy,
     .child-link.running { border-color: var(--accent); }
-    .child-link.done { border-color: var(--success); }
-    .child-link.failed { border-color: var(--error); }
+    .child-link.done,
+    .child-link.completed { border-color: var(--success); color: var(--success); }
+    .child-link.failed,
+    .child-link.error { border-color: var(--error); color: var(--error); }
+    .child-link.stopping { border-color: var(--warning); opacity: 0.7; }
+    .child-link.stopped { border-color: var(--text-dim); opacity: 0.5; }
 
     .branch-btn {
       color: var(--text-dim);
@@ -496,6 +504,35 @@
       return div.innerHTML;
     }
 
+    // Map VM event types to status strings
+    function mapEventTypeToStatus(eventType, currentStatus, event) {
+      // Event types from the VM events stream
+      switch (eventType) {
+        case 'vm_started':
+        case 'started':
+          return 'ready';
+        case 'vm_stopping':
+        case 'stopping':
+          return 'stopping';
+        case 'vm_stopped':
+        case 'stopped':
+          return 'stopped';
+        case 'vm_error':
+        case 'error':
+          return 'failed';
+        case 'tool_call':
+        case 'content_chunk':
+        case 'working':
+          return 'busy';
+        case 'turn_complete':
+        case 'idle':
+          return 'ready';
+        default:
+          // If we get a status field directly in the event, use it
+          return event?.status || currentStatus;
+      }
+    }
+
     // Components
     function Header({ parent, status, statusText, onThemeToggle }) {
       const vmId = window.location.hostname.split('.')[0];
@@ -532,6 +569,23 @@
         `;
       }
 
+      // Status indicator mapping
+      const statusIcon = (status) => {
+        switch (status) {
+          case 'starting': return '◔';
+          case 'ready': return '●';
+          case 'busy':
+          case 'running': return '◐';
+          case 'done':
+          case 'completed': return '✓';
+          case 'failed':
+          case 'error': return '✗';
+          case 'stopping': return '◑';
+          case 'stopped': return '○';
+          default: return '';
+        }
+      };
+
       return html`
         <div class="children-bar">
           <span class="children-label">children:</span>
@@ -540,8 +594,9 @@
               class="child-link ${c.status}"
               href="https://${c.vmId}.vm.vers.sh/shell"
               target="_blank"
+              title="${c.task || c.approach || c.status}"
             >
-              ${c.vmId.slice(0, 8)} ${c.status === 'running' ? '◐' : c.status === 'done' ? '✓' : c.status === 'failed' ? '✗' : ''}
+              ${statusIcon(c.status)} ${c.vmId.slice(0, 8)}
             </a>
           `)}
           <a class="branch-btn" href="#" onClick=${onBranch}>+ branch</a>
@@ -704,7 +759,7 @@
         return () => clearInterval(interval);
       }, []);
 
-      // SSE connection
+      // SSE connection for session events
       useEffect(() => {
         const eventsUrl = authToken ? `/events?token=${authToken}` : '/events';
         const es = new EventSource(eventsUrl);
@@ -726,6 +781,45 @@
 
         return () => es.close();
       }, []);
+
+      // Stable child IDs for SSE subscription dependency
+      const childIdsKey = vmContext.children.map(c => c.vmId).sort().join(',');
+
+      // SSE connection for VM events (real-time children status)
+      useEffect(() => {
+        // Only subscribe if we have children to track
+        if (!childIdsKey) return;
+
+        const vmEventsUrl = authToken
+          ? `/events/vms?vmIds=${childIdsKey}&token=${authToken}`
+          : `/events/vms?vmIds=${childIdsKey}`;
+        const vmEs = new EventSource(vmEventsUrl);
+
+        vmEs.addEventListener('vm_event', (e) => {
+          try {
+            const event = JSON.parse(e.data);
+            // Update child status if it's one of our children
+            if (event.vmId && event.type) {
+              setVmContext(ctx => ({
+                ...ctx,
+                children: ctx.children.map(child =>
+                  child.vmId === event.vmId
+                    ? { ...child, status: mapEventTypeToStatus(event.type, child.status, event) }
+                    : child
+                ),
+              }));
+            }
+          } catch (err) {
+            console.log('Error parsing vm_event:', err);
+          }
+        });
+
+        vmEs.onerror = () => {
+          console.log('VM events SSE error, will retry on reconnect');
+        };
+
+        return () => vmEs.close();
+      }, [childIdsKey]);
 
       // Auto-scroll
       useEffect(() => {
