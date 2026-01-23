@@ -1008,6 +1008,11 @@ function tryCreateServer(port: number): ReturnType<typeof Bun.serve> | null {
   }
 }
 
+// Route classification
+const PUBLIC_ROUTES = new Set(["/", "/health"]);
+const ADMIN_ROUTES = new Set(["/logs", "/metrics", "/commands", "/events/vms"]);
+// All other routes are USER routes (require user auth)
+
 // Shared request handler
 async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -1016,7 +1021,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Auth-Token, X-Client-Id",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Auth-Token, X-Client-Id, X-Admin-Token",
   };
 
   // Handle CORS preflight
@@ -1024,93 +1029,126 @@ async function handleRequest(req: Request): Promise<Response> {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Health check - allowed without auth, shows claim status
-  if (url.pathname === "/health") {
-    const claimState = authStore.getClaimState();
-    return Response.json({
-      status: "ok",
-      initialized: serverState.initialized,
-      sessionId: getCurrentSessionId(),
-      claimed: claimState.isClaimed,
-      claimedAt: claimState.claimedAt,
-      metrics: {
-        prompts: metrics.getCounter(MetricNames.PROMPTS_TOTAL),
-        sessions: metrics.getCounter(MetricNames.SESSIONS_CREATED),
-        queueLength: metrics.getGauge(MetricNames.QUEUE_LENGTH),
-        sseClients: metrics.getGauge(MetricNames.SSE_CLIENTS),
-      },
-    }, { headers: corsHeaders });
-  }
+  const isLocal = isLocalhostRequest(req);
+  const pathname = url.pathname;
 
-  // Claim endpoint - set API key for authentication
-  if (url.pathname === "/claim" && req.method === "POST") {
-    const providedKey = getAuthToken(req);
-    const isLocal = isLocalhostRequest(req);
-
-    // If API key provided in auth header
-    if (providedKey) {
-      if (hasAuth()) {
-        // Already have a key - verify it matches
-        if (verifyApiKey(providedKey)) {
-          return Response.json({
-            authenticated: true,
-            message: "API key verified",
-          }, { headers: corsHeaders });
-        }
-        return Response.json({
-          authenticated: false,
-          error: "Invalid API key",
-        }, { status: 403, headers: corsHeaders });
-      }
-
-      // No key yet - store this one
-      await setVersApiKey(providedKey);
-      info("VERS API key set via /claim endpoint");
+  // === PUBLIC ROUTES (no auth required) ===
+  if (PUBLIC_ROUTES.has(pathname)) {
+    if (pathname === "/health") {
+      const claimState = authStore.getClaimState();
       return Response.json({
-        authenticated: true,
-        message: "API key stored successfully",
+        status: "ok",
+        initialized: serverState.initialized,
+        claimed: claimState.isClaimed,
       }, { headers: corsHeaders });
     }
 
-    // No key provided - check status
-    if (hasAuth()) {
+    // Root endpoint
+    if (pathname === "/") {
+      return Response.json({
+        service: "vers-agent",
+        version: "0.1.0",
+        endpoints: {
+          public: ["/", "/health"],
+          user: ["/shell", "/rpc", "/events", "/claim"],
+          admin: ["/logs", "/metrics", "/commands", "/events/vms"],
+        },
+      }, { headers: corsHeaders });
+    }
+  }
+
+  // === ADMIN ROUTES (localhost only, or admin token) ===
+  if (ADMIN_ROUTES.has(pathname)) {
+    const adminToken = req.headers.get("X-Admin-Token");
+    const expectedAdminToken = process.env.VERS_ADMIN_TOKEN;
+
+    // Admin routes require localhost OR valid admin token
+    if (!isLocal) {
+      if (!expectedAdminToken) {
+        return Response.json({
+          error: "Admin access denied",
+          message: "Admin endpoints are localhost-only. Set VERS_ADMIN_TOKEN to enable remote admin access.",
+        }, { status: 403, headers: corsHeaders });
+      }
+      if (adminToken !== expectedAdminToken) {
+        return Response.json({
+          error: "Admin access denied",
+          message: "Invalid or missing X-Admin-Token header",
+        }, { status: 403, headers: corsHeaders });
+      }
+    }
+    // Fall through to handle the admin route
+  }
+
+  // === USER ROUTES (require user auth unless localhost) ===
+  if (!PUBLIC_ROUTES.has(pathname) && !ADMIN_ROUTES.has(pathname)) {
+    // Claim endpoint has special handling
+    if (pathname === "/claim" && req.method === "POST") {
+      const providedKey = getAuthToken(req);
+
+      // If API key provided in auth header
+      if (providedKey) {
+        if (hasAuth()) {
+          // Already have a key - verify it matches
+          if (verifyApiKey(providedKey)) {
+            return Response.json({
+              authenticated: true,
+              message: "API key verified",
+            }, { headers: corsHeaders });
+          }
+          return Response.json({
+            authenticated: false,
+            error: "Invalid API key",
+          }, { status: 403, headers: corsHeaders });
+        }
+
+        // No key yet - store this one
+        await setVersApiKey(providedKey);
+        info("VERS API key set via /claim endpoint");
+        return Response.json({
+          authenticated: true,
+          message: "API key stored successfully",
+        }, { headers: corsHeaders });
+      }
+
+      // No key provided - check status
+      if (hasAuth()) {
+        return Response.json({
+          authenticated: false,
+          error: "API key required. Provide via Authorization: Bearer <key>",
+        }, { status: 401, headers: corsHeaders });
+      }
+
+      // No auth configured
+      if (isLocal) {
+        return Response.json({
+          authenticated: true,
+          local: true,
+          message: "Localhost access allowed without API key",
+        }, { headers: corsHeaders });
+      }
+
       return Response.json({
         authenticated: false,
         error: "API key required. Provide via Authorization: Bearer <key>",
       }, { status: 401, headers: corsHeaders });
     }
 
-    // No auth configured
-    if (isLocal) {
-      // Allow localhost without auth
-      return Response.json({
-        authenticated: true,
-        local: true,
-        message: "Localhost access allowed without API key",
-      }, { headers: corsHeaders });
-    }
-
-    return Response.json({
-      authenticated: false,
-      error: "API key required. Provide via Authorization: Bearer <key>",
-    }, { status: 401, headers: corsHeaders });
-  }
-
-  // All other endpoints require auth (if configured) unless localhost
-  const isLocal = isLocalhostRequest(req);
-  if (hasAuth() && !isLocal) {
-    const providedKey = getAuthToken(req);
-    if (!providedKey) {
-      return Response.json({
-        error: "Authentication required",
-        message: "Provide API key via Authorization: Bearer <key>",
-      }, { status: 401, headers: corsHeaders });
-    }
-    if (!verifyApiKey(providedKey)) {
-      return Response.json({
-        error: "Invalid API key",
-        message: "The provided API key is invalid",
-      }, { status: 403, headers: corsHeaders });
+    // All other user routes require auth (if configured) unless localhost
+    if (hasAuth() && !isLocal) {
+      const providedKey = getAuthToken(req);
+      if (!providedKey) {
+        return Response.json({
+          error: "Authentication required",
+          message: "Provide API key via Authorization: Bearer <key>",
+        }, { status: 401, headers: corsHeaders });
+      }
+      if (!verifyApiKey(providedKey)) {
+        return Response.json({
+          error: "Invalid API key",
+          message: "The provided API key is invalid",
+        }, { status: 403, headers: corsHeaders });
+      }
     }
   }
 
@@ -1228,20 +1266,6 @@ async function handleRequest(req: Request): Promise<Response> {
         "Connection": "keep-alive",
       },
     });
-  }
-
-  // Root endpoint - identify this as vers-agent
-  if (url.pathname === "/" && req.method === "GET") {
-    return Response.json({
-      service: "vers-agent",
-      version: "0.1.0",
-      endpoints: ["/health", "/rpc", "/events", "/events/vms", "/logs", "/shell"]
-    }, { headers: corsHeaders });
-  }
-
-  // Health check endpoint
-  if (url.pathname === "/health" && req.method === "GET") {
-    return Response.json({ status: "ok" }, { headers: corsHeaders });
   }
 
   // Prometheus metrics endpoint

@@ -198,7 +198,7 @@
 
     .main::-webkit-scrollbar { width: 4px; }
     .main::-webkit-scrollbar-track { background: var(--bg); }
-    .main::-webkit-scrollbar-thumb { background: var(--border-dim); }
+    .main::-webkit-scrollbar-thumb { background: var(--accent); }
 
     /* Messages */
     .message {
@@ -817,7 +817,13 @@
 
     .tree-content::-webkit-scrollbar { width: 4px; }
     .tree-content::-webkit-scrollbar-track { background: var(--bg); }
-    .tree-content::-webkit-scrollbar-thumb { background: var(--border-dim); }
+    .tree-content::-webkit-scrollbar-thumb { background: var(--accent); }
+
+    /* Global scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-hover); }
 
     /* DAG Tree visualization */
     .dag-container {
@@ -1289,7 +1295,7 @@
         return html`
           <div class="tree-sidebar">
             <div class="tree-header">
-              <span class="tree-header-title">dag</span>
+              <span class="tree-header-title">tree</span>
             </div>
             <div class="tree-empty">
               <div style="font-size: 24px; margin-bottom: 8px;">◇</div>
@@ -1367,7 +1373,7 @@
       return html`
         <div class="tree-sidebar">
           <div class="tree-header">
-            <span class="tree-header-title">dag</span>
+            <span class="tree-header-title">tree</span>
             <span class="tree-count">${tree.total} VMs</span>
           </div>
           <div class="tree-content">
