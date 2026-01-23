@@ -9,17 +9,68 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     :root {
+      /* Light mode (default) */
+      --bg: #ffffff;
+      --bg-elevated: #fafafa;
+      --border: #002fff;
+      --border-dim: #e0e0e0;
+      --text: #002fff;
+      --text-dim: #666666;
+      --accent: #002fff;
+      --accent-hover: #0040ff;
+      --success: #00aa55;
+      --error: #cc0000;
+      --warning: #cc8800;
+      --invert-text: #ffffff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        /* Dark mode */
+        --bg: #000000;
+        --bg-elevated: #0a0a0a;
+        --border: #ffffff;
+        --border-dim: #333333;
+        --text: #d5d5d5;
+        --text-dim: #888888;
+        --accent: #f6d000;
+        --accent-hover: #ffdd33;
+        --success: #00ff88;
+        --error: #ff4444;
+        --warning: #ffaa00;
+        --invert-text: #000000;
+      }
+    }
+
+    /* Manual theme override classes */
+    html.light {
+      --bg: #ffffff;
+      --bg-elevated: #fafafa;
+      --border: #002fff;
+      --border-dim: #e0e0e0;
+      --text: #002fff;
+      --text-dim: #666666;
+      --accent: #002fff;
+      --accent-hover: #0040ff;
+      --success: #00aa55;
+      --error: #cc0000;
+      --warning: #cc8800;
+      --invert-text: #ffffff;
+    }
+
+    html.dark {
       --bg: #000000;
       --bg-elevated: #0a0a0a;
       --border: #ffffff;
       --border-dim: #333333;
-      --text: #ffffff;
+      --text: #d5d5d5;
       --text-dim: #888888;
-      --accent: #002fff;
-      --accent-hover: #0040ff;
+      --accent: #f6d000;
+      --accent-hover: #ffdd33;
       --success: #00ff88;
-      --error: #ff3333;
+      --error: #ff4444;
       --warning: #ffaa00;
+      --invert-text: #000000;
     }
 
     * {
@@ -55,9 +106,6 @@
       font-weight: 400;
       letter-spacing: 0.1em;
       text-transform: lowercase;
-    }
-
-    .logo span {
       color: var(--accent);
     }
 
@@ -94,8 +142,14 @@
       50% { opacity: 0.4; }
     }
 
-    .header-links {
+    .header-actions {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-links {
       display: flex;
       gap: 16px;
     }
@@ -114,6 +168,24 @@
     .header-links a:hover {
       color: var(--text);
       border-bottom-color: var(--accent);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: 1px solid var(--border-dim);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 4px 8px;
+      cursor: pointer;
+      text-transform: lowercase;
+      letter-spacing: 0.05em;
+      transition: all 0.2s ease;
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--accent);
+      color: var(--text);
     }
 
     /* Main content */
@@ -225,7 +297,6 @@
       color: var(--error);
       padding: 12px 16px;
       border: 1px solid var(--error);
-      background: rgba(255, 51, 51, 0.05);
     }
 
     /* Completion stats */
@@ -299,7 +370,7 @@
     .permission-btn.primary {
       background: var(--accent);
       border-color: var(--accent);
-      color: var(--text);
+      color: var(--invert-text);
     }
 
     .permission-btn.primary:hover {
@@ -347,7 +418,7 @@
       padding: 12px 24px;
       border: 1px solid var(--accent);
       background: var(--accent);
-      color: var(--text);
+      color: var(--invert-text);
       font-family: inherit;
       font-size: 12px;
       letter-spacing: 0.1em;
@@ -422,7 +493,7 @@
       font-weight: 400;
       letter-spacing: 0.1em;
       margin-bottom: 8px;
-      color: var(--text);
+      color: var(--accent);
     }
 
     .empty-state p {
@@ -433,15 +504,18 @@
 </head>
 <body>
   <header>
-    <div class="logo">vers <span>shell</span></div>
+    <div class="logo">vers shell</div>
     <div class="status">
       <div class="status-indicator" id="status-indicator"></div>
       <span id="status-text">connecting</span>
     </div>
-    <div class="header-links">
-      <a href="/" target="_blank">app</a>
-      <a href="/health" target="_blank">health</a>
-      <a href="/metrics" target="_blank">metrics</a>
+    <div class="header-actions">
+      <div class="header-links">
+        <a href="/" target="_blank">app</a>
+        <a href="/health" target="_blank">health</a>
+        <a href="/metrics" target="_blank">metrics</a>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle theme">theme</button>
     </div>
   </header>
 
@@ -469,11 +543,39 @@
     const promptInput = document.getElementById('prompt-input');
     const sendBtn = document.getElementById('send-btn');
     const inputForm = document.getElementById('input-form');
+    const themeToggle = document.getElementById('theme-toggle');
 
     let eventSource = null;
     let isWorking = false;
     let currentTextElement = null;
     let typingIndicator = null;
+
+    // Theme management
+    function getTheme() {
+      return localStorage.getItem('vers-theme') || 'system';
+    }
+
+    function setTheme(theme) {
+      localStorage.setItem('vers-theme', theme);
+      applyTheme(theme);
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.classList.remove('light', 'dark');
+      if (theme === 'light' || theme === 'dark') {
+        document.documentElement.classList.add(theme);
+      }
+      // 'system' uses media query, no class needed
+    }
+
+    function cycleTheme() {
+      const current = getTheme();
+      const next = current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system';
+      setTheme(next);
+    }
+
+    themeToggle.addEventListener('click', cycleTheme);
+    applyTheme(getTheme());
 
     function connect() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -495,9 +597,7 @@
         setTimeout(connect, 3000);
       };
 
-      eventSource.addEventListener('connected', () => {
-        // Connected silently
-      });
+      eventSource.addEventListener('connected', () => {});
 
       eventSource.addEventListener('notification', (e) => {
         const data = JSON.parse(e.data);
