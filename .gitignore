@@ -45,3 +45,6 @@ result
 
 # Local docs/scratchpads - Claude artifacts can clutter the commit tree
 docs/
+
+# Claude working directory - tmp space for sketching/iteration
+claude/

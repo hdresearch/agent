@@ -13,6 +13,15 @@ import { getSessionUsage, formatTokens as formatTokensUsage } from "../../utils/
 // Standalone API for VM operations (works without HTTP server)
 import * as api from "../../api/standalone";
 
+// Canvas for tree visualization
+import {
+  refreshTree,
+  flattenTree,
+  STATUS_ICONS,
+  type TreeNode,
+  type TreeState,
+} from "../../canvas";
+
 export interface CommandHandlerContext {
   client: HttpAcpClient | null;
   sessionConfig: SessionConfig;
@@ -156,6 +165,13 @@ export function handleSlashCommand(
     case "vm:run":
       handleVm(parts, ctx).catch(err => {
         ctx.addOutput({ type: "error", content: `VM error: ${err.message}` });
+      });
+      return { handled: true };
+
+    case "tree":
+    case "t":
+      handleTree(ctx).catch(err => {
+        ctx.addOutput({ type: "error", content: `Tree error: ${err.message}` });
       });
       return { handled: true };
 
@@ -1334,4 +1350,118 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
   ctx.addOutput({ type: "system", content: "  /vm:run <prompt>      - Fire prompt to all VMs" });
   ctx.addOutput({ type: "system", content: "" });
   ctx.addOutput({ type: "system", content: "Space-separated format also works: /vm new, /vm branch <id>, etc." });
+}
+
+// ============================================================
+// Tree Command
+// ============================================================
+
+/**
+ * Format duration in human-readable form
+ */
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
+}
+
+/**
+ * Render tree node as text with clickable links
+ */
+function renderNode(
+  node: TreeNode,
+  prefix: string,
+  isLast: boolean,
+  isRoot: boolean
+): string[] {
+  const lines: string[] = [];
+  const icon = STATUS_ICONS[node.status];
+  const duration = formatDuration(node.durationMs);
+
+  // Tree connector
+  const connector = isRoot ? "" : (isLast ? "└──" : "├──");
+  // For root, children use the same prefix; for non-root, add tree lines
+  const childPrefix = isRoot ? prefix : prefix + (isLast ? "   " : "│  ");
+
+  // Main line
+  const mainLine = `${prefix}${connector}${icon} [${node.shortId}] ${node.approach || node.task || "VM"}  ${node.status}  ${duration}`;
+  lines.push(mainLine);
+
+  // Links line - OSC 8 hyperlinks for clickable URLs
+  const shellLink = `\x1b]8;;${node.shellUrl}\x1b\\🔗 /shell\x1b]8;;\x1b\\`;
+  const appLink = `\x1b]8;;${node.appUrl}\x1b\\🌐 /app\x1b]8;;\x1b\\`;
+
+  if (isRoot) {
+    // Full URLs for root
+    const fullShellLink = `\x1b]8;;${node.shellUrl}\x1b\\🔗 ${node.shellUrl}\x1b]8;;\x1b\\`;
+    const fullAppLink = `\x1b]8;;${node.appUrl}\x1b\\🌐 ${node.appUrl}\x1b]8;;\x1b\\`;
+    lines.push(`${childPrefix}│  ${fullShellLink}`);
+    lines.push(`${childPrefix}│  ${fullAppLink}`);
+  } else {
+    lines.push(`${childPrefix}${shellLink}  ${appLink}`);
+  }
+
+  // Activity/error line
+  if (node.error) {
+    lines.push(`${childPrefix}└─ ❌ ${node.error}`);
+  } else if (node.lastActivity && node.status === "busy") {
+    lines.push(`${childPrefix}└─ ${node.lastActivity}`);
+  }
+
+  // Render children
+  for (let i = 0; i < node.children.length; i++) {
+    const child = node.children[i]!;
+    const isChildLast = i === node.children.length - 1;
+    const childLines = renderNode(child, childPrefix, isChildLast, false);
+    lines.push(...childLines);
+  }
+
+  return lines;
+}
+
+/**
+ * Handle /tree command - show VM branch tree with links
+ */
+async function handleTree(ctx: CommandHandlerContext): Promise<void> {
+  ctx.addOutput({ type: "system", content: "" });
+  ctx.addOutput({ type: "system", content: "┌─ Vers Canvas: Branch Tree ─────────────────────────────────────" });
+  ctx.addOutput({ type: "system", content: "│" });
+
+  try {
+    const state = await refreshTree();
+
+    if (state.totalVms === 0) {
+      ctx.addOutput({ type: "system", content: "│  No VMs found." });
+      ctx.addOutput({ type: "system", content: "│  Use /vm:new to create a VM, or the orchestrator API." });
+    } else {
+      // Render each root tree
+      for (const root of state.roots) {
+        const lines = renderNode(root, "│  ", false, true);
+        for (const line of lines) {
+          ctx.addOutput({ type: "system", content: line });
+        }
+        ctx.addOutput({ type: "system", content: "│" });
+      }
+
+      // Stats line
+      const stats = `${state.totalVms} VMs • ${state.runningCount} running • ${state.completedCount} done • ${state.failedCount} failed`;
+      ctx.addOutput({ type: "system", content: `│  ${stats}` });
+    }
+  } catch (err) {
+    ctx.addOutput({ type: "error", content: `│  Failed to load tree: ${err}` });
+  }
+
+  ctx.addOutput({ type: "system", content: "│" });
+  ctx.addOutput({ type: "system", content: "├───────────────────────────────────────────────────────────────" });
+  ctx.addOutput({ type: "system", content: "│  Links are clickable in supported terminals (iTerm2, VSCode, etc.)" });
+  ctx.addOutput({ type: "system", content: "└───────────────────────────────────────────────────────────────" });
+  ctx.addOutput({ type: "system", content: "" });
 }

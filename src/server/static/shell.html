@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vers Shell</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-secondary: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --cyan: #39c5cf;
+      --magenta: #bc8cff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+
+    .status-dot.connected {
+      background: var(--green);
+    }
+
+    .status-dot.busy {
+      background: var(--yellow);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .links {
+      margin-left: auto;
+      display: flex;
+      gap: 12px;
+    }
+
+    .links a {
+      color: var(--text-dim);
+      text-decoration: none;
+    }
+
+    .links a:hover {
+      color: var(--accent);
+    }
+
+    main {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .message {
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .message.text {
+      color: var(--text);
+    }
+
+    .message.tool {
+      color: var(--cyan);
+      background: rgba(57, 197, 207, 0.1);
+      padding: 8px 12px;
+      border-radius: 4px;
+      border-left: 3px solid var(--cyan);
+    }
+
+    .message.tool-result {
+      color: var(--text-dim);
+      background: var(--bg-secondary);
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-left: 16px;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .message.error {
+      color: var(--red);
+      background: rgba(248, 81, 73, 0.1);
+      padding: 8px 12px;
+      border-radius: 4px;
+      border-left: 3px solid var(--red);
+    }
+
+    .message.system {
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    .message.completed {
+      color: var(--green);
+      padding: 8px 12px;
+      background: rgba(63, 185, 80, 0.1);
+      border-radius: 4px;
+    }
+
+    .permission-request {
+      background: var(--bg-secondary);
+      border: 1px solid var(--yellow);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .permission-request h3 {
+      color: var(--yellow);
+      margin-bottom: 8px;
+    }
+
+    .permission-request .options {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .permission-request button {
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .permission-request button:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent);
+    }
+
+    .permission-request button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+
+    #input-area {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+    }
+
+    #input-form {
+      display: flex;
+      gap: 8px;
+    }
+
+    #prompt-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+
+    #prompt-input:focus {
+      border-color: var(--accent);
+    }
+
+    #prompt-input:disabled {
+      opacity: 0.5;
+    }
+
+    #send-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #000;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    #send-btn:hover {
+      opacity: 0.9;
+    }
+
+    #send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--text-dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="logo">vers shell</span>
+    <div class="status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connecting...</span>
+    </div>
+    <div class="links">
+      <a href="/" target="_blank">App</a>
+      <a href="/health" target="_blank">Health</a>
+      <a href="/metrics" target="_blank">Metrics</a>
+    </div>
+  </header>
+
+  <main>
+    <div id="output"></div>
+  </main>
+
+  <div id="input-area">
+    <form id="input-form">
+      <input type="text" id="prompt-input" placeholder="Send a message..." autocomplete="off" disabled>
+      <button type="submit" id="send-btn" disabled>Send</button>
+    </form>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const promptInput = document.getElementById('prompt-input');
+    const sendBtn = document.getElementById('send-btn');
+    const inputForm = document.getElementById('input-form');
+
+    let eventSource = null;
+    let sessionId = null;
+    let isWorking = false;
+    let currentTextElement = null;
+    let pendingPermission = null;
+
+    // Connect to SSE
+    function connect() {
+      // Get token from URL if present
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      const eventsUrl = token ? `/events?token=${token}` : '/events';
+      eventSource = new EventSource(eventsUrl);
+
+      eventSource.onopen = () => {
+        setStatus('connected', 'Connected');
+        promptInput.disabled = false;
+        sendBtn.disabled = false;
+      };
+
+      eventSource.onerror = () => {
+        setStatus('disconnected', 'Disconnected');
+        promptInput.disabled = true;
+        sendBtn.disabled = true;
+        // Try to reconnect
+        setTimeout(connect, 3000);
+      };
+
+      eventSource.addEventListener('connected', () => {
+        appendMessage('system', 'Connected to vers-agent');
+      });
+
+      eventSource.addEventListener('notification', (e) => {
+        const data = JSON.parse(e.data);
+        handleNotification(data);
+      });
+    }
+
+    function setStatus(state, text) {
+      statusDot.className = 'status-dot ' + state;
+      statusText.textContent = text;
+
+      if (state === 'busy') {
+        promptInput.disabled = true;
+        sendBtn.disabled = true;
+      } else if (state === 'connected') {
+        promptInput.disabled = false;
+        sendBtn.disabled = false;
+      }
+    }
+
+    function handleNotification(notification) {
+      const { type, data } = notification;
+
+      switch (type) {
+        case 'content_chunk':
+          handleContentChunk(data);
+          break;
+
+        case 'tool_call':
+          handleToolCall(data);
+          break;
+
+        case 'tool_result':
+          handleToolResult(data);
+          break;
+
+        case 'completed':
+          handleCompleted(data);
+          break;
+
+        case 'failed':
+          handleFailed(data);
+          break;
+
+        case 'cancelled':
+          handleCancelled();
+          break;
+
+        case 'permission_request':
+          handlePermissionRequest(data);
+          break;
+
+        case 'mode_update':
+          if (data.mode === 'plan') {
+            appendMessage('system', 'Entered plan mode');
+          }
+          break;
+      }
+    }
+
+    function handleContentChunk(data) {
+      setStatus('busy', 'Generating...');
+      isWorking = true;
+
+      if (!currentTextElement) {
+        currentTextElement = document.createElement('div');
+        currentTextElement.className = 'message text';
+        output.appendChild(currentTextElement);
+      }
+
+      currentTextElement.textContent += data.text || '';
+      scrollToBottom();
+
+      if (data.final) {
+        currentTextElement = null;
+      }
+    }
+
+    function handleToolCall(data) {
+      setStatus('busy', `Running ${data.toolName || 'tool'}...`);
+      currentTextElement = null;
+
+      const toolEl = document.createElement('div');
+      toolEl.className = 'message tool';
+      toolEl.textContent = `${getToolIcon(data.toolName)} ${data.title || data.toolName}`;
+      output.appendChild(toolEl);
+      scrollToBottom();
+    }
+
+    function handleToolResult(data) {
+      if (data.content) {
+        const resultEl = document.createElement('div');
+        resultEl.className = 'message tool-result';
+        const content = typeof data.content === 'string'
+          ? data.content
+          : JSON.stringify(data.content, null, 2);
+        resultEl.textContent = content.slice(0, 500) + (content.length > 500 ? '...' : '');
+        output.appendChild(resultEl);
+        scrollToBottom();
+      }
+    }
+
+    function handleCompleted(data) {
+      setStatus('connected', 'Connected');
+      isWorking = false;
+      currentTextElement = null;
+
+      const stats = [];
+      if (data.durationMs) stats.push(`${(data.durationMs / 1000).toFixed(1)}s`);
+      if (data.inputTokens) stats.push(`${data.inputTokens} in`);
+      if (data.outputTokens) stats.push(`${data.outputTokens} out`);
+      if (data.totalCostUsd) stats.push(`$${data.totalCostUsd.toFixed(4)}`);
+
+      if (stats.length > 0) {
+        const completeEl = document.createElement('div');
+        completeEl.className = 'message completed';
+        completeEl.textContent = `✓ Completed (${stats.join(' • ')})`;
+        output.appendChild(completeEl);
+        scrollToBottom();
+      }
+    }
+
+    function handleFailed(data) {
+      setStatus('connected', 'Connected');
+      isWorking = false;
+      currentTextElement = null;
+      appendMessage('error', `Error: ${data.error || 'Unknown error'}`);
+    }
+
+    function handleCancelled() {
+      setStatus('connected', 'Connected');
+      isWorking = false;
+      currentTextElement = null;
+      appendMessage('system', 'Cancelled');
+    }
+
+    function handlePermissionRequest(data) {
+      pendingPermission = data;
+
+      const permEl = document.createElement('div');
+      permEl.className = 'permission-request';
+      permEl.id = `perm-${data.requestId}`;
+
+      let html = `<h3>Permission Required</h3>`;
+      if (data.toolCall) {
+        html += `<p>${data.toolCall.title || data.toolCall.toolName}</p>`;
+      }
+      html += `<div class="options">`;
+
+      if (data.options) {
+        for (const opt of data.options) {
+          const isPrimary = opt.id === 'allow' || opt.id === 'yes';
+          html += `<button class="${isPrimary ? 'primary' : ''}" onclick="respondPermission('${data.requestId}', '${opt.id}')">${opt.label}</button>`;
+        }
+      } else {
+        html += `<button class="primary" onclick="respondPermission('${data.requestId}', 'allow')">Allow</button>`;
+        html += `<button onclick="respondPermission('${data.requestId}', 'deny')">Deny</button>`;
+      }
+
+      html += `</div>`;
+      permEl.innerHTML = html;
+      output.appendChild(permEl);
+      scrollToBottom();
+    }
+
+    async function respondPermission(requestId, optionId) {
+      const permEl = document.getElementById(`perm-${requestId}`);
+      if (permEl) {
+        permEl.remove();
+      }
+
+      try {
+        await rpc('permission/respond', { requestId, optionId });
+      } catch (err) {
+        appendMessage('error', `Failed to respond: ${err.message}`);
+      }
+
+      pendingPermission = null;
+    }
+
+    function getToolIcon(toolName) {
+      const icons = {
+        Read: '📄',
+        Write: '✏️',
+        Edit: '🔧',
+        Bash: '💻',
+        Glob: '🔍',
+        Grep: '🔎',
+        WebFetch: '🌐',
+        WebSearch: '🔍',
+        Task: '📋',
+      };
+      return icons[toolName] || '⚡';
+    }
+
+    function appendMessage(type, text) {
+      const el = document.createElement('div');
+      el.className = `message ${type}`;
+      el.textContent = text;
+      output.appendChild(el);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      output.scrollTop = output.scrollHeight;
+    }
+
+    // RPC helper
+    async function rpc(method, params = {}) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/rpc', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method,
+          params,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      return result.result;
+    }
+
+    // Handle form submission
+    inputForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const text = promptInput.value.trim();
+      if (!text || isWorking) return;
+
+      promptInput.value = '';
+      appendMessage('system', `> ${text}`);
+      setStatus('busy', 'Sending...');
+
+      try {
+        await rpc('session/prompt', { text });
+      } catch (err) {
+        appendMessage('error', `Failed to send: ${err.message}`);
+        setStatus('connected', 'Connected');
+      }
+    });
+
+    // Start connection
+    connect();
+  </script>
+</body>
+</html>

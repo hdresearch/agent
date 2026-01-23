@@ -1230,7 +1230,7 @@ async function handleRequest(req: Request): Promise<Response> {
     return Response.json({
       service: "vers-agent",
       version: "0.1.0",
-      endpoints: ["/health", "/rpc", "/events", "/events/vms", "/logs"]
+      endpoints: ["/health", "/rpc", "/events", "/events/vms", "/logs", "/shell"]
     }, { headers: corsHeaders });
   }
 
@@ -1305,6 +1305,18 @@ async function handleRequest(req: Request): Promise<Response> {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+      },
+    });
+  }
+
+  // Shell UI - web interface for vers-agent
+  if (url.pathname === "/shell" && req.method === "GET") {
+    const shellPath = new URL("./static/shell.html", import.meta.url).pathname;
+    const shellHtml = await Bun.file(shellPath).text();
+    return new Response(shellHtml, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/html; charset=utf-8",
       },
     });
   }
