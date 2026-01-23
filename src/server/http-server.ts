@@ -1009,9 +1009,9 @@ function tryCreateServer(port: number): ReturnType<typeof Bun.serve> | null {
 }
 
 // Route classification
+// PUBLIC: Open to everyone (customers, public)
+// PROTECTED: Requires VERS_API_KEY (engineers with full control)
 const PUBLIC_ROUTES = new Set(["/", "/health"]);
-const ADMIN_ROUTES = new Set(["/logs", "/metrics", "/commands", "/events/vms"]);
-// All other routes are USER routes (require user auth)
 
 // Shared request handler
 async function handleRequest(req: Request): Promise<Response> {
@@ -1050,38 +1050,14 @@ async function handleRequest(req: Request): Promise<Response> {
         version: "0.1.0",
         endpoints: {
           public: ["/", "/health"],
-          user: ["/shell", "/rpc", "/events", "/claim"],
-          admin: ["/logs", "/metrics", "/commands", "/events/vms"],
+          protected: ["/shell", "/rpc", "/events", "/claim", "/logs", "/metrics", "/commands", "/events/vms"],
         },
       }, { headers: corsHeaders });
     }
   }
 
-  // === ADMIN ROUTES (localhost only, or admin token) ===
-  if (ADMIN_ROUTES.has(pathname)) {
-    const adminToken = req.headers.get("X-Admin-Token");
-    const expectedAdminToken = process.env.VERS_ADMIN_TOKEN;
-
-    // Admin routes require localhost OR valid admin token
-    if (!isLocal) {
-      if (!expectedAdminToken) {
-        return Response.json({
-          error: "Admin access denied",
-          message: "Admin endpoints are localhost-only. Set VERS_ADMIN_TOKEN to enable remote admin access.",
-        }, { status: 403, headers: corsHeaders });
-      }
-      if (adminToken !== expectedAdminToken) {
-        return Response.json({
-          error: "Admin access denied",
-          message: "Invalid or missing X-Admin-Token header",
-        }, { status: 403, headers: corsHeaders });
-      }
-    }
-    // Fall through to handle the admin route
-  }
-
-  // === USER ROUTES (require user auth unless localhost) ===
-  if (!PUBLIC_ROUTES.has(pathname) && !ADMIN_ROUTES.has(pathname)) {
+  // === PROTECTED ROUTES (require VERS_API_KEY unless localhost) ===
+  if (!PUBLIC_ROUTES.has(pathname)) {
     // Claim endpoint has special handling
     if (pathname === "/claim" && req.method === "POST") {
       const providedKey = getAuthToken(req);
@@ -1134,7 +1110,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }, { status: 401, headers: corsHeaders });
     }
 
-    // All other user routes require auth (if configured) unless localhost
+    // All protected routes require VERS_API_KEY (unless localhost)
     if (hasAuth() && !isLocal) {
       const providedKey = getAuthToken(req);
       if (!providedKey) {
