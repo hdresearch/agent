@@ -230,9 +230,12 @@ function runFlagMode() {
   const installSkills = args.includes("--install-skills");
   const mcpMode = args.includes("--mcp");
   const mcpInstall = args.includes("--mcp-install");
-  const cliOnly = args.includes("--cli");
-  // Default to server-only mode (no interactive CLI)
-  const serverOnly = !cliOnly;
+  const cliMode = args.includes("--cli");
+  const serverMode = args.includes("--server");
+  // --cli = server + interactive CLI (the full experience)
+  // --server = server only (daemon mode, no CLI)
+  // default (no flags) = server + interactive CLI
+  const serverOnly = serverMode && !cliMode;
   const forceNewSession = args.includes("--new") || args.includes("-n");
   const continueSession = !forceNewSession; // Continue is now the default
   const forceLocal = args.includes("--local");
@@ -331,13 +334,14 @@ Commands:
 Options:
   --version, -v     Show version
   --update [channel] Self-update (default: nightly, or specify version like v0.2.0)
-  --cli             Run interactive CLI (connects to HTTP server)
+  --server          Run HTTP server only (daemon mode, no interactive CLI)
+  --cli             Run interactive CLI with server (same as default)
   --mcp             Run as MCP server (stdio transport for Claude integration)
   --url <url>       Connect CLI to remote server (e.g., --url http://192.168.1.100:9999)
   --local           Force local mode (clears saved remote server)
   --new, -n         Start a fresh session (default: continue last session)
   --install-skills  Install bundled skills to ~/.claude/skills/
-  (default)         Run HTTP server only (no interactive CLI)
+  (default)         Run HTTP server with interactive CLI
 
 Environment:
   PORT              HTTP server port (default: 9999)
@@ -350,8 +354,8 @@ Protocol:
   - GET /events     SSE stream for notifications
 
 Examples:
-  vers-agent                        # Start HTTP server (default)
-  vers-agent --cli                  # Start interactive CLI
+  vers-agent                        # Start server + interactive CLI (default)
+  vers-agent --server               # Start HTTP server only (daemon mode)
   vers-agent run "fix the bug"      # Send prompt and stream response
   vers-agent vms                    # List VMs
   vers-agent vm create "task"       # Create a new VM
@@ -430,10 +434,7 @@ Example:
         console.log(`Using Claude Code: ${claudePath}`);
       }
 
-      if (cliOnly) {
-        // CLI only (connects to local HTTP server)
-        await runCli({ continueSession, serverUrl: `http://localhost:${PORT}` });
-      } else if (serverOnly) {
+      if (serverOnly) {
         // HTTP server only (daemon mode)
         const server = createHttpServer(PORT);
 

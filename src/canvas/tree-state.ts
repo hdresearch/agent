@@ -276,5 +276,5 @@ function mapEventToNodeUpdates(
 // Utility exports
 // ============================================================
 
-export { buildTree, updateNode, flattenTree, findNode, getSiblings } from "./tree-builder";
-export type { VmInfo } from "./tree-builder";
+export { buildTree, updateNode, flattenTree, findNode, getSiblings, getFocusedTree } from "./tree-builder";
+export type { VmInfo, FocusedTree } from "./tree-builder";

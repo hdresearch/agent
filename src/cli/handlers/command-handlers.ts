@@ -38,6 +38,7 @@ export interface CommandHandlerContext {
   currentServerUrl?: string;
   agentCommands?: AvailableCommandData[];
   setShowTreeView?: (show: boolean) => void;
+  showBranchPopup?: (vmId: string) => void;
 }
 
 export type CommandResult = {
@@ -1195,6 +1196,8 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
       ctx.addOutput({ type: "system", content: `  Agent URL: ${result.agentUrl}` });
       ctx.addOutput({ type: "system", content: "" });
       ctx.addOutput({ type: "system", content: `Connect to it: /vm connect ${result.vmId.slice(0, 8)}` });
+      // Show branch popup
+      ctx.showBranchPopup?.(result.vmId);
     } catch (err) {
       ctx.addOutput({ type: "error", content: `Failed to create VM: ${err}` });
     }
@@ -1221,6 +1224,8 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
         const result = await api.branchVmById(vm.vmId);
         ctx.addOutput({ type: "system", content: `✓ Branched VM: ${result.vmId.slice(0, 8)}` });
         ctx.addOutput({ type: "system", content: `  Parent: ${result.parentId.slice(0, 8)}` });
+        // Show branch popup
+        ctx.showBranchPopup?.(result.vmId);
       } else {
         ctx.addOutput({ type: "system", content: `Creating ${count} branches from ${vmId.slice(0, 8)}...` });
         ctx.addOutput({ type: "system", content: "" });
@@ -1245,6 +1250,11 @@ async function handleVm(parts: string[], ctx: CommandHandlerContext): Promise<vo
         ctx.addOutput({ type: "system", content: `Created ${succeeded}/${count} branches` });
         if (succeeded > 0) {
           ctx.addOutput({ type: "system", content: `Run prompts: /vm:run <prompt>` });
+          // Show branch popup for first successful branch
+          const firstSuccess = results.find(r => r.status === "fulfilled") as PromiseFulfilledResult<{ vmId: string }> | undefined;
+          if (firstSuccess) {
+            ctx.showBranchPopup?.(firstSuccess.value.vmId);
+          }
         }
       }
     } catch (err) {

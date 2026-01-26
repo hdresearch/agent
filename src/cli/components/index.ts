@@ -8,3 +8,4 @@ export { CommandSuggestions, shouldShowCommandSuggestions } from "./command-sugg
 export { PathSuggestions } from "./path-suggestions";
 export { InputBar } from "./input-bar";
 export { BranchTree } from "./branch-tree";
+export { BranchPopup } from "./branch-popup";

@@ -319,7 +319,7 @@ export function OutputArea({ lines, maxLines = 20, scrollOffset = 0, maxToolsVis
               <Text wrap="wrap">{textLines[0] || ""}</Text>
             </Box>
             {textLines.slice(1).map((textLine, idx) => (
-              <Box key={idx}>
+              <Box key={`${line.id}-line-${idx}`}>
                 <Text wrap="wrap">{"   "}{textLine}</Text>
               </Box>
             ))}

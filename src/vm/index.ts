@@ -5,6 +5,10 @@
 
 import Vers, { withSSH, type VmResourceWithSSH, type ExecuteResult } from "vers";
 import type { Vm, VmCreateRootParams } from "vers/resources/vm";
+import { writeFileSync, unlinkSync, chmodSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { randomUUID } from "crypto";
 
 // Re-export VM path constants for convenience
 export { VM_HOME_DIR, VM_AGENT_DIR, VM_VERS_AGENT_CONFIG_DIR } from "./constants";
@@ -12,6 +16,9 @@ export { VM_HOME_DIR, VM_AGENT_DIR, VM_VERS_AGENT_CONFIG_DIR } from "./constants
 // Initialize client once
 const client = new Vers();
 const vm: VmResourceWithSSH = withSSH(client.vm);
+
+// Cache for SSH keys (in-memory, per-process)
+const sshKeyCache = new Map<string, string>();
 
 // Re-export types we need
 export type { Vm, ExecuteResult };
@@ -90,24 +97,139 @@ export async function listVms(): Promise<Vm[]> {
 }
 
 /**
+ * Get SSH key for a VM (with caching)
+ */
+async function getSSHKey(vmId: string): Promise<string> {
+  let key = sshKeyCache.get(vmId);
+  if (!key) {
+    const response = await client.vm.getSSHKey(vmId);
+    key = response.ssh_private_key;
+    sshKeyCache.set(vmId, key);
+  }
+  return key;
+}
+
+/**
+ * Execute a command on a VM via system SSH (fallback for ed25519 key support)
+ */
+async function executeViaSystemSSH(
+  vmId: string,
+  command: string
+): Promise<ExecuteResult> {
+  const privateKey = await getSSHKey(vmId);
+  const keyFile = join(tmpdir(), `vers-ssh-${randomUUID()}`);
+
+  try {
+    // Write key to temp file with secure permissions
+    writeFileSync(keyFile, privateKey, { mode: 0o600 });
+    chmodSync(keyFile, 0o600);
+
+    const hostname = `${vmId}.vm.vers.sh`;
+
+    // Use system SSH via ProxyCommand for TLS tunnel (port 443)
+    // The vers SSH protocol runs SSH over TLS on port 443
+    const result = Bun.spawnSync([
+      "ssh",
+      "-i", keyFile,
+      "-o", "StrictHostKeyChecking=no",
+      "-o", "UserKnownHostsFile=/dev/null",
+      "-o", `ProxyCommand=openssl s_client -quiet -connect %h:443 -servername %h 2>/dev/null`,
+      "-o", "LogLevel=ERROR",
+      `root@${hostname}`,
+      command
+    ], {
+      timeout: 60000,
+    });
+
+    return {
+      stdout: result.stdout?.toString() ?? "",
+      stderr: result.stderr?.toString() ?? "",
+      exitCode: result.exitCode ?? 1,
+    };
+  } finally {
+    // Clean up temp key file
+    try { unlinkSync(keyFile); } catch {}
+  }
+}
+
+/**
  * Execute a command on a VM via SSH
+ * Tries the SDK's ssh2 library first, falls back to system SSH for ed25519 keys
  */
 export async function execute(
   vmId: string,
   command: string
 ): Promise<ExecuteResult> {
-  return vm.execute(vmId, command);
+  try {
+    return await vm.execute(vmId, command);
+  } catch (err) {
+    // If ssh2 fails with ed25519 error, fall back to system SSH
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("ed25519") || message.includes("Cannot parse privateKey")) {
+      return executeViaSystemSSH(vmId, command);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Upload a file to a VM via system SCP (fallback for ed25519 key support)
+ */
+async function uploadViaSystemSCP(
+  vmId: string,
+  localPath: string,
+  remotePath: string
+): Promise<void> {
+  const privateKey = await getSSHKey(vmId);
+  const keyFile = join(tmpdir(), `vers-ssh-${randomUUID()}`);
+
+  try {
+    writeFileSync(keyFile, privateKey, { mode: 0o600 });
+    chmodSync(keyFile, 0o600);
+
+    const hostname = `${vmId}.vm.vers.sh`;
+
+    // Use scp with ProxyCommand for TLS tunnel
+    const result = Bun.spawnSync([
+      "scp",
+      "-i", keyFile,
+      "-o", "StrictHostKeyChecking=no",
+      "-o", "UserKnownHostsFile=/dev/null",
+      "-o", `ProxyCommand=openssl s_client -quiet -connect %h:443 -servername %h 2>/dev/null`,
+      "-o", "LogLevel=ERROR",
+      localPath,
+      `root@${hostname}:${remotePath}`
+    ], {
+      timeout: 120000,
+    });
+
+    if (result.exitCode !== 0) {
+      throw new Error(`SCP failed: ${result.stderr?.toString()}`);
+    }
+  } finally {
+    try { unlinkSync(keyFile); } catch {}
+  }
 }
 
 /**
  * Upload a file to a VM
+ * Tries the SDK's ssh2 library first, falls back to system SCP for ed25519 keys
  */
 export async function upload(
   vmId: string,
   localPath: string,
   remotePath: string
 ): Promise<void> {
-  await vm.upload(vmId, localPath, remotePath);
+  try {
+    await vm.upload(vmId, localPath, remotePath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("ed25519") || message.includes("Cannot parse privateKey")) {
+      await uploadViaSystemSCP(vmId, localPath, remotePath);
+      return;
+    }
+    throw err;
+  }
 }
 
 /**

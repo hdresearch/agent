@@ -272,3 +272,29 @@ export function getSiblings(state: TreeState, vmId: string): TreeNode[] {
 
   return parent.children.filter((c) => c.vmId !== vmId);
 }
+
+/**
+ * Result of getFocusedTree - shows context around current VM
+ */
+export interface FocusedTree {
+  parent: TreeNode | null;
+  current: TreeNode;
+  children: TreeNode[];
+}
+
+/**
+ * Get focused tree view: parent + current + direct children only
+ * Used by canvas to show just the immediate context around the current VM
+ */
+export function getFocusedTree(state: TreeState, currentVmId: string): FocusedTree | null {
+  const current = state.nodeMap.get(currentVmId);
+  if (!current) return null;
+
+  const parent = current.parentId ? state.nodeMap.get(current.parentId) || null : null;
+
+  return {
+    parent,
+    current,
+    children: current.children,
+  };
+}

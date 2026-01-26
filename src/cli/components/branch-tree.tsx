@@ -26,11 +26,15 @@ function TerminalLink({ url, children }: { url: string; children: React.ReactNod
 import {
   type TreeState,
   type TreeNode,
+  type FocusedTree,
   STATUS_ICONS,
   STATUS_COLORS,
   subscribeToTreeState,
   selectNode,
   refreshTree,
+  startListening,
+  stopListening,
+  getFocusedTree,
 } from "../../canvas";
 
 interface BranchTreeProps {
@@ -40,6 +44,8 @@ interface BranchTreeProps {
   onAction?: (action: string, vmId: string) => void;
   /** Show compact view (less detail) */
   compact?: boolean;
+  /** VM ID to focus on (shows only parent + this VM + direct children) */
+  focusVmId?: string;
 }
 
 /**
@@ -114,7 +120,7 @@ function TreeNodeRow({
           </TerminalLink>
           <Text>  </Text>
           <TerminalLink url={node.appUrl}>
-            <Text color="magenta">🌐 /app</Text>
+            <Text color="magenta">🌐 /</Text>
           </TerminalLink>
         </Box>
       )}
@@ -229,35 +235,60 @@ function RootNodeRow({
 }
 
 /**
- * Main branch tree component
+ * Get the VM to focus on - either provided, first busy, or first root
  */
-export function BranchTree({ onClose, onAction, compact }: BranchTreeProps) {
+function getAutoFocusVmId(state: TreeState): string | null {
+  // First, try to find a busy VM
+  for (const node of state.nodeMap.values()) {
+    if (node.status === "busy" || node.status === "starting") {
+      return node.vmId;
+    }
+  }
+  // Fall back to first root
+  if (state.roots.length > 0) {
+    return state.roots[0].vmId;
+  }
+  return null;
+}
+
+/**
+ * Main branch tree component
+ * Shows focused view: parent + current VM + direct children
+ */
+export function BranchTree({ onClose, onAction, compact, focusVmId }: BranchTreeProps) {
   const [state, setState] = useState<TreeState | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Subscribe to tree state
+  // Subscribe to tree state and start listening for updates
   useEffect(() => {
     const unsubscribe = subscribeToTreeState((event) => {
       setState(event.state);
     });
 
-    // Initial refresh
-    refreshTree().catch(() => {});
+    // Start listening (enables 30s polling + VM event subscription)
+    startListening();
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      stopListening();
+    };
   }, []);
 
   // Handle keyboard input
   useInput((input, key) => {
     if (!state) return;
 
-    // Get flat list of nodes for navigation
+    // Get focused tree for navigation
+    const effectiveFocusVmId = focusVmId || getAutoFocusVmId(state);
+    const focused = effectiveFocusVmId ? getFocusedTree(state, effectiveFocusVmId) : null;
+
+    // Build flat list from focused nodes only
     const allNodes: TreeNode[] = [];
-    function collectNodes(node: TreeNode) {
-      allNodes.push(node);
-      node.children.forEach(collectNodes);
+    if (focused) {
+      if (focused.parent) allNodes.push(focused.parent);
+      allNodes.push(focused.current);
+      allNodes.push(...focused.children);
     }
-    state.roots.forEach(collectNodes);
 
     if (key.upArrow) {
       setSelectedIndex((prev) => Math.max(0, prev - 1));
@@ -297,13 +328,17 @@ export function BranchTree({ onClose, onAction, compact }: BranchTreeProps) {
     );
   }
 
-  // Get flat list for selection tracking
+  // Determine focus VM
+  const effectiveFocusVmId = focusVmId || getAutoFocusVmId(state);
+  const focused = effectiveFocusVmId ? getFocusedTree(state, effectiveFocusVmId) : null;
+
+  // Build flat list for navigation (only focused nodes: parent + current + children)
   const allNodes: TreeNode[] = [];
-  function collectNodes(node: TreeNode) {
-    allNodes.push(node);
-    node.children.forEach(collectNodes);
+  if (focused) {
+    if (focused.parent) allNodes.push(focused.parent);
+    allNodes.push(focused.current);
+    allNodes.push(...focused.children);
   }
-  state.roots.forEach(collectNodes);
 
   const selectedVmId = allNodes[selectedIndex]?.vmId;
 
@@ -311,24 +346,94 @@ export function BranchTree({ onClose, onAction, compact }: BranchTreeProps) {
     <Box flexDirection="column" borderStyle="round" borderColor="gray" padding={1}>
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold color="cyan">Vers Canvas: Branch Tree</Text>
+        <Text bold color="cyan">Vers Canvas</Text>
         <Text>  </Text>
         <Text dimColor>
           {state.totalVms} VMs • {state.runningCount} running • {state.completedCount} done • {state.failedCount} failed
         </Text>
       </Box>
 
-      {/* Tree */}
-      <Box flexDirection="column">
-        {state.roots.map((root) => (
-          <RootNodeRow
-            key={root.vmId}
-            node={root}
-            isSelected={root.vmId === selectedVmId}
-            compact={compact}
-          />
-        ))}
-      </Box>
+      {/* Focused Tree View: parent + current + children */}
+      {focused ? (
+        <Box flexDirection="column">
+          {/* Parent (if exists) */}
+          {focused.parent && (
+            <Box>
+              <Text color={STATUS_COLORS[focused.parent.status]}>{STATUS_ICONS[focused.parent.status]}</Text>
+              <Text> </Text>
+              <Text dimColor>[{focused.parent.shortId}]</Text>
+              <Text> </Text>
+              <Text dimColor>{focused.parent.task || focused.parent.approach || "parent"}</Text>
+              <Text dimColor>  ↑ parent</Text>
+            </Box>
+          )}
+
+          {/* Current VM (highlighted) */}
+          <Box marginLeft={focused.parent ? 2 : 0}>
+            <Text>{focused.parent ? "└── " : ""}</Text>
+            <Text color={STATUS_COLORS[focused.current.status]}>{STATUS_ICONS[focused.current.status]}</Text>
+            <Text> </Text>
+            <Text bold backgroundColor={focused.current.vmId === selectedVmId ? "blue" : undefined}>
+              [{focused.current.shortId}]
+            </Text>
+            <Text> </Text>
+            <Text bold>{focused.current.task || focused.current.approach || "current"}</Text>
+            <Text>  </Text>
+            <Text color={STATUS_COLORS[focused.current.status]}>{focused.current.status}</Text>
+            <Text>  </Text>
+            <Text dimColor>{formatDuration(focused.current.durationMs)}</Text>
+          </Box>
+
+          {/* Current VM links */}
+          {!compact && (
+            <Box marginLeft={focused.parent ? 6 : 4}>
+              <TerminalLink url={focused.current.shellUrl}>
+                <Text color="cyan">🔗 /shell</Text>
+              </TerminalLink>
+              <Text>  </Text>
+              <TerminalLink url={focused.current.appUrl}>
+                <Text color="magenta">🌐 /</Text>
+              </TerminalLink>
+            </Box>
+          )}
+
+          {/* Activity/error for current */}
+          {!compact && (focused.current.lastActivity || focused.current.error) && (
+            <Box marginLeft={focused.parent ? 6 : 4}>
+              {focused.current.error ? (
+                <Text color="red">{focused.current.error}</Text>
+              ) : (
+                <Text dimColor>{focused.current.lastActivity}</Text>
+              )}
+            </Box>
+          )}
+
+          {/* Children */}
+          {focused.children.length > 0 && (
+            <Box flexDirection="column" marginLeft={focused.parent ? 6 : 4} marginTop={1}>
+              <Text dimColor>↓ {focused.children.length} child{focused.children.length !== 1 ? "ren" : ""}</Text>
+              {focused.children.map((child, idx) => (
+                <Box key={child.vmId}>
+                  <Text>{idx === focused.children.length - 1 ? "└── " : "├── "}</Text>
+                  <Text color={STATUS_COLORS[child.status]}>{STATUS_ICONS[child.status]}</Text>
+                  <Text> </Text>
+                  <Text backgroundColor={child.vmId === selectedVmId ? "blue" : undefined}>
+                    [{child.shortId}]
+                  </Text>
+                  <Text> </Text>
+                  <Text dimColor>{child.task || child.approach || "child"}</Text>
+                  <Text>  </Text>
+                  <Text color={STATUS_COLORS[child.status]}>{child.status}</Text>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
+      ) : (
+        <Box>
+          <Text dimColor>No focused VM</Text>
+        </Box>
+      )}
 
       {/* Footer */}
       <Box marginTop={1} borderStyle="single" borderColor="gray" borderTop borderBottom={false} borderLeft={false} borderRight={false}>

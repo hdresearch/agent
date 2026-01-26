@@ -48,3 +48,5 @@ docs/
 
 # Claude working directory - tmp space for sketching/iteration
 claude/
+
+*.bun-build

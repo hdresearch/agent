@@ -1059,6 +1059,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // === PROTECTED ROUTES (require VERS_API_KEY unless localhost) ===
   if (!PUBLIC_ROUTES.has(pathname)) {
     // Claim endpoint has special handling
+    // Returns ClaimResponse: { claimed: boolean, isOwner: boolean, token?: string, error?: string }
     if (pathname === "/claim" && req.method === "POST") {
       const providedKey = getAuthToken(req);
 
@@ -1068,12 +1069,14 @@ async function handleRequest(req: Request): Promise<Response> {
           // Already have a key - verify it matches
           if (verifyApiKey(providedKey)) {
             return Response.json({
-              authenticated: true,
+              claimed: true,
+              isOwner: true,
               message: "API key verified",
             }, { headers: corsHeaders });
           }
           return Response.json({
-            authenticated: false,
+            claimed: true,
+            isOwner: false,
             error: "Invalid API key",
           }, { status: 403, headers: corsHeaders });
         }
@@ -1082,30 +1085,34 @@ async function handleRequest(req: Request): Promise<Response> {
         await setVersApiKey(providedKey);
         info("VERS API key set via /claim endpoint");
         return Response.json({
-          authenticated: true,
+          claimed: true,
+          isOwner: true,
           message: "API key stored successfully",
         }, { headers: corsHeaders });
       }
 
-      // No key provided - check status
-      if (hasAuth()) {
-        return Response.json({
-          authenticated: false,
-          error: "API key required. Provide via Authorization: Bearer <key>",
-        }, { status: 401, headers: corsHeaders });
-      }
-
-      // No auth configured
+      // No key provided - localhost gets automatic access regardless of auth config
       if (isLocal) {
         return Response.json({
-          authenticated: true,
-          local: true,
+          claimed: hasAuth(),
+          isOwner: true,
           message: "Localhost access allowed without API key",
         }, { headers: corsHeaders });
       }
 
+      // Remote access - check if auth is configured
+      if (hasAuth()) {
+        return Response.json({
+          claimed: true,
+          isOwner: false,
+          error: "API key required. Provide via Authorization: Bearer <key>",
+        }, { status: 401, headers: corsHeaders });
+      }
+
+      // Remote access without auth configured - deny
       return Response.json({
-        authenticated: false,
+        claimed: false,
+        isOwner: false,
         error: "API key required. Provide via Authorization: Bearer <key>",
       }, { status: 401, headers: corsHeaders });
     }

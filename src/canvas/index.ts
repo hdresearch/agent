@@ -21,7 +21,9 @@ export {
   flattenTree,
   findNode,
   getSiblings,
+  getFocusedTree,
   type VmInfo,
+  type FocusedTree,
 } from "./tree-builder";
 
 // State management

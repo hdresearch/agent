@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>vers shell</title>
+  <title>vers canvas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -105,18 +105,6 @@
       color: var(--accent);
     }
 
-    .parent-link {
-      color: var(--text-dim);
-      text-decoration: none;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      transition: color 0.2s;
-    }
-
-    .parent-link:hover { color: var(--text); }
-
     .status {
       display: flex;
       align-items: center;
@@ -172,617 +160,22 @@
       color: var(--text);
     }
 
-    .session-stats {
-      font-size: 10px;
-      color: var(--text-dim);
-      display: flex;
-      gap: 10px;
-      margin-left: auto;
-    }
-
-    .session-stat {
-      display: flex;
-      gap: 4px;
-    }
-
-    .session-stat-value {
-      color: var(--text);
-    }
-
-    /* Main content */
-    .main {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px 24px;
-    }
-
-    .main::-webkit-scrollbar { width: 4px; }
-    .main::-webkit-scrollbar-track { background: var(--bg); }
-    .main::-webkit-scrollbar-thumb { background: var(--accent); }
-
-    /* Messages */
-    .message {
-      margin-bottom: 14px;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      animation: fadeIn 0.15s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .message-text { color: var(--text); }
-    .message-system { color: var(--text-dim); font-size: 12px; }
-    .message-user {
-      color: var(--accent);
-      padding-left: 14px;
-      border-left: 2px solid var(--accent);
-    }
-
-    .message-error {
-      color: var(--error);
-      padding: 10px 14px;
-      border: 1px solid var(--error);
-    }
-
-    .message-timestamp {
-      font-size: 10px;
-      color: var(--text-dim);
-      opacity: 0.6;
-      margin-left: 8px;
-    }
-
-    .message:hover .message-timestamp {
-      opacity: 1;
-    }
-
-    .message-wrapper {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
-
-    .message-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    /* Markdown content */
-    .markdown-content h1, .markdown-content h2, .markdown-content h3 {
-      color: var(--accent);
-      margin: 16px 0 8px 0;
-      font-weight: 400;
-    }
-    .markdown-content h1 { font-size: 18px; }
-    .markdown-content h2 { font-size: 16px; }
-    .markdown-content h3 { font-size: 14px; }
-    .markdown-content h1:first-child, .markdown-content h2:first-child, .markdown-content h3:first-child {
-      margin-top: 0;
-    }
-
-    .markdown-content p { margin: 8px 0; }
-    .markdown-content ul, .markdown-content ol { margin: 8px 0; padding-left: 24px; }
-    .markdown-content li { margin: 4px 0; }
-
-    .markdown-content a {
-      color: var(--accent);
-      text-decoration: underline;
-    }
-
-    .markdown-content code {
-      background: var(--bg-elevated);
-      padding: 2px 6px;
-      font-family: inherit;
-      font-size: 13px;
-      border: 1px solid var(--border-dim);
-    }
-
-    .markdown-content pre {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-dim);
-      padding: 12px 14px;
-      margin: 12px 0;
-      overflow-x: auto;
-      position: relative;
-    }
-
-    .markdown-content pre code {
-      background: none;
-      padding: 0;
-      border: none;
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .markdown-content blockquote {
-      border-left: 2px solid var(--border-dim);
-      padding-left: 14px;
-      margin: 12px 0;
-      color: var(--text-dim);
-    }
-
-    .markdown-content table {
-      border-collapse: collapse;
-      margin: 12px 0;
-      width: 100%;
-    }
-
-    .markdown-content th, .markdown-content td {
-      border: 1px solid var(--border-dim);
-      padding: 8px 12px;
-      text-align: left;
-    }
-
-    .markdown-content th {
-      background: var(--bg-elevated);
-      color: var(--accent);
-    }
-
-    /* Highlight.js overrides */
-    .hljs {
-      background: transparent !important;
-      padding: 0 !important;
-    }
-
-    /* Copy button */
-    .copy-btn {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      background: var(--bg);
-      border: 1px solid var(--border-dim);
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 10px;
-      padding: 3px 8px;
-      cursor: pointer;
-      opacity: 0;
-      transition: all 0.15s;
-    }
-
-    .markdown-content pre:hover .copy-btn,
-    .tool-block:hover .copy-btn {
-      opacity: 1;
-    }
-
-    .copy-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .copy-btn.copied {
-      border-color: var(--success);
-      color: var(--success);
-    }
-
-    /* Scroll to bottom button */
-    .scroll-bottom-btn {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: inherit;
-      font-size: 11px;
-      padding: 8px 12px;
-      cursor: pointer;
-      opacity: 0;
-      transform: translateY(10px);
-      transition: all 0.2s;
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .scroll-bottom-btn.visible {
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: auto;
-    }
-
-    .scroll-bottom-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .main-wrapper {
-      position: relative;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Tool blocks */
-    .tool-block {
-      border: 1px solid var(--border-dim);
-      margin: 14px 0;
-    }
-
-    .tool-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border-dim);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-dim);
-    }
-
-    .tool-header.running { border-left: 2px solid var(--accent); }
-    .tool-header.success { border-left: 2px solid var(--success); }
-    .tool-header.error { border-left: 2px solid var(--error); }
-
-    .tool-name { color: var(--text); }
-    .tool-status { margin-left: auto; font-size: 10px; }
-
-    .tool-content {
-      padding: 10px 14px;
-      font-size: 12px;
-      color: var(--text-dim);
-      max-height: 180px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      font-family: inherit;
-    }
-
-    .tool-content.collapsed {
-      max-height: 60px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .tool-content.collapsed::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 30px;
-      background: linear-gradient(transparent, var(--bg));
-    }
-
-    .tool-expand-btn {
-      background: none;
-      border: none;
-      color: var(--accent);
-      font-family: inherit;
-      font-size: 11px;
-      padding: 6px 14px;
-      cursor: pointer;
-      text-align: left;
-      border-top: 1px solid var(--border-dim);
-    }
-
-    .tool-expand-btn:hover {
-      text-decoration: underline;
-    }
-
-    .tool-content-lines {
-      counter-reset: line;
-    }
-
-    .tool-content-line {
-      display: flex;
-      gap: 12px;
-    }
-
-    .tool-content-line::before {
-      counter-increment: line;
-      content: counter(line);
-      color: var(--text-dim);
-      opacity: 0.5;
-      min-width: 24px;
-      text-align: right;
-      user-select: none;
-    }
-
-    .diff-line-add {
-      background: rgba(0, 255, 100, 0.1);
-      color: var(--success);
-    }
-
-    .diff-line-remove {
-      background: rgba(255, 0, 0, 0.1);
-      color: var(--error);
-    }
-
-    /* Command palette */
-    .command-palette-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding-top: 15vh;
-      z-index: 100;
-    }
-
-    .command-palette {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      width: 90%;
-      max-width: 500px;
-      max-height: 60vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .command-palette-input {
-      padding: 14px 16px;
-      border: none;
-      border-bottom: 1px solid var(--border-dim);
-      background: var(--bg);
-      color: var(--text);
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-    }
-
-    .command-palette-input::placeholder {
-      color: var(--text-dim);
-    }
-
-    .command-palette-list {
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .command-palette-item {
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      cursor: pointer;
-      transition: background 0.1s;
-    }
-
-    .command-palette-item:hover,
-    .command-palette-item.selected {
-      background: var(--bg-elevated);
-    }
-
-    .command-palette-item-icon {
-      font-size: 14px;
-      width: 20px;
-      text-align: center;
-    }
-
-    .command-palette-item-label {
-      flex: 1;
-    }
-
-    .command-palette-item-desc {
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-
-    .command-palette-hint {
-      padding: 8px 16px;
-      font-size: 10px;
-      color: var(--text-dim);
-      border-top: 1px solid var(--border-dim);
-    }
-
-    /* Stats */
-    .stats {
-      display: flex;
-      gap: 14px;
-      padding: 10px 14px;
-      border: 1px solid var(--border-dim);
-      font-size: 11px;
-      color: var(--text-dim);
-      margin: 14px 0;
-    }
-
-    .stat { display: flex; gap: 5px; }
-    .stat-value { color: var(--text); }
-
-    /* Permission */
-    .permission {
-      border: 1px solid var(--warning);
-      margin: 14px 0;
-    }
-
-    .permission-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--warning);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--warning);
-    }
-
-    .permission-content { padding: 14px; }
-    .permission-tool { color: var(--text); margin-bottom: 12px; }
-    .permission-actions { display: flex; gap: 10px; }
-
-    .permission-btn {
-      padding: 6px 14px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 11px;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .permission-btn:hover {
-      background: var(--text);
-      color: var(--bg);
-    }
-
-    .permission-btn.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: var(--invert-text);
-    }
-
-    .permission-btn.primary:hover { background: var(--accent-hover); }
-
-    /* Typing indicator */
-    .typing {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--text-dim);
-      font-size: 11px;
-      margin: 14px 0;
-    }
-
-    .typing-dots { display: flex; gap: 3px; }
-
-    .typing-dots span {
-      width: 4px;
-      height: 4px;
-      background: var(--accent);
-      animation: typing 1.4s infinite;
-    }
-
-    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-    @keyframes typing {
-      0%, 60%, 100% { opacity: 0.3; }
-      30% { opacity: 1; }
-    }
-
-    /* Empty state */
-    .empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--text-dim);
-      text-align: center;
-    }
-
-    .empty h2 {
-      font-size: 16px;
-      font-weight: 400;
-      letter-spacing: 0.1em;
-      margin-bottom: 6px;
-      color: var(--accent);
-    }
-
-    .empty p { font-size: 12px; }
-
-    /* Children bar */
-    .children-bar {
-      border-top: 1px solid var(--border-dim);
-      padding: 10px 24px;
-      background: var(--bg-elevated);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 11px;
-      flex-shrink: 0;
-    }
-
-    .children-label { color: var(--text-dim); }
-
-    .child-link {
-      color: var(--text);
-      text-decoration: none;
-      padding: 3px 8px;
-      border: 1px solid var(--border-dim);
-      transition: all 0.2s;
-    }
-
-    .child-link:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* Child VM status colors */
-    .child-link.starting { border-color: var(--text-dim); opacity: 0.7; }
-    .child-link.ready { border-color: var(--success); }
-    .child-link.busy,
-    .child-link.running { border-color: var(--accent); }
-    .child-link.done,
-    .child-link.completed { border-color: var(--success); color: var(--success); }
-    .child-link.failed,
-    .child-link.error { border-color: var(--error); color: var(--error); }
-    .child-link.stopping { border-color: var(--warning); opacity: 0.7; }
-    .child-link.stopped { border-color: var(--text-dim); opacity: 0.5; }
-
-    .branch-btn {
-      color: var(--text-dim);
-      text-decoration: none;
-      padding: 3px 8px;
-      border: 1px dashed var(--border-dim);
-      transition: all 0.2s;
-    }
-
-    .branch-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      border-style: solid;
-    }
-
-    /* Input area */
-    .input-area {
-      border-top: 1px solid var(--border);
-      padding: 14px 24px;
-      background: var(--bg);
-      flex-shrink: 0;
-    }
-
-    .input-form { display: flex; gap: 10px; }
-
-    .input-field {
-      flex: 1;
-      padding: 10px 14px;
-      border: 1px solid var(--border-dim);
-      background: var(--bg);
-      color: var(--text);
-      font-family: inherit;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .input-field:focus { border-color: var(--accent); }
-    .input-field:disabled { opacity: 0.5; }
-    .input-field::placeholder { color: var(--text-dim); }
-
-    .send-btn {
-      padding: 10px 20px;
-      border: 1px solid var(--accent);
-      background: var(--accent);
-      color: var(--invert-text);
-      font-family: inherit;
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .send-btn:hover { background: var(--accent-hover); }
-    .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-    /* Split layout */
+    /* Global scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-hover); }
+
+    /* Main split layout - 50/50 */
     .split-container {
       flex: 1;
       display: flex;
       overflow: hidden;
     }
 
-    .split-container.sidebar-closed .tree-sidebar { display: none; }
-    .split-container.sidebar-closed .shell-content { width: 100%; }
-
-    /* Tree sidebar */
-    .tree-sidebar {
-      width: 280px;
+    /* Tree panel (left 50%) */
+    .tree-panel {
+      width: 50%;
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
@@ -800,6 +193,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
 
     .tree-header-title { color: var(--accent); }
@@ -811,26 +205,16 @@
 
     .tree-content {
       flex: 1;
-      overflow-y: auto;
+      overflow: auto;
       padding: 8px 0;
     }
-
-    .tree-content::-webkit-scrollbar { width: 4px; }
-    .tree-content::-webkit-scrollbar-track { background: var(--bg); }
-    .tree-content::-webkit-scrollbar-thumb { background: var(--accent); }
-
-    /* Global scrollbar styling */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--accent-hover); }
 
     /* DAG Tree visualization */
     .dag-container {
       position: relative;
       padding: 24px 16px;
       min-height: 200px;
-      overflow-x: auto;
+      min-width: fit-content;
     }
 
     .dag-svg {
@@ -865,7 +249,7 @@
       justify-content: center;
       gap: 16px;
       position: relative;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .dag-node {
@@ -902,7 +286,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
 
-    .dag-node.current .dag-node-box {
+    .dag-node.selected .dag-node-box {
       border-color: var(--accent);
       border-width: 3px;
       box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--accent), 0 4px 16px rgba(0,0,0,0.2);
@@ -939,7 +323,7 @@
       font-family: var(--font-mono);
     }
 
-    .dag-node.current .dag-node-id { color: var(--accent); }
+    .dag-node.selected .dag-node-id { color: var(--accent); }
 
     .dag-node-label {
       font-size: 9px;
@@ -953,21 +337,6 @@
       font-style: italic;
     }
 
-    .dag-you-marker {
-      position: absolute;
-      top: 50%;
-      left: calc(100% + 8px);
-      transform: translateY(-50%);
-      font-size: 10px;
-      color: var(--accent);
-      white-space: nowrap;
-      font-weight: bold;
-      background: var(--bg);
-      padding: 2px 6px;
-      border-radius: 4px;
-      border: 1px solid var(--accent);
-    }
-
     .tree-empty {
       padding: 20px 14px;
       color: var(--text-dim);
@@ -975,108 +344,169 @@
       text-align: center;
     }
 
-    /* Shell content area */
-    .shell-content {
-      flex: 1;
+    /* Logs panel (right 50%) */
+    .logs-panel {
+      width: 50%;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
-    /* Toggle button */
-    .sidebar-toggle {
+    .logs-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .logs-header-title { color: var(--accent); }
+
+    .logs-vm-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logs-vm-id {
+      font-size: 12px;
+      color: var(--text);
+      font-weight: bold;
+    }
+
+    .logs-vm-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-dim);
+    }
+
+    .logs-vm-status.ready { border-color: var(--success); color: var(--success); }
+    .logs-vm-status.busy { border-color: var(--accent); color: var(--accent); }
+    .logs-vm-status.completed { border-color: var(--success); color: var(--success); }
+    .logs-vm-status.failed { border-color: var(--error); color: var(--error); }
+
+    .logs-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .logs-action-btn {
       background: none;
       border: 1px solid var(--border-dim);
       color: var(--text-dim);
       font-family: inherit;
       font-size: 10px;
-      padding: 3px 6px;
+      padding: 3px 8px;
       cursor: pointer;
       transition: all 0.2s;
+      text-decoration: none;
     }
 
-    .sidebar-toggle:hover {
-      border-color: var(--accent);
-      color: var(--text);
-    }
-
-    .sidebar-toggle.active {
+    .logs-action-btn:hover {
       border-color: var(--accent);
       color: var(--accent);
     }
 
-    /* Mobile responsive - vertical split (tree on top, shell on bottom) */
+    .logs-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      font-size: 12px;
+    }
+
+    .logs-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    .logs-empty h3 {
+      font-size: 14px;
+      font-weight: 400;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border-left: 2px solid var(--border-dim);
+      background: var(--bg-elevated);
+    }
+
+    .log-entry.info { border-left-color: var(--text-dim); }
+    .log-entry.tool { border-left-color: var(--accent); }
+    .log-entry.success { border-left-color: var(--success); }
+    .log-entry.error { border-left-color: var(--error); }
+    .log-entry.content { border-left-color: var(--text); }
+
+    .log-entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .log-entry-type {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+    }
+
+    .log-entry-time {
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    .log-entry-content {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+    }
+
+    .log-entry-content.truncated {
+      max-height: 100px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .log-entry-content.truncated::after {
+      content: '...';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: var(--bg-elevated);
+      padding-left: 8px;
+    }
+
+    /* Mobile responsive */
     @media (max-width: 768px) {
       .split-container {
         flex-direction: column;
       }
 
-      .tree-sidebar {
+      .tree-panel {
         width: 100%;
-        height: 35vh;
-        min-height: 120px;
-        max-height: 200px;
+        height: 50%;
         border-right: none;
         border-bottom: 1px solid var(--border);
       }
 
-      .split-container.sidebar-closed .tree-sidebar {
-        display: none;
-      }
-
-      .shell-content {
-        flex: 1;
-        min-height: 0;
-      }
-
-      .header {
-        padding: 10px 16px;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .header-right {
-        order: -1;
+      .logs-panel {
         width: 100%;
-        justify-content: flex-end;
-        margin-left: 0;
-      }
-
-      .main {
-        padding: 14px 16px;
-      }
-
-      .children-bar {
-        padding: 8px 16px;
-        flex-wrap: wrap;
-      }
-
-      .input-area {
-        padding: 10px 16px;
-      }
-
-      .tree-node {
-        padding: 8px 12px;
-      }
-
-      .tree-content {
-        padding: 4px 0;
-      }
-    }
-
-    /* Very small screens */
-    @media (max-width: 480px) {
-      .tree-sidebar {
-        height: 30vh;
-        max-height: 160px;
-      }
-
-      .logo {
-        font-size: 12px;
-      }
-
-      .tree-node-task {
-        display: none;
+        height: 50%;
       }
     }
   </style>
@@ -1084,66 +514,17 @@
 <body>
   <div id="app"></div>
 
-  <!-- Highlight.js theme -->
-  <link rel="stylesheet" href="https://esm.sh/highlight.js@11.9.0/styles/github-dark.min.css">
-
   <script type="module">
     import { h, render } from 'https://esm.sh/preact@10.19.3';
     import { useState, useEffect, useRef } from 'https://esm.sh/preact@10.19.3/hooks';
     import htm from 'https://esm.sh/htm@3.1.1';
-    import { marked } from 'https://esm.sh/marked@11.1.1';
-    import hljs from 'https://esm.sh/highlight.js@11.9.0/lib/core';
-    import javascript from 'https://esm.sh/highlight.js@11.9.0/lib/languages/javascript';
-    import typescript from 'https://esm.sh/highlight.js@11.9.0/lib/languages/typescript';
-    import python from 'https://esm.sh/highlight.js@11.9.0/lib/languages/python';
-    import rust from 'https://esm.sh/highlight.js@11.9.0/lib/languages/rust';
-    import go from 'https://esm.sh/highlight.js@11.9.0/lib/languages/go';
-    import json from 'https://esm.sh/highlight.js@11.9.0/lib/languages/json';
-    import yaml from 'https://esm.sh/highlight.js@11.9.0/lib/languages/yaml';
-    import bash from 'https://esm.sh/highlight.js@11.9.0/lib/languages/bash';
-    import sql from 'https://esm.sh/highlight.js@11.9.0/lib/languages/sql';
-    import xml from 'https://esm.sh/highlight.js@11.9.0/lib/languages/xml';
-    import css from 'https://esm.sh/highlight.js@11.9.0/lib/languages/css';
-
-    // Register languages
-    hljs.registerLanguage('javascript', javascript);
-    hljs.registerLanguage('js', javascript);
-    hljs.registerLanguage('typescript', typescript);
-    hljs.registerLanguage('ts', typescript);
-    hljs.registerLanguage('python', python);
-    hljs.registerLanguage('py', python);
-    hljs.registerLanguage('rust', rust);
-    hljs.registerLanguage('go', go);
-    hljs.registerLanguage('json', json);
-    hljs.registerLanguage('yaml', yaml);
-    hljs.registerLanguage('yml', yaml);
-    hljs.registerLanguage('bash', bash);
-    hljs.registerLanguage('sh', bash);
-    hljs.registerLanguage('shell', bash);
-    hljs.registerLanguage('sql', sql);
-    hljs.registerLanguage('html', xml);
-    hljs.registerLanguage('xml', xml);
-    hljs.registerLanguage('css', css);
-
-    // Configure marked with highlight.js
-    marked.setOptions({
-      highlight: function(code, lang) {
-        if (lang && hljs.getLanguage(lang)) {
-          try {
-            return hljs.highlight(code, { language: lang }).value;
-          } catch (e) {}
-        }
-        return code;
-      },
-      breaks: true,
-      gfm: true,
-    });
 
     const html = htm.bind(h);
 
-    // Get auth token from URL
+    // Get auth token and demo mode from URL
     const urlParams = new URLSearchParams(window.location.search);
     const authToken = urlParams.get('token');
+    const forceDemo = urlParams.get('demo') === 'true';
 
     // Theme management
     function getTheme() {
@@ -1167,72 +548,6 @@
 
     applyTheme(getTheme());
 
-    // Browser notifications
-    let notificationsEnabled = localStorage.getItem('vers-notifications') === 'true';
-
-    async function requestNotificationPermission() {
-      if (!('Notification' in window)) return false;
-      if (Notification.permission === 'granted') {
-        notificationsEnabled = true;
-        localStorage.setItem('vers-notifications', 'true');
-        return true;
-      }
-      if (Notification.permission !== 'denied') {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          notificationsEnabled = true;
-          localStorage.setItem('vers-notifications', 'true');
-          return true;
-        }
-      }
-      return false;
-    }
-
-    function sendNotification(title, body) {
-      if (!notificationsEnabled || document.hasFocus()) return;
-      if (Notification.permission === 'granted') {
-        new Notification(title, {
-          body,
-          icon: '/favicon.ico',
-          tag: 'vers-shell', // Prevents duplicate notifications
-        });
-      }
-    }
-
-    // Format relative time (e.g., "2m ago")
-    function formatRelativeTime(timestamp) {
-      const seconds = Math.floor((Date.now() - timestamp) / 1000);
-      if (seconds < 60) return 'just now';
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes}m ago`;
-      const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.floor(hours / 24);
-      return `${days}d ago`;
-    }
-
-    // Format short time (e.g., "14:32")
-    function formatShortTime(timestamp) {
-      return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    // Copy to clipboard helper
-    async function copyToClipboard(text, btn) {
-      try {
-        await navigator.clipboard.writeText(text);
-        if (btn) {
-          btn.textContent = 'copied!';
-          btn.classList.add('copied');
-          setTimeout(() => {
-            btn.textContent = 'copy';
-            btn.classList.remove('copied');
-          }, 1500);
-        }
-      } catch (e) {
-        console.log('Copy failed:', e);
-      }
-    }
-
     // RPC helper
     async function rpc(method, params = {}) {
       const headers = { 'Content-Type': 'application/json' };
@@ -1249,44 +564,13 @@
       return data.result;
     }
 
-    // Escape HTML
-    function esc(s) {
-      const div = document.createElement('div');
-      div.textContent = s;
-      return div.innerHTML;
-    }
-
-    // Map VM event types to status strings
-    function mapEventTypeToStatus(eventType, currentStatus, event) {
-      // Event types from the VM events stream
-      switch (eventType) {
-        case 'vm_started':
-        case 'started':
-          return 'ready';
-        case 'vm_stopping':
-        case 'stopping':
-          return 'stopping';
-        case 'vm_stopped':
-        case 'stopped':
-          return 'stopped';
-        case 'vm_error':
-        case 'error':
-          return 'failed';
-        case 'tool_call':
-        case 'content_chunk':
-        case 'working':
-          return 'busy';
-        case 'turn_complete':
-        case 'idle':
-          return 'ready';
-        default:
-          // If we get a status field directly in the event, use it
-          return event?.status || currentStatus;
-      }
+    // Format time
+    function formatTime(timestamp) {
+      return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
     // Build tree structure from flat VM list
-    function buildTreeFromVms(vms, currentVmId) {
+    function buildTreeFromVms(vms) {
       const nodeMap = new Map();
       let roots = [];
 
@@ -1295,7 +579,6 @@
         nodeMap.set(vm.vmId, {
           ...vm,
           children: [],
-          isCurrent: vm.vmId === currentVmId,
         });
       }
 
@@ -1309,41 +592,6 @@
         }
       }
 
-      // DEMO MODE: If all VMs are roots (no parent relationships),
-      // create a mock tree structure for visualization testing
-      if (roots.length > 3 && roots.length === vms.length) {
-        const mockRoots = [];
-        const sorted = [...roots].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-        // Take first VM as root
-        const root = sorted[0];
-        root.task = root.task || 'root task';
-        root.status = 'completed';
-        mockRoots.push(root);
-
-        // Split remaining VMs into branches (3-4 children per level)
-        const remaining = sorted.slice(1);
-        const branchCount = Math.min(4, Math.ceil(remaining.length / 3));
-
-        for (let i = 0; i < branchCount && i < remaining.length; i++) {
-          const branch = remaining[i];
-          branch.approach = `approach-${i + 1}`;
-          branch.status = i === 0 ? 'completed' : (i === 1 ? 'busy' : 'ready');
-          root.children.push(branch);
-
-          // Add sub-children to some branches
-          const subStart = branchCount + (i * 3);
-          for (let j = 0; j < 3 && subStart + j < remaining.length; j++) {
-            const subChild = remaining[subStart + j];
-            subChild.approach = `sub-${i + 1}-${j + 1}`;
-            subChild.status = j === 0 ? 'completed' : 'ready';
-            branch.children.push(subChild);
-          }
-        }
-
-        roots = mockRoots;
-      }
-
       // Sort children by creation time
       function sortChildren(node) {
         node.children.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
@@ -1354,36 +602,53 @@
       return { roots, nodeMap, total: vms.length };
     }
 
+    // Status icon helper
+    const statusIcon = (status) => {
+      switch (status) {
+        case 'starting': return '◔';
+        case 'ready': return '●';
+        case 'busy': return '◐';
+        case 'completed': return '✓';
+        case 'failed': return '✗';
+        default: return '○';
+      }
+    };
+
     // Components
-    function TreeSidebar({ tree, currentVmId }) {
+    function Header({ status, statusText, onThemeToggle }) {
+      return html`
+        <header class="header">
+          <span class="logo">vers canvas</span>
+          <div class="status">
+            <div class="status-dot ${status}"></div>
+            <span>${statusText}</span>
+          </div>
+          <div class="header-right">
+            <a class="header-link" href="/health" target="_blank">health</a>
+            <button class="theme-btn" onClick=${onThemeToggle}>theme</button>
+          </div>
+        </header>
+      `;
+    }
+
+    function TreePanel({ tree, selectedVmId, onSelectNode }) {
       const containerRef = useRef(null);
       const [edges, setEdges] = useState([]);
 
       if (!tree || tree.total === 0) {
         return html`
-          <div class="tree-sidebar">
+          <div class="tree-panel">
             <div class="tree-header">
-              <span class="tree-header-title">tree</span>
+              <span class="tree-header-title">vm tree</span>
             </div>
             <div class="tree-empty">
               <div style="font-size: 24px; margin-bottom: 8px;">◇</div>
               <div>no VMs yet</div>
-              <div style="font-size: 10px; margin-top: 4px;">branch to create nodes</div>
+              <div style="font-size: 10px; margin-top: 4px;">waiting for VMs...</div>
             </div>
           </div>
         `;
       }
-
-      const statusIcon = (status) => {
-        switch (status) {
-          case 'starting': return '◔';
-          case 'ready': return '●';
-          case 'busy': return '◐';
-          case 'completed': return '✓';
-          case 'failed': return '✗';
-          default: return '○';
-        }
-      };
 
       // Organize nodes by depth level for DAG layout
       function getLevels(roots) {
@@ -1402,7 +667,7 @@
         return { levels, nodePositions };
       }
 
-      const { levels, nodePositions } = getLevels(tree.roots);
+      const { levels } = getLevels(tree.roots);
 
       // Calculate edges after render
       useEffect(() => {
@@ -1411,7 +676,6 @@
         const newEdges = [];
         const container = containerRef.current;
 
-        // Find all parent-child pairs and calculate line positions
         function collectEdges(node) {
           const parentEl = container.querySelector(`[data-vm-id="${node.vmId}"]`);
           if (!parentEl) return;
@@ -1438,10 +702,19 @@
         setEdges(newEdges);
       }, [tree]);
 
+      const handleNodeClick = (e, node) => {
+        e.preventDefault();
+        // Open '/' in new tab
+        const appUrl = `https://${node.vmId}.vm.vers.sh/`;
+        window.open(appUrl, '_blank');
+        // Select node to show logs
+        onSelectNode(node.vmId);
+      };
+
       return html`
-        <div class="tree-sidebar">
+        <div class="tree-panel">
           <div class="tree-header">
-            <span class="tree-header-title">tree</span>
+            <span class="tree-header-title">vm tree</span>
             <span class="tree-count">${tree.total} VMs</span>
           </div>
           <div class="tree-content">
@@ -1459,15 +732,14 @@
                 ${levels.map((level, depth) => html`
                   <div key=${depth} class="dag-level">
                     ${level.map(node => {
-                      const url = `https://${node.vmId}.vm.vers.sh/shell`;
-                      const isCurrent = node.vmId === currentVmId || node.isCurrent;
+                      const isSelected = node.vmId === selectedVmId;
                       return html`
-                        <a
+                        <div
                           key=${node.vmId}
-                          class="dag-node ${node.status} ${isCurrent ? 'current' : ''}"
-                          href=${url}
+                          class="dag-node ${node.status} ${isSelected ? 'selected' : ''}"
                           data-vm-id=${node.vmId}
                           title="${node.task || node.approach || node.vmId}"
+                          onClick=${(e) => handleNodeClick(e, node)}
                         >
                           <div class="dag-node-box">
                             <span class="dag-node-status">${statusIcon(node.status)}</span>
@@ -1476,12 +748,11 @@
                           ${(node.task || node.approach) && html`
                             <span class="dag-node-label">${(node.task || node.approach).slice(0, 16)}${(node.task || node.approach).length > 16 ? '...' : ''}</span>
                           `}
-                          ${isCurrent && html`<span class="dag-you-marker">you</span>`}
-                        </a>
-                    `;
-                  })}
-                </div>
-              `)}
+                        </div>
+                      `;
+                    })}
+                  </div>
+                `)}
               </div>
             </div>
           </div>
@@ -1489,409 +760,64 @@
       `;
     }
 
-    function Header({ parent, status, statusText, onThemeToggle, sidebarOpen, onToggleSidebar, sessionStats }) {
-      const vmId = window.location.hostname.split('.')[0];
-      const parentUrl = parent ? `https://${parent}.vm.vers.sh/shell` : null;
+    function LogsPanel({ selectedVmId, tree, logs }) {
+      const logsEndRef = useRef(null);
+      const selectedNode = selectedVmId && tree ? tree.nodeMap.get(selectedVmId) : null;
 
-      return html`
-        <header class="header">
-          <span class="logo">vers shell</span>
-          ${parentUrl && html`
-            <a class="parent-link" href=${parentUrl} target="_blank">
-              ← ${parent.slice(0, 8)}
-            </a>
-          `}
-          <div class="status">
-            <div class="status-dot ${status}"></div>
-            <span>${statusText}</span>
-          </div>
-          ${sessionStats && sessionStats.turns > 0 && html`
-            <div class="session-stats">
-              <span class="session-stat">
-                <span>turns</span>
-                <span class="session-stat-value">${sessionStats.turns}</span>
-              </span>
-              <span class="session-stat">
-                <span>tokens</span>
-                <span class="session-stat-value">${(sessionStats.inputTokens + sessionStats.outputTokens).toLocaleString()}</span>
-              </span>
-              ${sessionStats.totalCost > 0 && html`
-                <span class="session-stat">
-                  <span>cost</span>
-                  <span class="session-stat-value">$${sessionStats.totalCost.toFixed(3)}</span>
-                </span>
-              `}
-            </div>
-          `}
-          <div class="header-right">
-            <button class="sidebar-toggle ${sidebarOpen ? 'active' : ''}" onClick=${onToggleSidebar}>
-              ${sidebarOpen ? '◀ tree' : '▶ tree'}
-            </button>
-            <a class="header-link" href="/" target="_blank">app</a>
-            <a class="header-link" href="/health" target="_blank">health</a>
-            <button class="theme-btn" onClick=${onThemeToggle}>theme</button>
-          </div>
-        </header>
-      `;
-    }
+      // Auto-scroll to bottom when new logs arrive
+      useEffect(() => {
+        if (logsEndRef.current) {
+          logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, [logs]);
 
-    function ChildrenBar({ children, onBranch }) {
-      if (!children || children.length === 0) {
+      if (!selectedVmId || !selectedNode) {
         return html`
-          <div class="children-bar">
-            <span class="children-label">no children</span>
-            <a class="branch-btn" href="#" onClick=${onBranch}>+ branch</a>
+          <div class="logs-panel">
+            <div class="logs-header">
+              <span class="logs-header-title">logs</span>
+            </div>
+            <div class="logs-content">
+              <div class="logs-empty">
+                <h3>select a VM</h3>
+                <p>click on a node in the tree to view its logs</p>
+              </div>
+            </div>
           </div>
         `;
       }
 
-      // Status indicator mapping
-      const statusIcon = (status) => {
-        switch (status) {
-          case 'starting': return '◔';
-          case 'ready': return '●';
-          case 'busy':
-          case 'running': return '◐';
-          case 'done':
-          case 'completed': return '✓';
-          case 'failed':
-          case 'error': return '✗';
-          case 'stopping': return '◑';
-          case 'stopped': return '○';
-          default: return '';
-        }
-      };
+      const vmLogs = logs[selectedVmId] || [];
+      const appUrl = `https://${selectedVmId}.vm.vers.sh/`;
 
       return html`
-        <div class="children-bar">
-          <span class="children-label">children:</span>
-          ${children.map(c => html`
-            <a
-              class="child-link ${c.status}"
-              href="https://${c.vmId}.vm.vers.sh/shell"
-              target="_blank"
-              title="${c.task || c.approach || c.status}"
-            >
-              ${statusIcon(c.status)} ${c.vmId.slice(0, 8)}
-            </a>
-          `)}
-          <a class="branch-btn" href="#" onClick=${onBranch}>+ branch</a>
-        </div>
-      `;
-    }
-
-    function Message({ type, content, ts }) {
-      const ref = useRef(null);
-      const [relTime, setRelTime] = useState(ts ? formatRelativeTime(ts) : '');
-
-      // Update relative time every minute
-      useEffect(() => {
-        if (!ts) return;
-        const interval = setInterval(() => setRelTime(formatRelativeTime(ts)), 60000);
-        return () => clearInterval(interval);
-      }, [ts]);
-
-      // Inject copy buttons into code blocks after render
-      useEffect(() => {
-        if (ref.current && type === 'text') {
-          const pres = ref.current.querySelectorAll('pre');
-          pres.forEach(pre => {
-            if (pre.querySelector('.copy-btn')) return; // Already has button
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = 'copy';
-            btn.onclick = () => copyToClipboard(pre.textContent, btn);
-            pre.style.position = 'relative';
-            pre.appendChild(btn);
-          });
-        }
-      }, [content]);
-
-      const timestamp = ts ? html`<span class="message-timestamp" title=${formatShortTime(ts)}>${relTime}</span>` : null;
-
-      // Render markdown for text messages from Claude
-      if (type === 'text' && content) {
-        const rendered = marked.parse(content);
-        return html`
-          <div class="message message-${type}">
-            <div ref=${ref} class="markdown-content" dangerouslySetInnerHTML=${{ __html: rendered }}></div>
-            ${timestamp}
-          </div>
-        `;
-      }
-      return html`<div class="message message-${type}">${content}${timestamp}</div>`;
-    }
-
-    function ToolBlock({ id, name, title, status, content }) {
-      const [collapsed, setCollapsed] = useState(true);
-      const handleCopy = (e) => copyToClipboard(content, e.target);
-
-      // Check if content is long enough to collapse
-      const isLong = content && content.length > 300;
-      const showCollapsed = collapsed && isLong;
-
-      // Render content based on tool type
-      const renderContent = () => {
-        if (!content) return null;
-
-        // For Read tool: show with line numbers
-        if (name === 'Read' || name === 'Glob') {
-          const lines = content.split('\n');
-          return html`
-            <div class="tool-content-lines ${showCollapsed ? 'collapsed' : ''}">
-              ${lines.slice(0, showCollapsed ? 5 : lines.length).map((line, i) => html`
-                <div key=${i} class="tool-content-line"><span>${esc(line)}</span></div>
-              `)}
+        <div class="logs-panel">
+          <div class="logs-header">
+            <div class="logs-vm-info">
+              <span class="logs-header-title">logs</span>
+              <span class="logs-vm-id">${selectedVmId.slice(0, 8)}</span>
+              <span class="logs-vm-status ${selectedNode.status}">${selectedNode.status}</span>
             </div>
-          `;
-        }
-
-        // For Edit tool: try to show diff
-        if (name === 'Edit' && content.includes('→')) {
-          const lines = content.split('\n');
-          return html`
-            <div class="tool-content ${showCollapsed ? 'collapsed' : ''}">
-              ${lines.map((line, i) => {
-                const isDiff = line.startsWith('-') || line.startsWith('+');
-                const cls = line.startsWith('+') ? 'diff-line-add' : line.startsWith('-') ? 'diff-line-remove' : '';
-                return html`<div key=${i} class=${cls}>${esc(line)}</div>`;
-              })}
-            </div>
-          `;
-        }
-
-        // Default: plain text
-        return html`<div class="tool-content ${showCollapsed ? 'collapsed' : ''}">${content}</div>`;
-      };
-
-      return html`
-        <div class="tool-block">
-          <div class="tool-header ${status}">
-            <span class="tool-name">${name}</span>
-            ${title && title !== name && html`<span>${esc(title)}</span>`}
-            <span class="tool-status">${status === 'running' ? 'running' : status === 'success' ? 'done' : 'failed'}</span>
-            ${content && html`<button class="copy-btn" style="position:static;opacity:1;margin-left:auto" onClick=${handleCopy}>copy</button>`}
-          </div>
-          ${renderContent()}
-          ${isLong && html`
-            <button class="tool-expand-btn" onClick=${() => setCollapsed(!collapsed)}>
-              ${collapsed ? '▼ show more' : '▲ show less'}
-            </button>
-          `}
-        </div>
-      `;
-    }
-
-    function Stats({ data }) {
-      const stats = [];
-      if (data.durationMs) stats.push({ l: 'time', v: (data.durationMs / 1000).toFixed(1) + 's' });
-      if (data.inputTokens) stats.push({ l: 'in', v: data.inputTokens.toLocaleString() });
-      if (data.outputTokens) stats.push({ l: 'out', v: data.outputTokens.toLocaleString() });
-      if (data.totalCostUsd) stats.push({ l: 'cost', v: '$' + data.totalCostUsd.toFixed(4) });
-
-      if (stats.length === 0) return null;
-
-      return html`
-        <div class="stats">
-          ${stats.map(s => html`
-            <div class="stat">
-              <span>${s.l}</span>
-              <span class="stat-value">${s.v}</span>
-            </div>
-          `)}
-        </div>
-      `;
-    }
-
-    function Permission({ id, toolCall, options, onRespond }) {
-      const opts = options || [
-        { id: 'allow', label: 'allow' },
-        { id: 'deny', label: 'deny' },
-      ];
-
-      return html`
-        <div class="permission">
-          <div class="permission-header">permission required</div>
-          <div class="permission-content">
-            ${toolCall && html`<div class="permission-tool">${esc(toolCall.title || toolCall.toolName)}</div>`}
-            <div class="permission-actions">
-              ${opts.map(o => html`
-                <button
-                  class="permission-btn ${o.id === 'allow' || o.id === 'yes' ? 'primary' : ''}"
-                  onClick=${() => onRespond(id, o.id)}
-                >
-                  ${o.label.toLowerCase()}
-                </button>
-              `)}
+            <div class="logs-actions">
+              <a class="logs-action-btn" href=${appUrl} target="_blank">open app</a>
             </div>
           </div>
-        </div>
-      `;
-    }
-
-    function Typing() {
-      return html`
-        <div class="typing">
-          <div class="typing-dots">
-            <span></span><span></span><span></span>
-          </div>
-          <span>working</span>
-        </div>
-      `;
-    }
-
-    function Empty() {
-      return html`
-        <div class="empty">
-          <h2>vers shell</h2>
-          <p>autonomous infrastructure for agents</p>
-        </div>
-      `;
-    }
-
-    // Message history for up arrow
-    const messageHistory = [];
-    let historyIndex = -1;
-
-    function InputArea({ disabled, onSubmit, inputRef }) {
-      const [value, setValue] = useState('');
-      const localRef = useRef(null);
-      const ref = inputRef || localRef;
-
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        if (!value.trim() || disabled) return;
-        // Add to history
-        messageHistory.unshift(value.trim());
-        if (messageHistory.length > 50) messageHistory.pop();
-        historyIndex = -1;
-        onSubmit(value.trim());
-        setValue('');
-      };
-
-      const handleKeyDown = (e) => {
-        // Cmd/Ctrl+Enter to send
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-          handleSubmit(e);
-          return;
-        }
-        // Escape to blur
-        if (e.key === 'Escape') {
-          e.target.blur();
-          return;
-        }
-        // Up arrow for history (only when input is empty or at start)
-        if (e.key === 'ArrowUp' && (value === '' || e.target.selectionStart === 0)) {
-          e.preventDefault();
-          if (historyIndex < messageHistory.length - 1) {
-            historyIndex++;
-            setValue(messageHistory[historyIndex] || '');
-          }
-          return;
-        }
-        // Down arrow for history
-        if (e.key === 'ArrowDown' && historyIndex >= 0) {
-          e.preventDefault();
-          historyIndex--;
-          setValue(historyIndex >= 0 ? messageHistory[historyIndex] : '');
-          return;
-        }
-      };
-
-      return html`
-        <div class="input-area">
-          <form class="input-form" onSubmit=${handleSubmit}>
-            <input
-              ref=${ref}
-              class="input-field"
-              type="text"
-              placeholder="send a message (⌘↵ to send)"
-              value=${value}
-              onInput=${e => { setValue(e.target.value); historyIndex = -1; }}
-              onKeyDown=${handleKeyDown}
-              disabled=${disabled}
-            />
-            <button class="send-btn" type="submit" disabled=${disabled}>send</button>
-          </form>
-        </div>
-      `;
-    }
-
-    // Command palette commands
-    const COMMANDS = [
-      { id: 'branch', icon: '🌿', label: '/branch', desc: 'Create a new branch VM' },
-      { id: 'clear', icon: '🗑', label: '/clear', desc: 'Clear message history' },
-      { id: 'status', icon: '📊', label: '/status', desc: 'Show VM status' },
-      { id: 'tree', icon: '🌲', label: '/tree', desc: 'Toggle tree sidebar' },
-      { id: 'theme', icon: '🎨', label: '/theme', desc: 'Cycle theme (light/dark/system)' },
-    ];
-
-    function CommandPalette({ open, onClose, onCommand }) {
-      const [query, setQuery] = useState('');
-      const [selectedIndex, setSelectedIndex] = useState(0);
-      const inputRef = useRef(null);
-
-      const filtered = COMMANDS.filter(c =>
-        c.label.toLowerCase().includes(query.toLowerCase()) ||
-        c.desc.toLowerCase().includes(query.toLowerCase())
-      );
-
-      useEffect(() => {
-        if (open && inputRef.current) {
-          inputRef.current.focus();
-          setQuery('');
-          setSelectedIndex(0);
-        }
-      }, [open]);
-
-      const handleKeyDown = (e) => {
-        if (e.key === 'Escape') {
-          onClose();
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSelectedIndex(i => Math.min(i + 1, filtered.length - 1));
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setSelectedIndex(i => Math.max(i - 1, 0));
-        } else if (e.key === 'Enter' && filtered[selectedIndex]) {
-          onCommand(filtered[selectedIndex].id);
-          onClose();
-        }
-      };
-
-      if (!open) return null;
-
-      return html`
-        <div class="command-palette-overlay" onClick=${onClose}>
-          <div class="command-palette" onClick=${e => e.stopPropagation()}>
-            <input
-              ref=${inputRef}
-              class="command-palette-input"
-              type="text"
-              placeholder="Type a command..."
-              value=${query}
-              onInput=${e => { setQuery(e.target.value); setSelectedIndex(0); }}
-              onKeyDown=${handleKeyDown}
-            />
-            <div class="command-palette-list">
-              ${filtered.map((cmd, i) => html`
-                <div
-                  key=${cmd.id}
-                  class="command-palette-item ${i === selectedIndex ? 'selected' : ''}"
-                  onClick=${() => { onCommand(cmd.id); onClose(); }}
-                >
-                  <span class="command-palette-item-icon">${cmd.icon}</span>
-                  <span class="command-palette-item-label">${cmd.label}</span>
-                  <span class="command-palette-item-desc">${cmd.desc}</span>
+          <div class="logs-content">
+            ${vmLogs.length === 0 ? html`
+              <div class="logs-empty">
+                <h3>no logs yet</h3>
+                <p>waiting for activity from this VM...</p>
+              </div>
+            ` : vmLogs.map((log, i) => html`
+              <div key=${i} class="log-entry ${log.type}">
+                <div class="log-entry-header">
+                  <span class="log-entry-type">${log.type}</span>
+                  <span class="log-entry-time">${formatTime(log.timestamp)}</span>
                 </div>
-              `)}
-              ${filtered.length === 0 && html`
-                <div class="command-palette-item">
-                  <span class="command-palette-item-desc">No commands found</span>
-                </div>
-              `}
-            </div>
-            <div class="command-palette-hint">↑↓ navigate • ↵ select • esc close</div>
+                <div class="log-entry-content ${log.content && log.content.length > 500 ? 'truncated' : ''}">${log.content || log.message || ''}</div>
+              </div>
+            `)}
+            <div ref=${logsEndRef}></div>
           </div>
         </div>
       `;
@@ -1901,486 +827,230 @@
     function App() {
       const [status, setStatus] = useState('');
       const [statusText, setStatusText] = useState('connecting');
-      const [messages, setMessages] = useState([]);
-      const [tools, setTools] = useState({});
-      const [permissions, setPermissions] = useState({});
-      const [typing, setTyping] = useState(false);
-      const [working, setWorking] = useState(false);
-      const [vmContext, setVmContext] = useState({ vmId: null, parent: null, children: [], siblings: [] });
-      const [sidebarOpen, setSidebarOpen] = useState(true);
       const [tree, setTree] = useState(null);
-      const [showScrollBtn, setShowScrollBtn] = useState(false);
-      const [sessionStats, setSessionStats] = useState({ inputTokens: 0, outputTokens: 0, totalCost: 0, turns: 0 });
-      const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-      const mainRef = useRef(null);
-      const textAccum = useRef('');
-      const sessionStart = useRef(Date.now());
+      const [selectedVmId, setSelectedVmId] = useState(null);
+      const [logs, setLogs] = useState({}); // { vmId: [log entries] }
 
-      // Get current VM ID from hostname
-      const currentVmId = window.location.hostname.split('.')[0];
+      // Mock data for preview (used when no real VMs exist)
+      const MOCK_VMS = [
+        { vmId: 'vm-root-001', status: 'completed', task: 'Build authentication system', createdAt: new Date(Date.now() - 3600000).toISOString() },
+        { vmId: 'vm-branch-a1', parent: 'vm-root-001', status: 'completed', task: 'JWT token implementation', approach: 'Using jsonwebtoken', createdAt: new Date(Date.now() - 3000000).toISOString() },
+        { vmId: 'vm-branch-a2', parent: 'vm-root-001', status: 'busy', task: 'OAuth2 integration', approach: 'Google + GitHub', createdAt: new Date(Date.now() - 2400000).toISOString() },
+        { vmId: 'vm-branch-a2-1', parent: 'vm-branch-a2', status: 'busy', task: 'Google OAuth', createdAt: new Date(Date.now() - 1800000).toISOString() },
+        { vmId: 'vm-branch-a2-2', parent: 'vm-branch-a2', status: 'ready', task: 'GitHub OAuth', createdAt: new Date(Date.now() - 1200000).toISOString() },
+        { vmId: 'vm-branch-b1', parent: 'vm-root-001', status: 'failed', task: 'Session storage', approach: 'Redis approach', error: 'Connection refused', createdAt: new Date(Date.now() - 1800000).toISOString() },
+        { vmId: 'vm-root-002', status: 'ready', task: 'API rate limiting', createdAt: new Date(Date.now() - 600000).toISOString() },
+      ];
 
-      // Global keyboard shortcuts
-      useEffect(() => {
-        const handleGlobalKeyDown = (e) => {
-          // Cmd/Ctrl+K to open command palette
-          if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-            e.preventDefault();
-            setCommandPaletteOpen(true);
-          }
-        };
-        window.addEventListener('keydown', handleGlobalKeyDown);
-        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-      }, []);
-
-      // Handle command palette commands
-      const handleCommand = async (cmdId) => {
-        switch (cmdId) {
-          case 'branch':
-            handleBranch({ preventDefault: () => {} });
-            break;
-          case 'clear':
-            setMessages([]);
-            setTools({});
-            break;
-          case 'status':
-            setMessages(m => [...m, {
-              type: 'system',
-              content: `VM: ${vmContext.vmId || 'local'} | Status: ${status} | Children: ${vmContext.children.length}`,
-              ts: Date.now()
-            }]);
-            break;
-          case 'tree':
-            setSidebarOpen(s => !s);
-            break;
-          case 'theme':
-            cycleTheme();
-            break;
-        }
+      const MOCK_LOGS = {
+        'vm-branch-a2-1': [
+          { type: 'info', content: 'Starting Google OAuth implementation...', timestamp: Date.now() - 300000 },
+          { type: 'tool', content: 'Read: src/auth/google.ts', timestamp: Date.now() - 280000 },
+          { type: 'tool', content: 'Edit: src/auth/google.ts', timestamp: Date.now() - 260000 },
+          { type: 'content', content: 'Added OAuth callback handler with PKCE flow', timestamp: Date.now() - 240000 },
+          { type: 'tool', content: 'Bash: npm install googleapis', timestamp: Date.now() - 200000 },
+          { type: 'success', content: 'Google OAuth integration complete', timestamp: Date.now() - 100000 },
+        ],
+        'vm-branch-a2': [
+          { type: 'info', content: 'Branching to implement OAuth providers...', timestamp: Date.now() - 500000 },
+          { type: 'tool', content: 'Task: spawn vm-branch-a2-1 for Google', timestamp: Date.now() - 480000 },
+          { type: 'tool', content: 'Task: spawn vm-branch-a2-2 for GitHub', timestamp: Date.now() - 460000 },
+        ],
       };
 
-      // Fetch VM context (parent/children/siblings)
-      useEffect(() => {
-        async function fetchContext() {
-          try {
-            const ctx = await rpc('vm/context');
-            setVmContext({
-              vmId: ctx.vmId,
-              parent: ctx.parent,
-              children: ctx.children || [],
-              siblings: ctx.siblings || [],
-            });
-          } catch (e) {
-            console.log('Could not fetch VM context:', e);
-          }
-        }
-        fetchContext();
-
-        // Refresh context periodically to catch new children
-        const interval = setInterval(fetchContext, 10000);
-        return () => clearInterval(interval);
-      }, []);
-
-      // Fetch full VM tree for sidebar
+      // Fetch full VM tree (falls back to mock data for preview)
       useEffect(() => {
         async function fetchTree() {
+          // Force demo mode with ?demo=true
+          if (forceDemo) {
+            const treeData = buildTreeFromVms(MOCK_VMS);
+            setTree(treeData);
+            setLogs(MOCK_LOGS);
+            setSelectedVmId('vm-branch-a2-1');
+            setStatus('connected');
+            setStatusText('demo mode');
+            return;
+          }
+
           try {
             const result = await rpc('vm/list');
-            const treeData = buildTreeFromVms(result.vms || [], currentVmId);
+            const vms = result.vms || [];
+            // Use mock data if no real VMs exist
+            const treeData = buildTreeFromVms(vms.length > 0 ? vms : MOCK_VMS);
             setTree(treeData);
+            // Also set mock logs if using mock data
+            if (vms.length === 0) {
+              setLogs(MOCK_LOGS);
+              setSelectedVmId('vm-branch-a2-1'); // Pre-select a node with logs
+            }
+            setStatus('connected');
+            setStatusText(vms.length > 0 ? 'connected' : 'demo mode');
           } catch (e) {
-            console.log('Could not fetch VM tree:', e);
+            console.log('Could not fetch VM tree, using mock data:', e);
+            // Use mock data on error too
+            const treeData = buildTreeFromVms(MOCK_VMS);
+            setTree(treeData);
+            setLogs(MOCK_LOGS);
+            setSelectedVmId('vm-branch-a2-1');
+            setStatus('connected');
+            setStatusText('demo mode');
           }
         }
         fetchTree();
 
-        // Refresh tree periodically
-        const interval = setInterval(fetchTree, 15000);
-        return () => clearInterval(interval);
-      }, [currentVmId]);
-
-      // SSE connection for session events with reconnection
-      useEffect(() => {
-        const eventsUrl = authToken ? `/events?token=${authToken}` : '/events';
-        let es = null;
-        let reconnectDelay = 1000;
-        let reconnectTimeout = null;
-        let closed = false;
-
-        function connect() {
-          if (closed) return;
-          es = new EventSource(eventsUrl);
-
-          es.onopen = () => {
-            reconnectDelay = 1000; // Reset backoff on success
-            setStatus('connected');
-            setStatusText('connected');
-          };
-
-          es.onerror = () => {
-            if (closed) return;
-            setStatus('error');
-            setStatusText('reconnecting...');
-            es.close();
-            // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
-            reconnectTimeout = setTimeout(() => {
-              reconnectDelay = Math.min(reconnectDelay * 2, 30000);
-              connect();
-            }, reconnectDelay);
-          };
-
-          es.addEventListener('notification', (e) => {
-            const { type, data } = JSON.parse(e.data);
-            handleNotification(type, data);
-          });
+        // Refresh tree periodically (skip in demo mode)
+        if (!forceDemo) {
+          const interval = setInterval(fetchTree, 15000);
+          return () => clearInterval(interval);
         }
-
-        connect();
-
-        return () => {
-          closed = true;
-          if (reconnectTimeout) clearTimeout(reconnectTimeout);
-          if (es) es.close();
-        };
       }, []);
 
-      // Stable child IDs for SSE subscription dependency
-      const childIdsKey = vmContext.children.map(c => c.vmId).sort().join(',');
-
-      // SSE connection for VM events (real-time children status)
+      // SSE connection for VM events (logs)
       useEffect(() => {
-        // Only subscribe if we have children to track
-        if (!childIdsKey) return;
+        const eventsUrl = authToken ? `/events/vms?token=${authToken}` : '/events/vms';
+        const es = new EventSource(eventsUrl);
 
-        const vmEventsUrl = authToken
-          ? `/events/vms?vmIds=${childIdsKey}&token=${authToken}`
-          : `/events/vms?vmIds=${childIdsKey}`;
-        const vmEs = new EventSource(vmEventsUrl);
+        es.onopen = () => {
+          setStatus('connected');
+          setStatusText('connected');
+        };
 
-        vmEs.addEventListener('vm_event', (e) => {
+        es.onerror = () => {
+          setStatus('error');
+          setStatusText('reconnecting...');
+        };
+
+        es.addEventListener('vm_event', (e) => {
           try {
             const event = JSON.parse(e.data);
-            // Update child status if it's one of our children
-            if (event.vmId && event.type) {
-              setVmContext(ctx => ({
-                ...ctx,
-                children: ctx.children.map(child =>
-                  child.vmId === event.vmId
-                    ? { ...child, status: mapEventTypeToStatus(event.type, child.status, event) }
-                    : child
-                ),
-              }));
+            if (event.vmId) {
+              // Add to logs
+              setLogs(prevLogs => {
+                const vmLogs = prevLogs[event.vmId] || [];
+                const newLog = {
+                  type: event.type || 'info',
+                  content: event.data?.text || event.data?.toolName || event.message || JSON.stringify(event.data || {}),
+                  timestamp: event.timestamp || Date.now(),
+                };
+                return {
+                  ...prevLogs,
+                  [event.vmId]: [...vmLogs.slice(-100), newLog], // Keep last 100 logs per VM
+                };
+              });
+
+              // Update tree node status
+              if (event.type) {
+                setTree(currentTree => {
+                  if (!currentTree || !currentTree.nodeMap.has(event.vmId)) return currentTree;
+                  const node = currentTree.nodeMap.get(event.vmId);
+                  let newStatus = node.status;
+
+                  switch (event.type) {
+                    case 'tool_call':
+                    case 'content_chunk':
+                      newStatus = 'busy';
+                      break;
+                    case 'completed':
+                      newStatus = 'completed';
+                      break;
+                    case 'failed':
+                      newStatus = 'failed';
+                      break;
+                    case 'ready':
+                    case 'idle':
+                      newStatus = 'ready';
+                      break;
+                  }
+
+                  if (newStatus === node.status) return currentTree;
+
+                  const newNodeMap = new Map(currentTree.nodeMap);
+                  newNodeMap.set(event.vmId, { ...node, status: newStatus });
+
+                  const newRoots = currentTree.roots.map(function updateNode(n) {
+                    if (n.vmId === event.vmId) {
+                      return { ...n, status: newStatus, children: n.children.map(updateNode) };
+                    }
+                    return { ...n, children: n.children.map(updateNode) };
+                  });
+
+                  return { ...currentTree, roots: newRoots, nodeMap: newNodeMap };
+                });
+              }
             }
           } catch (err) {
             console.log('Error parsing vm_event:', err);
           }
         });
 
-        vmEs.onerror = () => {
-          console.log('VM events SSE error, will retry on reconnect');
-        };
-
-        return () => vmEs.close();
-      }, [childIdsKey]);
-
-      // SSE connection for ALL VM events (updates tree sidebar)
-      useEffect(() => {
-        if (!sidebarOpen) return; // Don't subscribe if sidebar is closed
-
-        const allVmEventsUrl = authToken
-          ? `/events/vms?token=${authToken}`
-          : `/events/vms`;
-        const allVmEs = new EventSource(allVmEventsUrl);
-
-        allVmEs.addEventListener('vm_event', (e) => {
-          try {
-            const event = JSON.parse(e.data);
-            // Update tree node status
-            if (event.vmId && event.type) {
-              setTree(currentTree => {
-                if (!currentTree || !currentTree.nodeMap.has(event.vmId)) return currentTree;
-                const node = currentTree.nodeMap.get(event.vmId);
-                const newStatus = mapEventTypeToStatus(event.type, node.status, event);
-                if (newStatus === node.status) return currentTree;
-
-                // Update node in map
-                const newNodeMap = new Map(currentTree.nodeMap);
-                newNodeMap.set(event.vmId, { ...node, status: newStatus });
-
-                // Update roots if needed
-                const newRoots = currentTree.roots.map(function updateNode(n) {
-                  if (n.vmId === event.vmId) {
-                    return { ...n, status: newStatus, children: n.children.map(updateNode) };
-                  }
-                  return { ...n, children: n.children.map(updateNode) };
-                });
-
-                return { ...currentTree, roots: newRoots, nodeMap: newNodeMap };
-              });
-            }
-          } catch (err) {
-            console.log('Error updating tree from vm_event:', err);
-          }
-        });
-
-        allVmEs.onerror = () => {
-          console.log('All VM events SSE error');
-        };
-
-        return () => allVmEs.close();
-      }, [sidebarOpen]);
-
-      // Auto-scroll (only if user is near bottom)
-      useEffect(() => {
-        if (mainRef.current) {
-          const el = mainRef.current;
-          const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-          if (isNearBottom) {
-            el.scrollTop = el.scrollHeight;
-            setShowScrollBtn(false);
-          }
-        }
-      }, [messages, tools, typing]);
-
-      // Scroll tracking
-      const handleScroll = () => {
-        if (mainRef.current) {
-          const el = mainRef.current;
-          const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-          setShowScrollBtn(!isNearBottom);
-        }
-      };
-
-      const scrollToBottom = () => {
-        if (mainRef.current) {
-          mainRef.current.scrollTo({ top: mainRef.current.scrollHeight, behavior: 'smooth' });
-          setShowScrollBtn(false);
-        }
-      };
-
-      function handleNotification(type, data) {
-        switch (type) {
-          case 'content_chunk':
-            setTyping(false);
-            setStatus('busy');
-            setStatusText('generating');
-            setWorking(true);
-            textAccum.current += data.text || '';
-            if (data.final && textAccum.current) {
-              setMessages(m => [...m, { type: 'text', content: textAccum.current, ts: Date.now() }]);
-              textAccum.current = '';
-            }
-            break;
-
-          case 'tool_call':
-            setTyping(false);
-            setStatus('busy');
-            setStatusText(data.toolName || 'tool');
-            setTools(t => ({
-              ...t,
-              [data.toolId || data.toolCallId]: {
-                id: data.toolId || data.toolCallId,
-                name: data.toolName,
-                title: data.title,
-                status: 'running',
-                content: null,
-              }
-            }));
-            break;
-
-          case 'tool_result':
-            const tid = data.toolId || data.toolCallId;
-            setTools(t => ({
-              ...t,
-              [tid]: {
-                ...t[tid],
-                status: data.success !== false ? 'success' : 'error',
-                content: typeof data.content === 'string'
-                  ? data.content.slice(0, 1000)
-                  : data.content ? JSON.stringify(data.content, null, 2).slice(0, 1000) : null,
-              }
-            }));
-            break;
-
-          case 'completed':
-            setStatus('connected');
-            setStatusText('connected');
-            setWorking(false);
-            setTyping(false);
-            // Accumulate session stats
-            setSessionStats(s => ({
-              inputTokens: s.inputTokens + (data.inputTokens || 0),
-              outputTokens: s.outputTokens + (data.outputTokens || 0),
-              totalCost: s.totalCost + (data.totalCostUsd || 0),
-              turns: s.turns + 1,
-            }));
-            if (data.durationMs || data.inputTokens) {
-              setMessages(m => [...m, { type: 'stats', data }]);
-            }
-            sendNotification('Task completed', 'vers shell has finished processing.');
-            break;
-
-          case 'failed':
-            setStatus('connected');
-            setStatusText('connected');
-            setWorking(false);
-            setTyping(false);
-            setMessages(m => [...m, { type: 'error', content: data.error || 'unknown error' }]);
-            sendNotification('Task failed', data.error || 'An error occurred.');
-            break;
-
-          case 'cancelled':
-            setStatus('connected');
-            setStatusText('connected');
-            setWorking(false);
-            setTyping(false);
-            setMessages(m => [...m, { type: 'system', content: 'cancelled' }]);
-            break;
-
-          case 'permission_request':
-            setTyping(false);
-            setPermissions(p => ({
-              ...p,
-              [data.requestId]: data,
-            }));
-            sendNotification('Permission required', 'vers shell needs your approval to continue.');
-            break;
-        }
-      }
-
-      async function handleSend(text) {
-        // Request notification permission on first interaction
-        if (!notificationsEnabled && Notification.permission === 'default') {
-          requestNotificationPermission();
-        }
-
-        setMessages(m => [...m, { type: 'user', content: text, ts: Date.now() }]);
-        setTyping(true);
-        setStatus('busy');
-        setStatusText('sending');
-
-        try {
-          await rpc('session/prompt', { text });
-        } catch (e) {
-          setTyping(false);
-          setStatus('connected');
-          setStatusText('connected');
-          setMessages(m => [...m, { type: 'error', content: 'failed to send: ' + e.message }]);
-        }
-      }
-
-      async function handlePermission(requestId, optionId) {
-        setPermissions(p => {
-          const { [requestId]: _, ...rest } = p;
-          return rest;
-        });
-
-        try {
-          await rpc('permission/respond', { requestId, optionId });
-        } catch (e) {
-          setMessages(m => [...m, { type: 'error', content: 'failed to respond: ' + e.message }]);
-        }
-      }
-
-      async function handleBranch(e) {
-        e.preventDefault();
-
-        if (!vmContext.vmId) {
-          setMessages(m => [...m, { type: 'error', content: 'cannot branch: not running in a VM' }]);
-          return;
-        }
-
-        try {
-          setMessages(m => [...m, { type: 'system', content: 'creating branch...' }]);
-          const result = await rpc('vm/branch', { vmId: vmContext.vmId });
-          setMessages(m => [...m, { type: 'system', content: `branch created: ${result.vmId}` }]);
-
-          // Add the new child to context
-          setVmContext(ctx => ({
-            ...ctx,
-            children: [...ctx.children, { vmId: result.vmId, status: 'starting' }],
-          }));
-        } catch (e) {
-          setMessages(m => [...m, { type: 'error', content: 'failed to create branch: ' + e.message }]);
-        }
-      }
-
-      const hasContent = messages.length > 0 || Object.keys(tools).length > 0 || typing;
+        return () => es.close();
+      }, []);
 
       return html`
         <${Header}
-          parent=${vmContext.parent}
           status=${status}
           statusText=${statusText}
           onThemeToggle=${cycleTheme}
-          sidebarOpen=${sidebarOpen}
-          onToggleSidebar=${() => setSidebarOpen(!sidebarOpen)}
-          sessionStats=${sessionStats}
         />
-
-        <div class="split-container ${sidebarOpen ? '' : 'sidebar-closed'}">
-          <${TreeSidebar} tree=${tree} currentVmId=${currentVmId} />
-
-          <div class="shell-content">
-            <div class="main-wrapper">
-              <main class="main" ref=${mainRef} onScroll=${handleScroll}>
-                ${!hasContent && html`<${Empty} />`}
-
-                ${messages.map((m, i) => {
-                  if (m.type === 'stats') {
-                    return html`<${Stats} key=${i} data=${m.data} />`;
-                  }
-                  return html`<${Message} key=${i} type=${m.type} content=${m.content} ts=${m.ts} />`;
-                })}
-
-                ${Object.values(tools).map(t => html`
-                  <${ToolBlock}
-                    key=${t.id}
-                    id=${t.id}
-                    name=${t.name}
-                    title=${t.title}
-                    status=${t.status}
-                    content=${t.content}
-                  />
-                `)}
-
-                ${Object.values(permissions).map(p => html`
-                  <${Permission}
-                    key=${p.requestId}
-                    id=${p.requestId}
-                    toolCall=${p.toolCall}
-                    options=${p.options}
-                    onRespond=${handlePermission}
-                  />
-                `)}
-
-                ${typing && html`<${Typing} />`}
-              </main>
-              <button class="scroll-bottom-btn ${showScrollBtn ? 'visible' : ''}" onClick=${scrollToBottom}>
-                ↓ scroll to bottom
-              </button>
-            </div>
-
-            <${ChildrenBar}
-              children=${vmContext.children}
-              onBranch=${handleBranch}
-            />
-
-            <${InputArea}
-              disabled=${working || status !== 'connected'}
-              onSubmit=${handleSend}
-            />
-          </div>
+        <div class="split-container">
+          <${TreePanel}
+            tree=${tree}
+            selectedVmId=${selectedVmId}
+            onSelectNode=${setSelectedVmId}
+          />
+          <${LogsPanel}
+            selectedVmId=${selectedVmId}
+            tree=${tree}
+            logs=${logs}
+          />
         </div>
-
-        <${CommandPalette}
-          open=${commandPaletteOpen}
-          onClose=${() => setCommandPaletteOpen(false)}
-          onCommand=${handleCommand}
-        />
       `;
     }
 
     render(html`<${App} />`, document.getElementById('app'));
   </script>
+
+  <!--
+  ============================================================
+  SHELL CODE - COMMENTED OUT FOR FUTURE USE
+  ============================================================
+  The following shell/chat interface code has been preserved
+  for future exploration. To re-enable, uncomment and integrate
+  back into the App component.
+  ============================================================
+
+  // Previous imports needed for shell:
+  // import { marked } from 'https://esm.sh/marked@11.1.1';
+  // import hljs from 'https://esm.sh/highlight.js@11.9.0/lib/core';
+  // ... (highlight.js language imports)
+
+  // Shell-related CSS was in the original file
+  // Shell-related components:
+  // - InputArea
+  // - Message
+  // - ToolBlock
+  // - Stats
+  // - Permission
+  // - Typing
+  // - Empty
+  // - ChildrenBar
+  // - CommandPalette
+
+  // Shell state in App:
+  // const [messages, setMessages] = useState([]);
+  // const [tools, setTools] = useState({});
+  // const [permissions, setPermissions] = useState({});
+  // const [typing, setTyping] = useState(false);
+  // const [working, setWorking] = useState(false);
+  // const [vmContext, setVmContext] = useState({ vmId: null, parent: null, children: [], siblings: [] });
+  // const [sessionStats, setSessionStats] = useState({ inputTokens: 0, outputTokens: 0, totalCost: 0, turns: 0 });
+  // const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // Shell notification handling (SSE /events endpoint)
+  // Shell send/permission handlers
+  // Shell markdown rendering with highlight.js
+
+  ============================================================
+  -->
 </body>
 </html>

@@ -8,6 +8,7 @@ import {
   StatusBar,
   InputBar,
   BranchTree,
+  BranchPopup,
 } from "./components";
 import { PermissionDialog } from "./components/permission-dialog";
 import { PopupWindow } from "./components/popup-window";
@@ -27,6 +28,9 @@ import { uniqueId } from "./utils/formatting";
 import { getConfig, getCommandHistory, addToCommandHistory, loadCommandHistory } from "../utils/config";
 import { addMessage, saveHistory } from "../utils/history";
 
+// Canvas for VM stats
+import { subscribeToTreeState, type TreeState } from "../canvas";
+
 interface AppProps {
   initialContinue: boolean;
   serverUrl?: string;
@@ -42,6 +46,15 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
   const [scrollOffset, setScrollOffset] = useState(0);
   // Interactive tree view mode
   const [showTreeView, setShowTreeView] = useState(false);
+  // Branch popup - shows when VM is created/branched
+  const [branchPopupVmId, setBranchPopupVmId] = useState<string | null>(null);
+  // VM stats for top status bar
+  const [vmStats, setVmStats] = useState<{
+    total: number;
+    running: number;
+    completed: number;
+    failed: number;
+  } | null>(null);
   // Server URL - can be changed with /connect command
   const [serverUrl, setServerUrl] = useState(initialServerUrl);
   // In remote mode, default to continuing the most recent session
@@ -168,6 +181,20 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     }
   }, [statusInfo.sessionId]);
 
+  // Subscribe to VM tree state for stats in top bar
+  useEffect(() => {
+    const unsubscribe = subscribeToTreeState((event) => {
+      const state = event.state;
+      setVmStats({
+        total: state.totalVms,
+        running: state.runningCount,
+        completed: state.completedCount,
+        failed: state.failedCount,
+      });
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Send message to server
   const sendMessage = useCallback(
     async (message: string, images: Array<{ id: number; path: string; mediaType: string; base64: string }>) => {
@@ -282,6 +309,7 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
           currentServerUrl: serverUrl,
           agentCommands,
           setShowTreeView,
+          showBranchPopup: (vmId: string) => setBranchPopupVmId(vmId),
         };
 
         const result = handleSlashCommand(value, ctx);
@@ -419,6 +447,11 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
     if (key.end) {
       setScrollOffset(0);
     }
+
+    // 'c' or 'C' - open canvas when VMs exist (only when input is empty to avoid capturing typing)
+    if ((inputChar === "c" || inputChar === "C") && vmStats && vmStats.total > 0 && input === "") {
+      setShowTreeView(true);
+    }
   });
 
   // Handle tree view actions
@@ -458,6 +491,8 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
         sessionId={statusInfo.sessionId}
         serverUrl={serverUrl}
         agentName={agentName}
+        vmStats={vmStats || undefined}
+        canvasUrl={serverUrl ? `${serverUrl}/shell` : undefined}
       />
       <OutputArea lines={output} maxLines={outputMaxLines} scrollOffset={scrollOffset} />
       <StatusBar state={state} />
@@ -475,6 +510,16 @@ export function App({ initialContinue, serverUrl: initialServerUrl }: AppProps) 
           title="Agent Output"
           content={agentOutput}
           onClose={clearAgentOutput}
+        />
+      )}
+      {/* Branch popup - shown when VM is created/branched */}
+      {branchPopupVmId && (
+        <BranchPopup
+          newVmId={branchPopupVmId}
+          onClose={() => setBranchPopupVmId(null)}
+          onOpen={(vmId) => {
+            addOutput({ type: "system", content: `Opening VM ${vmId.slice(0, 8)}...` });
+          }}
         />
       )}
       {/* Show pending attachments above input like Claude Code */}
