@@ -484,15 +484,18 @@ export interface SessionIdUpdatedData {
 
 export interface VmInfo {
   vmId: string;
-  parent?: string | null;
+  parentId?: string | null;
   status: "starting" | "ready" | "busy" | "completed" | "failed" | "unhealthy" | "recovering";
   task?: string;
   approach?: string;
   createdAt: string;
+  // Duration since creation (updated by background sync)
+  durationMs?: number;
   // Health tracking fields (optional)
   lastHealthCheckAt?: string;
+  lastActivity?: string;
   healthScore?: number;
-  lastError?: string;
+  error?: string;
 }
 
 export interface VmListResult {

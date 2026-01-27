@@ -35,6 +35,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Build output binary
 vers-agent
+vers-agent-linux
+
+# Rust build artifacts
+vers-tui/target/
 
 # CLI bin folder
 bin

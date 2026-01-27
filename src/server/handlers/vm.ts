@@ -65,16 +65,27 @@ export async function handleVmList(ctx: VmHandlerContext): Promise<VmListResult>
   try {
     const { listManagedVms } = await import("../../orchestrator");
     const vms = await listManagedVms();
+    const now = Date.now();
 
     return {
-      vms: vms.map(vm => ({
-        vmId: vm.vmId,
-        parent: vm.parent,
-        status: vm.metadata?.status || "ready",
-        task: vm.metadata?.task,
-        approach: vm.metadata?.approach,
-        createdAt: vm.metadata?.createdAt || new Date().toISOString(),
-      })),
+      vms: vms.map(vm => {
+        // Calculate duration from createdAt
+        const createdAt = vm.metadata?.createdAt || new Date().toISOString();
+        const createdAtMs = new Date(createdAt).getTime();
+        const durationMs = now - createdAtMs;
+
+        return {
+          vmId: vm.vmId,
+          parentId: vm.parent || vm.metadata?.parentId || null,
+          status: vm.metadata?.status || "ready",
+          task: vm.metadata?.task,
+          approach: vm.metadata?.approach,
+          createdAt,
+          durationMs,
+          lastActivity: vm.metadata?.lastEventAt || vm.metadata?.lastHealthCheckAt,
+          error: vm.metadata?.lastError,
+        };
+      }),
       currentVmId: ctx.getCurrentVmId() || undefined,
     };
   } catch (err) {
