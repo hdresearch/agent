@@ -115,6 +115,61 @@ vers config                  # Show configuration
 vers help                    # Show all commands
 ```
 
+## vers-tui (Rust TUI)
+
+A high-performance terminal UI built with [Ratatui](https://ratatui.rs/). Alternative to the Ink-based CLI with VM canvas visualization.
+
+### Installation
+
+```bash
+cd vers-tui && cargo build --release
+```
+
+### Usage
+
+```bash
+# Connect to local vers-agent
+./vers-tui/target/release/vers-tui --url http://localhost:9999
+
+# Run on a fresh Vers VM (auto-creates VM)
+./vers-tui/target/release/vers-tui --cloud
+
+# Specify bootstrap server for VM creation
+./vers-tui/target/release/vers-tui --cloud --bootstrap http://localhost:10000
+```
+
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-u, --url <URL>` | Server URL to connect to (default: `http://localhost:9999`) |
+| `--cloud` | Create a fresh Vers VM and connect to it |
+| `--bootstrap <URL>` | Bootstrap server URL for VM creation (default: `http://localhost:9999`) |
+| `-d, --debug` | Enable debug logging |
+
+### Features
+
+- **Chat interface** - Streaming responses with markdown rendering
+- **Canvas view** (`/canvas`) - DAG tree visualization of Vers VMs
+- **VM actions** - Create, branch, delete, ping, connect to VMs
+- **Keyboard navigation** - Vi-style keybindings (j/k for up/down)
+
+### Canvas Keybindings
+
+| Key | Action |
+|-----|--------|
+| `↑/k` | Move selection up |
+| `↓/j` | Move selection down |
+| `Enter` | Connect to selected VM |
+| `c` | Create new VM |
+| `b` | Branch from selected VM |
+| `d` | Delete selected VM |
+| `p` | Ping VM (check if alive) |
+| `r` | Refresh VM list |
+| `q/Esc` | Return to chat view |
+
+---
+
 ## CLI Features
 
 ### Terminal UI

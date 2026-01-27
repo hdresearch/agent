@@ -592,7 +592,7 @@ impl App {
             Ok(vm) => {
                 self.messages.push(Message {
                     role: MessageRole::System,
-                    content: format!("Created VM {}", &vm.id[..6.min(vm.id.len())]),
+                    content: format!("Created VM {}", &vm.vm_id[..6.min(vm.vm_id.len())]),
                 });
                 self.refresh_canvas().await?;
             }
@@ -611,7 +611,7 @@ impl App {
                     role: MessageRole::System,
                     content: format!(
                         "Branched VM {} from {}",
-                        &vm.id[..6.min(vm.id.len())],
+                        &vm.vm_id[..6.min(vm.vm_id.len())],
                         &vm_id[..6.min(vm_id.len())]
                     ),
                 });

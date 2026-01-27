@@ -66,6 +66,26 @@ pub struct SessionInfo {
     pub mode: String,
 }
 
+/// VM creation result
+#[derive(Debug, Clone, Deserialize)]
+pub struct VmCreateResult {
+    #[serde(rename = "vmId")]
+    pub vm_id: String,
+    #[serde(rename = "agentUrl")]
+    pub agent_url: String,
+}
+
+/// VM branch result
+#[derive(Debug, Clone, Deserialize)]
+pub struct VmBranchResult {
+    #[serde(rename = "vmId")]
+    pub vm_id: String,
+    #[serde(rename = "parentId")]
+    pub parent_id: String,
+    #[serde(rename = "agentUrl")]
+    pub agent_url: String,
+}
+
 fn default_mode() -> String {
     "default".to_string()
 }
@@ -264,24 +284,24 @@ impl VersClient {
     }
 
     /// Create a new VM
-    pub async fn vm_create(&mut self, task: Option<&str>) -> Result<VmInfo> {
+    pub async fn vm_create(&mut self, task: Option<&str>) -> Result<VmCreateResult> {
         let params = match task {
             Some(t) => json!({ "task": t }),
             None => json!({}),
         };
         let result = self.rpc("vm/create", params).await?;
-        let vm: VmInfo = serde_json::from_value(result)?;
+        let vm: VmCreateResult = serde_json::from_value(result)?;
         Ok(vm)
     }
 
     /// Branch from an existing VM
-    pub async fn vm_branch(&mut self, vm_id: &str, approach: Option<&str>) -> Result<VmInfo> {
+    pub async fn vm_branch(&mut self, vm_id: &str, approach: Option<&str>) -> Result<VmBranchResult> {
         let mut params = json!({ "vmId": vm_id });
         if let Some(a) = approach {
             params["approach"] = json!(a);
         }
         let result = self.rpc("vm/branch", params).await?;
-        let vm: VmInfo = serde_json::from_value(result)?;
+        let vm: VmBranchResult = serde_json::from_value(result)?;
         Ok(vm)
     }
 
