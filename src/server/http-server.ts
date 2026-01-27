@@ -156,6 +156,10 @@ import {
   type SessionHandlerContext,
 } from "./handlers";
 
+// VM metadata sync - keep local cache in sync with Vers infrastructure
+import { listVms } from "../vm/index";
+import { loadMetadata, updateVmMetadata, removeVmMetadata, type VmMetadata } from "../orchestrator/index";
+
 // SSE management
 import { addSseClient, removeSseClient, broadcastEvent } from "./sse-manager";
 
@@ -1336,10 +1340,66 @@ async function handleRequest(req: Request): Promise<Response> {
   return Response.json({ error: "Not Found" }, { status: 404, headers: corsHeaders });
 }
 
+// VM metadata sync interval (10 seconds)
+const VM_SYNC_INTERVAL_MS = 10_000;
+
+/**
+ * Sync local VM metadata with Vers infrastructure (source of truth)
+ * - Removes stale entries for VMs that no longer exist in Vers
+ * - Updates duration_ms for running VMs
+ */
+async function syncVmMetadata(): Promise<void> {
+  try {
+    // Get VMs from Vers SDK (source of truth)
+    const versVms = await listVms();
+    const versVmIds = new Set(versVms.map(vm => vm.vm_id));
+
+    // Load local metadata
+    const localMetadata = loadMetadata();
+    const localVmIds = Object.keys(localMetadata);
+
+    let removedCount = 0;
+    let updatedCount = 0;
+
+    // Remove stale entries (VMs in local metadata but not in Vers)
+    for (const vmId of localVmIds) {
+      if (!versVmIds.has(vmId)) {
+        debug(`[vm-sync] Removing stale VM metadata: ${vmId.slice(0, 8)}`);
+        removeVmMetadata(vmId);
+        removedCount++;
+      }
+    }
+
+    // Update duration_ms for running VMs
+    const now = Date.now();
+    for (const vmId of localVmIds) {
+      if (versVmIds.has(vmId)) {
+        const meta = localMetadata[vmId];
+        if (meta && (meta.status === "starting" || meta.status === "ready" || meta.status === "busy")) {
+          const createdAt = new Date(meta.createdAt).getTime();
+          const durationMs = now - createdAt;
+          // Only update if status is still active (not completed/failed)
+          updateVmMetadata(vmId, { lastHealthCheckAt: new Date().toISOString() });
+          updatedCount++;
+        }
+      }
+    }
+
+    if (removedCount > 0 || updatedCount > 0) {
+      debug(`[vm-sync] Sync complete: removed=${removedCount}, updated=${updatedCount}`);
+    }
+  } catch (err) {
+    // Don't crash the server if sync fails - just log and continue
+    const message = err instanceof Error ? err.message : String(err);
+    debug(`[vm-sync] Sync failed: ${message}`);
+  }
+}
+
 // Create the HTTP server with automatic port finding
 export function createHttpServer(requestedPort: number, maxAttempts = 10): { close: () => void; port: number } {
   let server: ReturnType<typeof Bun.serve> | null = null;
   let actualPort = requestedPort;
+  let vmSyncInterval: ReturnType<typeof setInterval> | null = null;
 
   // Set up callback for agent commands - broadcast to all SSE clients
   onAgentCommandsUpdated((commands) => {
@@ -1393,8 +1453,30 @@ export function createHttpServer(requestedPort: number, maxAttempts = 10): { clo
 
   info("ACP HTTP server listening", { url: `http://localhost:${actualPort}` });
 
+  // Start VM metadata sync (every 10 seconds)
+  vmSyncInterval = setInterval(() => {
+    syncVmMetadata().catch(err => {
+      debug(`[vm-sync] Background sync error: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }, VM_SYNC_INTERVAL_MS);
+
+  // Run initial sync immediately
+  syncVmMetadata().catch(err => {
+    debug(`[vm-sync] Initial sync error: ${err instanceof Error ? err.message : String(err)}`);
+  });
+
+  info("[vm-sync] Background VM sync started", { intervalMs: VM_SYNC_INTERVAL_MS });
+
   return {
-    close: () => server!.stop(),
+    close: () => {
+      // Stop VM sync interval
+      if (vmSyncInterval) {
+        clearInterval(vmSyncInterval);
+        vmSyncInterval = null;
+        info("[vm-sync] Background VM sync stopped");
+      }
+      server!.stop();
+    },
     port: actualPort,
   };
 }

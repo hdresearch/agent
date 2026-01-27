@@ -226,3 +226,22 @@ Example:
 ```bash
 VERS_DEBUG=true ./vers-agent --local
 ```
+
+## API Documentation
+
+When creating new API endpoints with non-trivial logic flows, create a logic sequence diagram in `/claude/<api-name>-flow.md`. The diagram should include:
+
+- ASCII flow diagrams showing the request/response flow
+- Function reference table mapping functions to their file locations and purpose
+- Database state changes at each step
+
+## Web Research
+
+When navigating external websites or documentation sites, first fetch `/llms.txt` and `/llms-full.txt` from the site root. These files provide LLM-optimized site structure and content summaries, helping identify where to look for specific information.
+
+## Claude Folder 
+- /claude folder contains plans for various features, investigations and improvements to the codebase. Not all of these plans are up to date so please check the commit history to see the latest plans.
+- architecture analysis of the codebase and the changes being made.
+- Whenever a PR is created, please update the /claude folder with the latest plan for the feature.
+- Whenever a PR is updated via a commit, please update the /claude folder with the latest plan for the feature.
+- /claude folder must remain in .gitignore.
