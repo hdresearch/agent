@@ -18,6 +18,7 @@ This document specifies how Vers uses [UCAN](https://ucan.xyz) (User Controlled 
 3. **Attenuation only** — Delegated tokens can have fewer permissions, never more
 4. **Stateless verification** — Verify tokens without hitting a central server
 5. **Open standard** — Built on UCAN, DIDs, and other open specs
+6. **Formally verified** — Core security properties proven mathematically
 
 ## Agent Identity
 
@@ -235,6 +236,167 @@ Grandchild (did:key:zGrandchild)
 
 Lineage is encoded in the proof chain. "Who spawned this agent?" → Follow the `prf` chain.
 
+## Formal Verification
+
+The core authorization logic will be formally verified using [Hermes](https://github.com/google/aspect-cpp) (Rust → Lean translation) to provide mathematical proofs of security properties.
+
+### Why Formal Verification?
+
+Traditional testing: "These 1000 test cases pass"  
+Formal verification: "This property holds for **every possible input**, including ones we never thought of"
+
+For security-critical authorization, proofs >>> fuzzing.
+
+### Properties to Prove
+
+#### P1: Attenuation Monotonicity
+
+**Statement:** A delegated token can never have more permissions than its parent.
+
+```lean
+theorem attenuation_monotonic :
+  ∀ (parent child : Ucan),
+    valid_delegation parent child →
+    capabilities child ⊆ capabilities parent
+```
+
+**Intuition:** If Alice gives Bob `read` access, Bob cannot give Carol `write` access.
+
+#### P2: Verification Soundness
+
+**Statement:** The verification algorithm accepts all valid tokens and rejects all invalid tokens.
+
+```lean
+theorem verification_sound :
+  ∀ (token : Ucan) (chain : List Ucan),
+    verify token chain = Accept ↔ semantically_valid token chain
+
+theorem verification_complete :
+  ∀ (token : Ucan) (chain : List Ucan),
+    semantically_valid token chain → verify token chain = Accept
+```
+
+**Intuition:** No false positives, no false negatives.
+
+#### P3: No Permission Escalation
+
+**Statement:** No sequence of valid operations can create permissions that weren't originally granted.
+
+```lean
+theorem no_escalation :
+  ∀ (ops : List Operation) (initial : Capabilities),
+    let final := execute_all ops initial
+    ∀ (cap : Capability), cap ∈ final → 
+      cap ∈ initial ∨ (∃ parent ∈ initial, cap ⊆ parent)
+```
+
+**Intuition:** You can't bootstrap authority from nothing.
+
+#### P4: Revocation Completeness
+
+**Statement:** Revoking a token invalidates all tokens in its delegation subtree.
+
+```lean
+theorem revocation_complete :
+  ∀ (revoked : Ucan) (descendant : Ucan),
+    in_delegation_subtree revoked descendant →
+    revoked ∈ revocation_list →
+    verify descendant = Reject
+```
+
+**Intuition:** Killing a parent kills all children.
+
+#### P5: Signature Unforgeability
+
+**Statement:** Without the private key, an attacker cannot produce a valid signature (reduces to cryptographic assumption).
+
+```lean
+axiom signature_unforgeable :
+  ∀ (msg : Message) (pk : PublicKey),
+    ¬has_private_key pk →
+    ∀ (sig : Signature), verify_sig pk msg sig = false
+```
+
+**Intuition:** Standard cryptographic assumption (EUF-CMA security of EdDSA).
+
+#### P6: Chain Integrity
+
+**Statement:** A valid delegation chain forms a connected path from a root authority to the token holder.
+
+```lean
+theorem chain_integrity :
+  ∀ (token : Ucan) (chain : List Ucan),
+    verify token chain = Accept →
+    connected_path chain ∧ 
+    head chain ∈ root_authorities ∧
+    last chain = token
+```
+
+**Intuition:** No gaps or disconnected proofs.
+
+#### P7: Temporal Validity
+
+**Statement:** Expired tokens are never accepted; not-yet-valid tokens are never accepted.
+
+```lean
+theorem temporal_validity :
+  ∀ (token : Ucan) (now : Timestamp),
+    verify_at token now = Accept →
+    token.nbf ≤ now ∧ now < token.exp
+```
+
+### Implementation Strategy
+
+1. **Write core logic in Rust** with Hermes annotations:
+
+```rust
+///@ hermes spec
+///@ requires parent.exp > now
+///@ requires valid_signature(&parent)
+///@ ensures result.is_ok() → 
+///@         capabilities(&result.unwrap()) ⊆ capabilities(&parent)
+pub fn delegate(
+    parent: &Ucan,
+    audience: Did,
+    new_capabilities: &[Capability],
+    now: Timestamp,
+) -> Result<Ucan, DelegationError> {
+    // Verify parent is valid
+    verify(parent, now)?;
+    
+    // Check attenuation
+    for cap in new_capabilities {
+        if !is_subset(cap, &parent.att) {
+            return Err(DelegationError::EscalationAttempt);
+        }
+    }
+    
+    // ... construct new UCAN
+}
+```
+
+2. **Run Hermes** to generate Lean specifications
+3. **Prove properties** in Lean (some automatic, some manual)
+4. **CI integration** — proofs must pass before merge
+
+### Verification Scope
+
+| Component | Verified | Notes |
+|-----------|----------|-------|
+| Token parsing | ✅ | Reject malformed tokens |
+| Signature verification | ⚠️ | Assumes crypto library correct |
+| Attenuation checking | ✅ | Core security property |
+| Chain validation | ✅ | Path connectivity |
+| Expiration checking | ✅ | Temporal bounds |
+| Revocation checking | ✅ | List membership |
+| DID resolution | ❌ | Network-dependent, tested not proven |
+
+### Prior Art
+
+- [Macaroons formal analysis](https://www.ndss-symposium.org/wp-content/uploads/2017/09/03_4.pdf) — Formal security proofs for macaroons
+- [SPKI/SDSI formal semantics](https://www.cs.columbia.edu/~angelos/Papers/spki.pdf) — Logic-based analysis
+- [Verifying capability-based systems](http://erights.org/talks/thesis/markm-thesis.pdf) — Mark Miller's thesis on ocap verification
+
 ## Integration with Existing Systems
 
 ### OAuth2 Bridge
@@ -275,6 +437,8 @@ Response:
 - [ ] Should facts (`fct`) include billing/metering metadata?
 - [ ] Revocation list format — use UCAN Revocation spec or custom?
 - [ ] Rate limiting per-DID vs per-UCAN?
+- [ ] Which properties are Day 1 vs later for formal verification?
+- [ ] Do we verify in CI or as a release gate?
 
 ## References
 
@@ -286,6 +450,8 @@ Response:
 - [did:web Method](https://w3c-ccg.github.io/did-method-web/)
 - [Macaroons Paper](https://research.google/pubs/macaroons-cookies-with-contextual-caveats-for-decentralized-authorization-in-the-cloud/)
 - [Capability Myths Demolished](https://srl.cs.jhu.edu/pubs/SRL2003-02.pdf)
+- [Hermes: Rust to Lean verification](https://github.com/google/aspect-cpp)
+- [Mark Miller's Thesis](http://www.erights.org/talks/thesis/markm-thesis.pdf)
 
 ---
 
